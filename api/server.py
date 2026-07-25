@@ -89,7 +89,7 @@ EVENT_COLUMNS = """
     coin_metrics, primary_coin, primary_coin_market_cap,
     primary_coin_btc_ratio, coin_cap_tier,
     -- 内容理解增强：结构化实体、情绪、板块相关度明细
-    entities, sentiment, sentiment_score, sector_relevance,
+    entities, sentiment, sentiment_score, sector_relevance, impact_horizon,
     created_at, updated_at
 """
 

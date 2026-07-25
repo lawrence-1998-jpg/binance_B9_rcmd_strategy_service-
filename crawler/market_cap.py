@@ -37,7 +37,6 @@ MEME 有 2 个）。瞎猜一个会让「Uniswap 市值 60 亿」变成「某个
 """
 import json
 import logging
-import os
 import re
 import time
 from datetime import datetime, timezone
