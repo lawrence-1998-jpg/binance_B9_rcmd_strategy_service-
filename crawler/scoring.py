@@ -10,6 +10,7 @@ import logging
 import math
 from datetime import datetime, timezone
 
+from . import verification
 from .dedup import parse_dt
 
 logger = logging.getLogger(__name__)
@@ -100,9 +101,17 @@ def compute_hotness(event: dict, baseline: float) -> float:
 # ── A：权威 ──────────────────────────────────────────────────────────
 
 def compute_authority(event: dict) -> float:
-    """LLM 给出的信源权威分，谣言打 7 折（文档 2.4）。"""
+    """LLM 给出的信源权威分，谣言打 7 折（文档 2.4），再按真实性校验结论降权。
+
+    两道折扣叠加是有意的，它们防的是不同东西：`is_rumor` 是 LLM 从**文本措辞**
+    判断的（"据传"/"消息人士"），而 verification 看的是**客观信号**（几家独立
+    机构报道、信源可信度分层、有无矛盾报道）。一条写得像板上钉钉、但只有一个
+    陌生账号说的消息，LLM 不会标 rumor，只有校验层能压住它。
+    """
     authority = _clamp(float(event.get("score_authority", 0.5) or 0.0))
-    return authority * 0.7 if event.get("is_rumor") else authority
+    if event.get("is_rumor"):
+        authority *= 0.7
+    return _clamp(authority * verification.authority_multiplier(event))
 
 
 # ── Q：质量 ──────────────────────────────────────────────────────────

@@ -28,6 +28,7 @@ from .dedup import aggregate_events, build_fingerprint, fallback_id
 from .scoring import score_events
 from .sources import SECTOR_LABELS
 from .usage_tracker import UsageTracker
+from .verification import persist_verification, verify_events
 
 logger = logging.getLogger(__name__)
 
@@ -353,9 +354,20 @@ def run_pipeline() -> dict:
         #    在合并后的完整推文集合上统计，互动量才不会漏算
         storage.attach_social_metrics(events, conn)
 
+        # 7.5 真实性校验（DC 之外的另一道闸）。全部基于客观信号——按机构去重后的
+        #     独立佐证数、信源可信度分层、时间一致性、矛盾检测——零 LLM 调用。
+        #     必须在打分之前：compute_authority 会用到校验结论做降权。
+        verification_stats = verify_events(events, conn=conn)
+        stats["unverified"] = (verification_stats.get("UNVERIFIED", 0)
+                               + verification_stats.get("DISPUTED", 0))
+        logger.info(f"Step 7.5 verification: {verification_stats}")
+
         # 8. 打分 + 入库
         score_events(events)
         storage.write_events(events, conn)
+
+        # 9. 校验结论落库。必须在 write_events 之后——它是 UPDATE，行得先存在
+        persist_verification(events, conn)
 
         duration = round(time.time() - start, 2)
         tracker.log_summary()

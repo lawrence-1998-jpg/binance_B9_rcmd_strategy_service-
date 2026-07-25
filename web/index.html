@@ -1,0 +1,1697 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Lawrence Crypto News Crawler · B9 新闻数据服务</title>
+<meta name="description" content="Binance B9 内容推荐模块的新闻数据底座 —— 全网抓取、AI 结构化、去重与重要性打分，对外提供 REST API。">
+<style>
+/* ══════════════════════════════════════════════════════════════════════
+   Design tokens — Binance brand system
+   ══════════════════════════════════════════════════════════════════════ */
+:root{
+  --bg:#0B0E11;
+  --bg-1:#12161C;
+  --bg-2:#181A20;
+  --bg-3:#1E2329;
+  --bg-4:#252A31;
+  --line:#2B3139;
+  --line-soft:#22272E;
+  --tx:#EAECEF;
+  --tx-2:#B7BDC6;
+  --tx-3:#848E9C;
+  --tx-4:#5E6673;
+  --gold:#F0B90B;
+  --gold-2:#FCD535;
+  --gold-dim:rgba(240,185,11,.10);
+  --gold-line:rgba(240,185,11,.28);
+  --green:#0ECB81;
+  --red:#F6465D;
+  --blue:#4A9BFF;
+  --amber:#FF8A00;
+  --r:10px;
+  --r-lg:14px;
+  --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px -12px rgba(0,0,0,.7);
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+}
+*,*::before,*::after{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{
+  margin:0;background:var(--bg);color:var(--tx);font-family:var(--sans);
+  font-size:14px;line-height:1.6;-webkit-font-smoothing:antialiased;
+  overflow-x:hidden;
+}
+body::before{
+  content:"";position:fixed;inset:0;pointer-events:none;z-index:0;
+  background:
+    radial-gradient(760px 420px at 12% -10%, rgba(240,185,11,.075), transparent 62%),
+    radial-gradient(680px 400px at 92% -6%, rgba(74,155,255,.055), transparent 60%);
+}
+h1,h2,h3,h4{margin:0;font-weight:600;letter-spacing:-.01em;line-height:1.25}
+p{margin:0}
+a{color:var(--gold);text-decoration:none}
+a:hover{color:var(--gold-2);text-decoration:underline}
+button{font-family:inherit;font-size:inherit;cursor:pointer}
+code,pre,.mono{font-family:var(--mono)}
+::selection{background:rgba(240,185,11,.28)}
+:focus-visible{outline:2px solid var(--gold);outline-offset:2px;border-radius:4px}
+
+/* scrollbars */
+*::-webkit-scrollbar{width:10px;height:10px}
+*::-webkit-scrollbar-track{background:var(--bg-1)}
+*::-webkit-scrollbar-thumb{background:#333A44;border-radius:6px;border:2px solid var(--bg-1)}
+*::-webkit-scrollbar-thumb:hover{background:#434B57}
+
+/* ── Layout ─────────────────────────────────────────────────────────── */
+.wrap{position:relative;z-index:1;max-width:1400px;margin:0 auto;padding:0 24px}
+.section{margin:0 0 40px}
+.section-head{display:flex;align-items:baseline;gap:12px;margin-bottom:16px;flex-wrap:wrap}
+.section-head h2{font-size:19px}
+.eyebrow{
+  font-size:10.5px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--gold);font-family:var(--mono);
+}
+.section-head .sub{font-size:12.5px;color:var(--tx-3)}
+
+/* ── Header ─────────────────────────────────────────────────────────── */
+header{
+  position:sticky;top:0;z-index:50;background:rgba(11,14,17,.86);
+  backdrop-filter:saturate(160%) blur(14px);-webkit-backdrop-filter:saturate(160%) blur(14px);
+  border-bottom:1px solid var(--line);
+}
+.hbar{display:flex;align-items:center;gap:16px;padding:13px 0;flex-wrap:wrap}
+.brand{display:flex;align-items:center;gap:11px;min-width:0}
+.mark{width:30px;height:30px;flex:none}
+.brand-tx{min-width:0}
+.brand-tx .n{font-size:14.5px;font-weight:650;letter-spacing:-.02em;white-space:nowrap}
+.brand-tx .n b{color:var(--gold);font-weight:650}
+.brand-tx .s{font-size:10.5px;color:var(--tx-3);letter-spacing:.05em;white-space:nowrap}
+.hspacer{flex:1}
+.pill{
+  display:inline-flex;align-items:center;gap:7px;padding:5px 11px;border-radius:100px;
+  background:var(--bg-2);border:1px solid var(--line);font-size:11.5px;color:var(--tx-2);
+  font-family:var(--mono);white-space:nowrap;
+}
+.dot{width:6px;height:6px;border-radius:50%;background:var(--tx-4);flex:none}
+.dot.ok{background:var(--green);box-shadow:0 0 0 3px rgba(14,203,129,.16);animation:pulse 2.4s ease-in-out infinite}
+.dot.bad{background:var(--red);box-shadow:0 0 0 3px rgba(246,70,93,.16)}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.45}}
+
+/* ── Tabs ───────────────────────────────────────────────────────────── */
+nav.tabs{display:flex;gap:2px;overflow-x:auto;scrollbar-width:none}
+nav.tabs::-webkit-scrollbar{display:none}
+.tab{
+  position:relative;background:none;border:0;padding:12px 2px 13px;margin-right:28px;
+  color:var(--tx-3);font-size:13.5px;font-weight:550;white-space:nowrap;letter-spacing:.01em;
+  transition:color .16s;
+}
+.tab:last-child{margin-right:0}
+.tab .idx{font-family:var(--mono);font-size:10.5px;color:var(--tx-4);margin-right:7px}
+.tab:hover{color:var(--tx-2)}
+.tab[aria-selected="true"]{color:var(--tx)}
+.tab[aria-selected="true"] .idx{color:var(--gold)}
+.tab::after{
+  content:"";position:absolute;left:0;right:0;bottom:0;height:2px;border-radius:2px;
+  background:var(--gold);transform:scaleX(0);transition:transform .2s cubic-bezier(.4,0,.2,1);
+}
+.tab[aria-selected="true"]::after{transform:scaleX(1)}
+
+main{padding:30px 0 72px}
+[role=tabpanel][hidden]{display:none}
+[role=tabpanel]{animation:fade .3s ease}
+@keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+
+/* ── Cards ──────────────────────────────────────────────────────────── */
+.card{
+  background:var(--bg-1);border:1px solid var(--line-soft);border-radius:var(--r-lg);
+  padding:20px;box-shadow:var(--shadow);
+}
+.grid{display:grid;gap:14px}
+.g2{grid-template-columns:repeat(2,minmax(0,1fr))}
+.g3{grid-template-columns:repeat(3,minmax(0,1fr))}
+.g4{grid-template-columns:repeat(4,minmax(0,1fr))}
+
+/* ── Hero ───────────────────────────────────────────────────────────── */
+.hero{
+  border:1px solid var(--line);border-radius:18px;padding:32px 34px;margin-bottom:26px;
+  background:
+    linear-gradient(180deg,rgba(240,185,11,.055),transparent 55%),
+    linear-gradient(180deg,var(--bg-2),var(--bg-1));
+  position:relative;overflow:hidden;
+}
+.hero::after{
+  content:"";position:absolute;top:0;left:0;right:0;height:1px;
+  background:linear-gradient(90deg,transparent,var(--gold),transparent);opacity:.6;
+}
+.hero .tagline{
+  display:inline-flex;align-items:center;gap:8px;padding:4px 11px;border-radius:100px;
+  background:var(--gold-dim);border:1px solid var(--gold-line);color:var(--gold);
+  font-size:11px;font-weight:600;font-family:var(--mono);letter-spacing:.05em;margin-bottom:16px;
+}
+.hero h1{font-size:clamp(24px,3.2vw,34px);letter-spacing:-.03em;margin-bottom:12px}
+.hero h1 .accent{
+  background:linear-gradient(96deg,var(--gold-2),var(--gold));
+  -webkit-background-clip:text;background-clip:text;color:transparent;
+}
+.hero .lede{font-size:14.5px;color:var(--tx-2);max-width:76ch;line-height:1.72}
+.hero .lede strong{color:var(--tx);font-weight:600}
+.chipline{display:flex;flex-wrap:wrap;gap:8px;margin-top:20px}
+.chip{
+  font-size:11.5px;padding:4px 10px;border-radius:6px;background:var(--bg-3);
+  border:1px solid var(--line);color:var(--tx-2);font-family:var(--mono);
+}
+.chip b{color:var(--gold);font-weight:600}
+
+/* ── KPI ────────────────────────────────────────────────────────────── */
+.kpi{
+  background:var(--bg-1);border:1px solid var(--line-soft);border-radius:var(--r-lg);
+  padding:17px 18px;position:relative;overflow:hidden;transition:border-color .18s,transform .18s;
+}
+.kpi:hover{border-color:#39404A;transform:translateY(-1px)}
+.kpi::before{
+  content:"";position:absolute;left:0;top:14px;bottom:14px;width:2px;border-radius:2px;
+  background:var(--gold);opacity:.85;
+}
+.kpi .lbl{font-size:11px;color:var(--tx-3);letter-spacing:.04em;margin-bottom:7px}
+.kpi .val{font-size:27px;font-weight:650;letter-spacing:-.03em;font-family:var(--mono);line-height:1.1}
+.kpi .val .u{font-size:13px;color:var(--tx-3);font-weight:500;margin-left:3px;letter-spacing:0}
+.kpi .note{font-size:11px;color:var(--tx-4);margin-top:6px}
+.kpi.b::before{background:var(--blue)}
+.kpi.g::before{background:var(--green)}
+.kpi.r::before{background:var(--red)}
+
+/* ── Problem → Solution ─────────────────────────────────────────────── */
+.ps{display:grid;grid-template-columns:1fr auto 1fr;gap:18px;align-items:stretch}
+.ps-col h4{font-size:12px;letter-spacing:.1em;text-transform:uppercase;font-family:var(--mono);margin-bottom:11px}
+.ps-col.bad h4{color:var(--red)}
+.ps-col.good h4{color:var(--green)}
+.ps-item{
+  background:var(--bg-1);border:1px solid var(--line-soft);border-left:2px solid var(--red);
+  border-radius:8px;padding:12px 14px;margin-bottom:9px;
+}
+.ps-col.good .ps-item{border-left-color:var(--green)}
+.ps-item .t{font-size:13px;font-weight:600;margin-bottom:3px}
+.ps-item .d{font-size:12px;color:var(--tx-3);line-height:1.6}
+.ps-arrow{
+  display:flex;align-items:center;justify-content:center;color:var(--gold);
+  font-size:22px;font-family:var(--mono);padding-top:26px;
+}
+
+/* ── Pipeline ───────────────────────────────────────────────────────── */
+.flow{display:flex;gap:0;overflow-x:auto;padding-bottom:6px}
+.step{
+  flex:1 1 0;min-width:140px;background:var(--bg-1);border:1px solid var(--line-soft);
+  padding:15px 14px 14px;position:relative;
+}
+.step:first-child{border-radius:10px 0 0 10px}
+.step:last-child{border-radius:0 10px 10px 0}
+.step + .step{border-left:0}
+.step::after{
+  content:"";position:absolute;right:-6px;top:50%;width:11px;height:11px;z-index:2;
+  transform:translateY(-50%) rotate(45deg);background:var(--bg-1);
+  border-top:1px solid var(--line-soft);border-right:1px solid var(--line-soft);
+}
+.step:last-child::after{display:none}
+.step .num{
+  font-family:var(--mono);font-size:10px;color:var(--gold);letter-spacing:.1em;
+  font-weight:700;margin-bottom:8px;
+}
+.step .nm{font-size:13px;font-weight:600;margin-bottom:5px}
+.step .ds{font-size:11.5px;color:var(--tx-3);line-height:1.55}
+.step .tag{
+  display:inline-block;margin-top:9px;font-size:10px;font-family:var(--mono);
+  padding:2px 6px;border-radius:4px;background:var(--bg-3);color:var(--tx-3);border:1px solid var(--line);
+}
+.step.hi{background:linear-gradient(180deg,rgba(240,185,11,.07),var(--bg-1));border-color:var(--gold-line)}
+.step.hi::after{background:var(--bg-1);border-color:var(--gold-line)}
+
+/* ── Formula ────────────────────────────────────────────────────────── */
+.formula{
+  font-family:var(--mono);font-size:15px;padding:16px 18px;background:var(--bg);
+  border:1px solid var(--line);border-radius:10px;color:var(--tx-2);
+  overflow-x:auto;white-space:nowrap;letter-spacing:.01em;
+}
+.formula .w{color:var(--gold);font-weight:600}
+.formula .f{color:var(--tx);font-weight:600}
+.factor{display:grid;grid-template-columns:120px 1fr 46px;gap:12px;align-items:center;margin-top:11px}
+.factor .fn{font-size:12.5px}
+.factor .fn i{font-family:var(--mono);color:var(--gold);font-style:normal;font-weight:600;margin-right:6px}
+.bar{height:7px;border-radius:4px;background:var(--bg-3);overflow:hidden}
+.bar > i{display:block;height:100%;border-radius:4px;background:linear-gradient(90deg,var(--gold),var(--gold-2));transition:width .7s cubic-bezier(.2,.8,.2,1)}
+.bar.blue > i{background:linear-gradient(90deg,#2E7CF6,var(--blue))}
+.factor .fv{font-family:var(--mono);font-size:12px;color:var(--tx-3);text-align:right}
+
+/* ── Tier ladder ────────────────────────────────────────────────────── */
+.tier-row{display:flex;align-items:center;gap:12px;padding:9px 0;border-bottom:1px solid var(--line-soft)}
+.tier-row:last-child{border-bottom:0}
+.tier-row .desc{flex:1;font-size:12.5px;color:var(--tx-3);min-width:0}
+.tier-row .cnt{font-family:var(--mono);font-size:12.5px;color:var(--tx-2);width:74px;text-align:right}
+.tier-row .mini{width:96px;height:6px;border-radius:3px;background:var(--bg-3);overflow:hidden;flex:none}
+.tier-row .mini > i{display:block;height:100%;transition:width .7s cubic-bezier(.2,.8,.2,1)}
+
+/* ── Badges ─────────────────────────────────────────────────────────── */
+.tier{
+  display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;
+  border-radius:5px;font-family:var(--mono);font-size:11.5px;font-weight:700;flex:none;
+}
+.tier-S{background:rgba(240,185,11,.15);color:var(--gold);box-shadow:inset 0 0 0 1px rgba(240,185,11,.4)}
+.tier-A{background:rgba(255,138,0,.14);color:var(--amber);box-shadow:inset 0 0 0 1px rgba(255,138,0,.34)}
+.tier-B{background:rgba(74,155,255,.13);color:var(--blue);box-shadow:inset 0 0 0 1px rgba(74,155,255,.3)}
+.tier-C{background:rgba(132,142,156,.14);color:#9AA4B2;box-shadow:inset 0 0 0 1px rgba(132,142,156,.26)}
+.tier-D{background:rgba(94,102,115,.14);color:var(--tx-4);box-shadow:inset 0 0 0 1px rgba(94,102,115,.24)}
+.tag-s{
+  display:inline-block;font-size:10.5px;padding:1.5px 6px;border-radius:4px;margin:1.5px 3px 1.5px 0;
+  background:rgba(74,155,255,.10);color:#8FBEFF;border:1px solid rgba(74,155,255,.2);white-space:nowrap;
+}
+.tag-c{background:rgba(240,185,11,.09);color:var(--gold);border-color:rgba(240,185,11,.22);font-family:var(--mono)}
+.tag-n{background:var(--bg-3);color:var(--tx-3);border-color:var(--line)}
+.tag-r{background:rgba(246,70,93,.11);color:var(--red);border-color:rgba(246,70,93,.26);font-weight:600}
+.tag-v{background:rgba(14,203,129,.10);color:var(--green);border-color:rgba(14,203,129,.24)}
+
+/* ── Source bars ────────────────────────────────────────────────────── */
+.srcbar{display:grid;grid-template-columns:150px 1fr 42px;gap:11px;align-items:center;margin-bottom:7px}
+.srcbar .sn{font-size:12px;color:var(--tx-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.srcbar .sc{font-family:var(--mono);font-size:11.5px;color:var(--tx-3);text-align:right}
+
+/* ── Filter bar ─────────────────────────────────────────────────────── */
+.filters{
+  background:var(--bg-1);border:1px solid var(--line-soft);border-radius:var(--r-lg);
+  padding:15px 17px;margin-bottom:16px;
+}
+.frow{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end}
+.field{display:flex;flex-direction:column;gap:5px;min-width:0}
+.field > label{font-size:10.5px;color:var(--tx-3);letter-spacing:.06em;text-transform:uppercase;font-family:var(--mono)}
+select,input[type=text],input[type=date]{
+  appearance:none;-webkit-appearance:none;background:var(--bg-3);color:var(--tx);
+  border:1px solid var(--line);border-radius:8px;padding:7px 30px 7px 11px;font-size:12.5px;
+  font-family:inherit;min-width:132px;transition:border-color .15s,background .15s;
+  background-image:url("data:image/svg+xml;charset=utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M2.5 4.5L6 8l3.5-3.5' fill='none' stroke='%23848E9C' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 10px center;background-size:11px;
+}
+input[type=text],input[type=date]{background-image:none;padding-right:11px}
+input[type=date]{min-width:142px;color-scheme:dark}
+select:hover,input:hover{border-color:#3A424C}
+select:focus,input:focus{outline:none;border-color:var(--gold);background-color:var(--bg-4)}
+.btn{
+  background:var(--bg-3);border:1px solid var(--line);color:var(--tx-2);border-radius:8px;
+  padding:7px 14px;font-size:12.5px;font-weight:500;transition:all .15s;white-space:nowrap;
+}
+.btn:hover{background:var(--bg-4);color:var(--tx);border-color:#3A424C}
+.btn.primary{background:var(--gold);border-color:var(--gold);color:#0B0E11;font-weight:650}
+.btn.primary:hover{background:var(--gold-2);border-color:var(--gold-2);color:#0B0E11}
+.btn.sm{padding:4px 10px;font-size:11.5px}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+
+.meta-line{
+  display:flex;align-items:center;gap:14px;flex-wrap:wrap;
+  margin-bottom:11px;font-size:12.5px;color:var(--tx-3);
+}
+.meta-line b{color:var(--tx);font-family:var(--mono);font-weight:600}
+.mspacer{flex:1}
+.active-f{display:flex;gap:6px;flex-wrap:wrap}
+.fchip{
+  display:inline-flex;align-items:center;gap:6px;font-size:11px;font-family:var(--mono);
+  padding:2.5px 5px 2.5px 8px;border-radius:5px;background:var(--gold-dim);
+  border:1px solid var(--gold-line);color:var(--gold);
+}
+.fchip button{background:none;border:0;color:var(--gold);padding:0 2px;font-size:13px;line-height:1;opacity:.7}
+.fchip button:hover{opacity:1}
+
+/* ── Table ──────────────────────────────────────────────────────────── */
+.tbl-wrap{
+  background:var(--bg-1);border:1px solid var(--line-soft);border-radius:var(--r-lg);
+  overflow-x:auto;box-shadow:var(--shadow);
+}
+table{width:100%;border-collapse:collapse;min-width:940px}
+thead th{
+  position:sticky;top:0;z-index:5;background:var(--bg-3);text-align:left;
+  font-size:10.5px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;
+  color:var(--tx-3);padding:11px 14px;border-bottom:1px solid var(--line);
+  font-family:var(--mono);white-space:nowrap;
+}
+tbody td{padding:12px 14px;border-bottom:1px solid var(--line-soft);vertical-align:top}
+tbody tr.row{cursor:pointer;transition:background .12s}
+tbody tr.row:hover{background:rgba(255,255,255,.022)}
+tbody tr.row.open{background:rgba(240,185,11,.045)}
+tbody tr.row.open td{border-bottom-color:transparent}
+.c-rank{width:44px;color:var(--tx-4);font-family:var(--mono);font-size:11.5px;text-align:right;padding-right:0!important}
+.c-score{width:118px}
+.c-title{min-width:330px}
+.c-tags{width:190px}
+.c-src{width:150px}
+.c-time{width:112px}
+.c-x{width:34px;text-align:center}
+.score-cell{display:flex;align-items:center;gap:8px}
+.score-num{font-family:var(--mono);font-size:13px;font-weight:600;color:var(--tx);width:46px}
+.t-zh{font-size:13.5px;font-weight:550;line-height:1.45;margin-bottom:3px}
+.t-en{font-size:11.5px;color:var(--tx-4);line-height:1.45;display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;overflow:hidden}
+.src-list{font-size:11.5px;color:var(--tx-3);line-height:1.5}
+.src-list .more{color:var(--tx-4)}
+.tm{font-family:var(--mono);font-size:11.5px;color:var(--tx-3);white-space:nowrap;line-height:1.5}
+.tm .d{color:var(--tx-2)}
+.caret{
+  display:inline-block;color:var(--tx-4);font-size:10px;transition:transform .2s;font-family:var(--mono);
+}
+tr.row.open .caret{transform:rotate(90deg);color:var(--gold)}
+
+.detail td{background:var(--bg);border-bottom:1px solid var(--line);padding:0}
+.detail-in{padding:18px 22px 20px;border-left:2px solid var(--gold)}
+.d-grid{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(0,1fr);gap:26px}
+.d-h{
+  font-size:10px;font-family:var(--mono);letter-spacing:.12em;text-transform:uppercase;
+  color:var(--gold);margin-bottom:8px;
+}
+.d-sec{margin-bottom:18px}
+.d-sec:last-child{margin-bottom:0}
+.d-txt{font-size:12.8px;color:var(--tx-2);line-height:1.78;white-space:pre-wrap}
+.d-short{
+  font-size:13px;color:var(--tx);line-height:1.7;padding:11px 13px;background:var(--bg-1);
+  border:1px solid var(--line-soft);border-radius:8px;
+}
+.kv{display:grid;grid-template-columns:88px 1fr;gap:5px 12px;font-size:12px}
+.kv dt{color:var(--tx-4)}
+.kv dd{margin:0;color:var(--tx-2);font-family:var(--mono);word-break:break-word}
+.srclink{display:block;font-size:11.5px;margin-bottom:5px;line-height:1.45;word-break:break-all}
+.srclink .au{font-family:var(--mono);font-size:10px;color:var(--tx-4);margin-left:5px}
+.mini-f{display:grid;grid-template-columns:64px 1fr 38px;gap:9px;align-items:center;margin-bottom:6px;font-size:11.5px}
+.mini-f .mn{color:var(--tx-3)}
+.mini-f .mv{font-family:var(--mono);color:var(--tx-2);text-align:right;font-size:11px}
+.rumor-box{
+  margin-top:10px;padding:9px 12px;border-radius:8px;font-size:12px;line-height:1.6;
+  background:rgba(246,70,93,.07);border:1px solid rgba(246,70,93,.22);color:#FF9AA8;
+}
+
+/* ── States ─────────────────────────────────────────────────────────── */
+.state{padding:56px 24px;text-align:center;color:var(--tx-3)}
+/* 表格有 min-width:940px，窄屏下 td 内的空态/错误态会被撑到视口外。
+   sticky + 视口宽度约束把它钉回可见区，避免用户要横向拖才能看到报错文案。 */
+.tbl-wrap .state{position:sticky;left:0;width:min(940px, calc(100vw - 48px));margin:0 auto;box-sizing:border-box}
+.state .ic{font-size:26px;margin-bottom:12px;opacity:.55;font-family:var(--mono)}
+.state .ti{font-size:14px;color:var(--tx-2);font-weight:600;margin-bottom:6px}
+.state .ds{font-size:12.5px;max-width:52ch;margin:0 auto 16px;line-height:1.65}
+.state.err .ic{color:var(--red)}
+.err-code{
+  display:inline-block;font-family:var(--mono);font-size:11px;color:var(--tx-4);
+  background:var(--bg-2);border:1px solid var(--line);border-radius:6px;padding:5px 10px;
+  margin-top:14px;max-width:100%;overflow-x:auto;text-align:left;white-space:pre-wrap;word-break:break-all;
+}
+.skel{
+  background:linear-gradient(90deg,var(--bg-3) 25%,#262C35 50%,var(--bg-3) 75%);
+  background-size:200% 100%;animation:sh 1.3s infinite;border-radius:5px;height:11px;
+}
+@keyframes sh{0%{background-position:200% 0}100%{background-position:-200% 0}}
+.banner{
+  display:flex;align-items:flex-start;gap:11px;padding:12px 15px;border-radius:10px;margin-bottom:18px;
+  background:rgba(246,70,93,.07);border:1px solid rgba(246,70,93,.25);font-size:12.5px;color:#FFA8B4;line-height:1.6;
+}
+.banner .bi{color:var(--red);font-family:var(--mono);font-weight:700;flex:none}
+.banner b{color:#FFD0D6}
+
+/* ── API tab ────────────────────────────────────────────────────────── */
+.ep{
+  background:var(--bg-1);border:1px solid var(--line-soft);border-radius:var(--r-lg);
+  margin-bottom:13px;overflow:hidden;
+}
+.ep-head{display:flex;align-items:center;gap:12px;padding:14px 17px;flex-wrap:wrap}
+.method{
+  font-family:var(--mono);font-size:10.5px;font-weight:700;padding:3px 8px;border-radius:5px;
+  background:rgba(14,203,129,.12);color:var(--green);border:1px solid rgba(14,203,129,.25);flex:none;
+}
+.ep-path{font-family:var(--mono);font-size:13.5px;color:var(--tx);font-weight:550}
+.ep-path .p{color:var(--gold)}
+.ep-desc{font-size:12.5px;color:var(--tx-3);flex:1;min-width:180px}
+.noauth{font-size:10px;font-family:var(--mono);padding:2px 7px;border-radius:4px;background:var(--bg-3);color:var(--tx-3);border:1px solid var(--line)}
+.ep-body{padding:0 17px 16px;border-top:1px solid var(--line-soft)}
+.ptable{width:100%;border-collapse:collapse;min-width:0;margin-top:12px}
+.ptable th{
+  text-align:left;font-size:10px;font-family:var(--mono);letter-spacing:.08em;text-transform:uppercase;
+  color:var(--tx-4);padding:6px 10px 6px 0;border-bottom:1px solid var(--line-soft);font-weight:600;
+  position:static;background:none;
+}
+.ptable td{padding:7px 10px 7px 0;border-bottom:1px solid var(--line-soft);font-size:12px;color:var(--tx-2);vertical-align:top}
+.ptable td:first-child{font-family:var(--mono);color:var(--gold);white-space:nowrap;font-size:11.5px}
+.ptable td:nth-child(2){font-family:var(--mono);color:var(--tx-4);font-size:11px;white-space:nowrap}
+.ptable tr:last-child td{border-bottom:0}
+.try{display:flex;gap:9px;align-items:center;margin-top:13px;flex-wrap:wrap}
+.urlbox{
+  flex:1;min-width:220px;font-family:var(--mono);font-size:11.5px;color:var(--tx-3);
+  background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:7px 11px;
+  overflow-x:auto;white-space:nowrap;
+}
+.out{
+  margin-top:11px;background:var(--bg);border:1px solid var(--line);border-radius:8px;
+  padding:12px 14px;font-family:var(--mono);font-size:11.5px;line-height:1.65;color:var(--tx-2);
+  max-height:340px;overflow:auto;white-space:pre;
+}
+.out .k{color:var(--blue)}
+.out .s{color:var(--green)}
+.out .n{color:var(--gold)}
+.out .b{color:#C58AF9}
+.out.error{color:#FF9AA8;border-color:rgba(246,70,93,.3)}
+pre.code{
+  background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:14px 16px;
+  overflow-x:auto;font-size:12px;line-height:1.72;color:var(--tx-2);margin:0;
+}
+pre.code .cm{color:var(--tx-4)}
+pre.code .kw{color:#C58AF9}
+pre.code .st{color:var(--green)}
+pre.code .fn{color:var(--gold)}
+.copy{
+  background:var(--bg-3);border:1px solid var(--line);color:var(--tx-3);border-radius:6px;
+  padding:3px 9px;font-size:10.5px;font-family:var(--mono);transition:all .15s;
+}
+.copy:hover{background:var(--bg-4);color:var(--tx)}
+.copy.done{color:var(--green);border-color:rgba(14,203,129,.35)}
+.code-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+.code-head .cl{font-size:11px;font-family:var(--mono);color:var(--tx-3);letter-spacing:.06em}
+
+.dict{width:100%;border-collapse:collapse;min-width:660px}
+.dict th{
+  text-align:left;font-size:10px;font-family:var(--mono);letter-spacing:.08em;text-transform:uppercase;
+  color:var(--tx-3);padding:9px 12px;border-bottom:1px solid var(--line);background:var(--bg-3);
+  position:sticky;top:0;font-weight:600;
+}
+.dict td{padding:8px 12px;border-bottom:1px solid var(--line-soft);font-size:12px;color:var(--tx-2);vertical-align:top}
+.dict td:first-child{font-family:var(--mono);color:var(--gold);white-space:nowrap;font-size:11.5px}
+.dict td:nth-child(2){font-family:var(--mono);color:var(--tx-4);font-size:10.5px;white-space:nowrap}
+.dict tr:last-child td{border-bottom:0}
+
+.note{
+  font-size:12px;color:var(--tx-3);line-height:1.7;padding:12px 15px;background:var(--bg-2);
+  border:1px solid var(--line-soft);border-left:2px solid var(--gold);border-radius:0 8px 8px 0;
+}
+.note b{color:var(--tx-2)}
+
+/* ── Footer ─────────────────────────────────────────────────────────── */
+footer{
+  border-top:1px solid var(--line);padding:22px 0 34px;
+  font-size:11.5px;color:var(--tx-4);
+}
+.fbar{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;align-items:center}
+.fbar .mono{font-family:var(--mono)}
+
+/* ── Responsive ─────────────────────────────────────────────────────── */
+@media (max-width:1100px){
+  .g4{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .d-grid{grid-template-columns:1fr;gap:18px}
+}
+@media (max-width:860px){
+  .wrap{padding:0 16px}
+  .g3,.g2{grid-template-columns:1fr}
+  .hero{padding:24px 20px}
+  .ps{grid-template-columns:1fr}
+  .ps-arrow{padding:0;transform:rotate(90deg);font-size:18px}
+  .flow{display:grid;grid-template-columns:1fr;gap:8px}
+  .step{border-radius:10px!important;border-left:1px solid var(--line-soft)!important;min-width:0}
+  .step::after{display:none}
+  .srcbar{grid-template-columns:112px 1fr 36px}
+  .factor{grid-template-columns:96px 1fr 42px}
+  .tab{margin-right:18px;font-size:12.5px}
+  select,input[type=text],input[type=date]{min-width:0;width:100%}
+  .field{flex:1 1 132px}
+  .kpi .val{font-size:22px}
+}
+@media (max-width:640px){
+  .g4{grid-template-columns:1fr}
+  .brand-tx .s{display:none}
+  .hbar{padding:10px 0}
+}
+@media print{
+  body{background:#fff;color:#000}
+  header{position:static}
+  body::before{display:none}
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <div class="hbar">
+      <div class="brand">
+        <svg class="mark" viewBox="0 0 64 64" aria-hidden="true">
+          <g fill="#F0B90B">
+            <rect x="26.4" y="4"  width="11.2" height="11.2" rx="1.6" transform="rotate(45 32 9.6)"/>
+            <rect x="4"    y="26.4" width="11.2" height="11.2" rx="1.6" transform="rotate(45 9.6 32)"/>
+            <rect x="48.8" y="26.4" width="11.2" height="11.2" rx="1.6" transform="rotate(45 54.4 32)"/>
+            <rect x="26.4" y="48.8" width="11.2" height="11.2" rx="1.6" transform="rotate(45 32 54.4)"/>
+            <rect x="25.6" y="25.6" width="12.8" height="12.8" rx="1.8" transform="rotate(45 32 32)" opacity=".9"/>
+          </g>
+        </svg>
+        <div class="brand-tx">
+          <div class="n">Lawrence <b>Crypto News</b> Crawler</div>
+          <div class="s">B9 RECOMMENDATION · NEWS DATA SERVICE</div>
+        </div>
+      </div>
+      <div class="hspacer"></div>
+      <div class="pill" id="healthPill" title="服务健康状态">
+        <span class="dot" id="healthDot"></span><span id="healthTx">连接中…</span>
+      </div>
+    </div>
+    <nav class="tabs" role="tablist" aria-label="主导航">
+      <button class="tab" role="tab" id="tab-1" aria-controls="panel-1" aria-selected="true"><span class="idx">01</span>产品介绍</button>
+      <button class="tab" role="tab" id="tab-2" aria-controls="panel-2" aria-selected="false"><span class="idx">02</span>数据看板</button>
+      <button class="tab" role="tab" id="tab-3" aria-controls="panel-3" aria-selected="false"><span class="idx">03</span>API 服务</button>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+
+<!-- ══════════════════ TAB 1 · 产品介绍 ══════════════════ -->
+<div role="tabpanel" id="panel-1" aria-labelledby="tab-1">
+
+  <div class="hero">
+    <div class="tagline"><span class="dot ok"></span>PRODUCTION · 每日 2 次自动运行</div>
+    <h1>给 B9 内容推荐<span class="accent">造一套新闻数据底座</span></h1>
+    <p class="lede">
+      全网抓取加密货币、美股与高相关科技行业新闻，用 <strong>LLM 结构化</strong>为标准事件（双语标题、长短摘要、板块标签、涉及币种、可信度），
+      经<strong>四层去重管线</strong>折叠同一事件的多源报道，再用<strong>五因子模型</strong>打出重要性分并分级入库，
+      最终打包成 <strong>REST API</strong> 供下游推荐场景消费。
+    </p>
+    <div class="chipline">
+      <span class="chip">抓取量 <b>~1200 条/轮</b></span>
+      <span class="chip">LLM <b>gpt-5.4</b></span>
+      <span class="chip">向量 <b>text-embedding-3-small · 256d</b></span>
+      <span class="chip">存储 <b>MySQL 8</b></span>
+      <span class="chip">部署 <b>GCP VM · systemd + cron</b></span>
+    </div>
+  </div>
+
+  <div class="grid g4 section" id="kpiRow">
+    <div class="kpi"><div class="lbl">事件库总量</div><div class="val" id="k-total">—</div><div class="note">已结构化 & 去重的新闻事件</div></div>
+    <div class="kpi b"><div class="lbl">活跃信源</div><div class="val" id="k-src">—</div><div class="note">近期产出过事件的独立信源</div></div>
+    <div class="kpi g"><div class="lbl">最近一轮折叠率</div><div class="val" id="k-dedup">—</div><div class="note">原始条目 → 唯一事件</div></div>
+    <div class="kpi r"><div class="lbl">谣言标记</div><div class="val" id="k-rumor">—</div><div class="note">可信度校验拦截，下游可过滤</div></div>
+  </div>
+
+  <!-- 问题 → 方案 -->
+  <section class="section">
+    <div class="section-head">
+      <span class="eyebrow">Why</span>
+      <h2>线上推荐的两个病根，与本服务的对策</h2>
+      <span class="sub">均有线上截图实证</span>
+    </div>
+    <div class="ps">
+      <div class="ps-col bad">
+        <h4>现状问题</h4>
+        <div class="ps-item"><div class="t">按时间强排</div><div class="d">不重要的人事变动排第一，BitMEX 关停这类大事被压到第五位。时间序不等于重要性序。</div></div>
+        <div class="ps-item"><div class="t">没有去重</div><div class="d">K25.ai 融资同一条新闻在信息流里并列出现 3 次，挤占坑位、观感廉价。</div></div>
+        <div class="ps-item"><div class="t">噪音挤占头部</div><div class="d">交易所运营公告刷屏 Top 榜；DeepSeek / Nvidia 等泛科技新闻混入高分区。</div></div>
+        <div class="ps-item"><div class="t">中文信源缺失</div><div class="d">吴说、BlockBeats、ChainCatcher 未被召回，中文用户体验差；链上聪明钱动向完全缺位。</div></div>
+      </div>
+      <div class="ps-arrow">→</div>
+      <div class="ps-col good">
+        <h4>本服务的对策</h4>
+        <div class="ps-item"><div class="t">五因子重要性打分</div><div class="d">影响面 / 时效 / 热度 / 权威 / 质量加权，输出 0–1 连续分 + S/A/B/C/D 分级，下游直接按分排序。</div></div>
+        <div class="ps-item"><div class="t">四层去重管线</div><div class="d">标题归一化 → 事件三元组指纹 → embedding 语义聚类 → 跨轮归并。多源报道折叠成单一事件并保留全部信源。</div></div>
+        <div class="ps-item"><div class="t">防火墙规则</div><div class="d">泛科技新闻强制降为 D 级且影响面 ≤ 0.08；交易所上下架公告不进推荐池。</div></div>
+        <div class="ps-item"><div class="t">中英双轨信源架构</div><div class="d">中文媒体直连 + 自建 RSSHub，英文 RSS，32 个 X KOL 含链上/安全/监管账号，全部入库。</div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 数据源 -->
+  <section class="section">
+    <div class="section-head">
+      <span class="eyebrow">Data Sources</span>
+      <h2>信源架构</h2>
+      <span class="sub">35+ 新闻源 · 32 个 X KOL · X 全网搜索 · 搜索引擎 · 行情异动信号</span>
+    </div>
+    <div class="grid g3" style="margin-bottom:14px">
+      <div class="card">
+        <div class="eyebrow" style="margin-bottom:12px">01 · 中文直连</div>
+        <div class="chipline" style="margin:0">
+          <span class="chip">吴说区块链</span><span class="chip">BlockBeats 律动</span><span class="chip">金色财经</span>
+          <span class="chip">Followin 快讯</span><span class="chip">ChainCatcher</span><span class="chip">PANews</span>
+          <span class="chip">TechFlow 深潮</span><span class="chip">币安广场</span><span class="chip">币安上币公告</span>
+        </div>
+        <p style="font-size:11.5px;color:var(--tx-4);margin-top:12px;line-height:1.6">
+          官方 RSS + 自建 RSSHub 容器 + HTML 解析（NUXT SSR 数据提取）三种接入方式并存。
+        </p>
+      </div>
+      <div class="card">
+        <div class="eyebrow" style="margin-bottom:12px">02 · 英文与宏观</div>
+        <div class="chipline" style="margin:0">
+          <span class="chip">CoinDesk</span><span class="chip">TheBlock</span><span class="chip">Cointelegraph</span>
+          <span class="chip">Decrypt</span><span class="chip">Blockworks</span><span class="chip">TheDefiant</span>
+          <span class="chip">CNBC Finance</span><span class="chip">YahooFinance</span><span class="chip">CoinMarketCal</span>
+        </div>
+        <p style="font-size:11.5px;color:var(--tx-4);margin-top:12px;line-height:1.6">
+          CNBC / YahooFinance 含大量泛财经噪音，已通过防火墙规则降权处理。
+        </p>
+      </div>
+      <div class="card">
+        <div class="eyebrow" style="margin-bottom:12px">03 · X / 社交与信号</div>
+        <div class="chipline" style="margin:0">
+          <span class="chip">32 个 KOL 时间线</span><span class="chip">X 全网搜索 · 21 组查询</span>
+          <span class="chip">Google News RSS</span><span class="chip">ddgs 搜索</span>
+          <span class="chip">行情异动 · binance.vision</span><span class="chip">行情异动 · OKX</span>
+        </div>
+        <p style="font-size:11.5px;color:var(--tx-4);margin-top:12px;line-height:1.6">
+          KOL 覆盖媒体快讯、链上聪明钱、数据研究、安全预警、官方、宏观、监管七类。行情异动信号零 LLM 成本。
+        </p>
+      </div>
+    </div>
+    <div class="card">
+      <div class="section-head" style="margin-bottom:14px">
+        <h2 style="font-size:14px">信源产出分布 · 实时</h2>
+        <span class="sub" id="srcMeta">加载中…</span>
+      </div>
+      <div id="srcChart"><div class="skel" style="height:11px;margin-bottom:9px"></div><div class="skel" style="height:11px;margin-bottom:9px;width:80%"></div><div class="skel" style="height:11px;width:62%"></div></div>
+    </div>
+  </section>
+
+  <!-- 生成流程 -->
+  <section class="section">
+    <div class="section-head">
+      <span class="eyebrow">Pipeline</span>
+      <h2>事件生成流程</h2>
+      <span class="sub">每天 2 次 · UTC 00:00 / 12:00（北京 08:00 / 20:00）</span>
+    </div>
+    <div class="flow">
+      <div class="step"><div class="num">01</div><div class="nm">多源抓取</div><div class="ds">RSS / RSSHub / HTML 解析 / X API / 搜索引擎 / 行情 API 并发拉取，7 天时间窗过滤陈年内容。</div><div class="tag">~1200 条/轮</div></div>
+      <div class="step"><div class="num">02</div><div class="nm">粗去重</div><div class="ds">标题归一化后精确比对，剔除同源重复推送与转载。</div><div class="tag">规则层</div></div>
+      <div class="step hi"><div class="num">03</div><div class="nm">LLM 结构化</div><div class="ds">生成双语标题、50–100 字短摘要、数百字长摘要，抽取板块 / 币种 / 类型 / 主体-动作-日期三元组。</div><div class="tag">gpt-5.4</div></div>
+      <div class="step hi"><div class="num">04</div><div class="nm">语义聚合</div><div class="ds">256 维 embedding 计算余弦相似度，cosine ≥ 0.82 判为同一事件并入同簇。</div><div class="tag">cosine ≥ 0.82</div></div>
+      <div class="step"><div class="num">05</div><div class="nm">跨轮归并</div><div class="ds">写库前与历史事件比对指纹与向量，命中则合并信源、更新分数，而非新增行。</div><div class="tag">写库前拦截</div></div>
+      <div class="step"><div class="num">06</div><div class="nm">五因子打分</div><div class="ds">影响面 / 时效 / 热度 / 权威 / 质量加权求和，映射为 S/A/B/C/D 事件级别。</div><div class="tag">0–1 连续分</div></div>
+      <div class="step"><div class="num">07</div><div class="nm">入库 & 服务</div><div class="ds">落 MySQL <code style="font-size:10.5px;color:var(--tx-3)">news_events</code>，Flask REST API 对外提供查询与筛选。</div><div class="tag">MySQL + REST</div></div>
+    </div>
+    <div class="card" style="margin-top:14px">
+      <div class="section-head" style="margin-bottom:12px"><h2 style="font-size:14px">最近一次 Pipeline 运行 · 实时</h2><span class="sub" id="runMeta">加载中…</span></div>
+      <div class="grid g4" id="runStats">
+        <div class="skel" style="height:52px"></div><div class="skel" style="height:52px"></div>
+        <div class="skel" style="height:52px"></div><div class="skel" style="height:52px"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 打分模型 + 去重 -->
+  <section class="section">
+    <div class="section-head">
+      <span class="eyebrow">Scoring</span>
+      <h2>重要性打分模型 · Macro Insight v1</h2>
+    </div>
+    <div class="grid g2">
+      <div class="card">
+        <div class="formula">
+          <span class="f">Score</span> = <span class="w">0.35</span>·M + <span class="w">0.20</span>·T + <span class="w">0.15</span>·H + <span class="w">0.15</span>·A + <span class="w">0.15</span>·Q
+        </div>
+        <div style="margin-top:16px">
+          <div class="factor"><div class="fn"><i>M</i>影响面</div><div class="bar"><i style="width:0" data-w="100"></i></div><div class="fv">0.35</div></div>
+          <div class="factor"><div class="fn"><i>T</i>时效性</div><div class="bar"><i style="width:0" data-w="57"></i></div><div class="fv">0.20</div></div>
+          <div class="factor"><div class="fn"><i>H</i>热度</div><div class="bar"><i style="width:0" data-w="43"></i></div><div class="fv">0.15</div></div>
+          <div class="factor"><div class="fn"><i>A</i>权威性</div><div class="bar"><i style="width:0" data-w="43"></i></div><div class="fv">0.15</div></div>
+          <div class="factor"><div class="fn"><i>Q</i>质量体裁</div><div class="bar"><i style="width:0" data-w="43"></i></div><div class="fv">0.15</div></div>
+        </div>
+        <div class="note" style="margin-top:16px">
+          <b>因子口径：</b>M 为事件对价格与资金流的潜在影响；T 按 24 小时半衰期衰减；
+          H = 0.6×log 归一(社交互动) + 0.4×min(信源数/8, 1)；A 为信源权威分级；
+          Q 区分深度分析 &gt; 快讯 &gt; 价格播报。<b>无硬门限</b>，保底供给。
+        </div>
+      </div>
+      <div class="card">
+        <div class="section-head" style="margin-bottom:8px"><h2 style="font-size:14px">事件级别分布 · 实时</h2><span class="sub" id="tierMeta"></span></div>
+        <div id="tierList">
+          <div class="skel" style="height:14px;margin-bottom:12px"></div><div class="skel" style="height:14px;margin-bottom:12px"></div>
+          <div class="skel" style="height:14px;margin-bottom:12px"></div><div class="skel" style="height:14px;margin-bottom:12px"></div>
+          <div class="skel" style="height:14px"></div>
+        </div>
+        <div style="height:1px;background:var(--line-soft);margin:18px 0"></div>
+        <div class="section-head" style="margin-bottom:8px"><h2 style="font-size:14px">新闻类型分布 · 实时</h2></div>
+        <div id="typeList"><div class="skel" style="height:14px;margin-bottom:12px"></div><div class="skel" style="height:14px;margin-bottom:12px"></div><div class="skel" style="height:14px"></div></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="section-head">
+      <span class="eyebrow">Dedup</span>
+      <h2>去重管线 · 项目最大的一处重构</h2>
+      <span class="sub">重构前实测 48.7% 冗余</span>
+    </div>
+    <div class="grid g2">
+      <div class="card">
+        <div class="eyebrow" style="margin-bottom:12px">四层管线</div>
+        <div class="tier-row"><span class="tier tier-S">1</span><div class="desc"><b style="color:var(--tx-2)">标题归一化</b> — 去标点、统一大小写与全半角后精确比对，拦同源重复推送</div></div>
+        <div class="tier-row"><span class="tier tier-A">2</span><div class="desc"><b style="color:var(--tx-2)">事件三元组指纹</b> — LLM 输出「主体 / 动作 / 日期」，sha256 派生稳定 ID</div></div>
+        <div class="tier-row"><span class="tier tier-B">3</span><div class="desc"><b style="color:var(--tx-2)">embedding 语义聚类</b> — 256 维真向量，cosine ≥ 0.82 并簇</div></div>
+        <div class="tier-row"><span class="tier tier-C">4</span><div class="desc"><b style="color:var(--tx-2)">跨轮归并</b> — 写库前与历史比对，命中则合并信源而非新增行</div></div>
+      </div>
+      <div class="card">
+        <div class="eyebrow" style="margin-bottom:12px">重构成果（实测）</div>
+        <div class="grid g2" style="gap:12px">
+          <div class="kpi r" style="padding:14px"><div class="lbl">重构前冗余率</div><div class="val" style="font-size:22px">48.7<span class="u">%</span></div><div class="note">855 行中 416 行是同事件重复</div></div>
+          <div class="kpi g" style="padding:14px"><div class="lbl">同输入折叠增量</div><div class="val" style="font-size:22px">27.9<span class="u">%</span></div><div class="note">事件数 484 → 349</div></div>
+          <div class="kpi b" style="padding:14px"><div class="lbl">跨轮归并命中</div><div class="val" style="font-size:22px">267<span class="u">/349</span></div><div class="note">并入既有行，表行数净增 82</div></div>
+          <div class="kpi" style="padding:14px"><div class="lbl">代码行数</div><div class="val" style="font-size:22px">944<span class="u">→508</span></div><div class="note">拆成 dedup/scoring/storage/pipeline</div></div>
+        </div>
+        <div class="note" style="margin-top:14px">
+          <b>阈值标定：</b>文档写的 cosine 0.65 会把「油价破 100 美元」和「特斯拉周跌 18%」判为同一事件。
+          在 855 条真实事件、28 万配对上分档抽样并人工标注 13 组：「应合并」最低 <b>0.859</b>、「应分开」最高 <b>0.761</b>，
+          中间有 0.098 的干净空隙 —— 阈值因此定为 <b>0.82</b>。
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="section-head">
+      <span class="eyebrow">Taxonomy</span>
+      <h2>标签体系</h2>
+      <span class="sub">与 B9 线上板块标签对齐</span>
+    </div>
+    <div class="grid g3">
+      <div class="card">
+        <div class="eyebrow" style="margin-bottom:12px">板块标签 · 20 个</div>
+        <div class="chipline" style="margin:0" id="sectorChips"></div>
+      </div>
+      <div class="card">
+        <div class="eyebrow" style="margin-bottom:12px">新闻类型 · 6 类</div>
+        <div class="chipline" style="margin:0">
+          <span class="chip">macro 宏观</span><span class="chip">policy 政策监管</span><span class="chip">market 市场行情</span>
+          <span class="chip">project 项目动态</span><span class="chip">security 安全事件</span><span class="chip">other 其他</span>
+        </div>
+        <div class="eyebrow" style="margin:18px 0 12px">可信度</div>
+        <div class="chipline" style="margin:0">
+          <span class="chip">credibility_score 0–1</span><span class="chip">is_rumor 谣言标记</span><span class="chip">rumor_reason 判定原因</span>
+        </div>
+      </div>
+      <div class="card">
+        <div class="eyebrow" style="margin-bottom:12px">运行与运维</div>
+        <dl class="kv" style="grid-template-columns:96px 1fr">
+          <dt>主机</dt><dd>GCP VM · 34.138.247.158</dd>
+          <dt>调度</dt><dd>cron · UTC 00:00 / 12:00</dd>
+          <dt>服务</dt><dd>systemd · crypto-news-api</dd>
+          <dt>存储</dt><dd>MySQL 8 · crypto_news</dd>
+          <dt>依赖</dt><dd>自建 RSSHub :1200</dd>
+          <dt>接口</dt><dd>Flask REST · :8080</dd>
+        </dl>
+        <div class="note" style="margin-top:14px">
+          原计划每 4 小时一轮，按降本要求改为每天 2 次；同步把每源 RSS 取数上限 30→100、
+          X 回看窗口 6h→14h，防止降频导致召回下滑。
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<!-- ══════════════════ TAB 2 · 数据看板 ══════════════════ -->
+<div role="tabpanel" id="panel-2" aria-labelledby="tab-2" hidden>
+
+  <div class="section-head">
+    <span class="eyebrow">Data</span>
+    <h2>事件数据表</h2>
+    <span class="sub">全部字段来自线上 MySQL，筛选条件变化即重新请求 API</span>
+  </div>
+
+  <div class="filters">
+    <div class="frow">
+      <div class="field"><label for="f-sector">板块 Sector</label>
+        <select id="f-sector"><option value="">全部板块</option></select></div>
+      <div class="field"><label for="f-tier">事件级别 Tier</label>
+        <select id="f-tier">
+          <option value="">全部级别</option><option value="S">S · 极重大</option><option value="A">A · 重大</option>
+          <option value="B">B · 重要</option><option value="C">C · 一般</option><option value="D">D · 次要</option>
+        </select></div>
+      <div class="field"><label for="f-type">新闻类型 Type</label>
+        <select id="f-type">
+          <option value="">全部类型</option><option value="macro">macro · 宏观</option><option value="policy">policy · 政策监管</option>
+          <option value="market">market · 市场行情</option><option value="project">project · 项目动态</option>
+          <option value="security">security · 安全事件</option><option value="other">other · 其他</option>
+        </select></div>
+      <div class="field"><label for="f-rumor">是否谣言 Rumor</label>
+        <select id="f-rumor"><option value="">不限</option><option value="0">仅已核实</option><option value="1">仅谣言标记</option></select></div>
+      <div class="field"><label for="f-source">信源 Source</label>
+        <select id="f-source"><option value="">全部信源</option></select></div>
+      <div class="field"><label for="f-sort">排序 Sort</label>
+        <select id="f-sort"><option value="importance">重要性由高到低</option><option value="date">采集时间由新到旧</option></select></div>
+      <div class="field"><label for="f-limit">每页条数</label>
+        <select id="f-limit"><option value="20">20</option><option value="50" selected>50</option><option value="100">100</option></select></div>
+      <div class="field"><label for="f-from">起始日期</label><input type="date" id="f-from"></div>
+      <div class="field"><label for="f-to">截止日期</label><input type="date" id="f-to"></div>
+      <div class="field" style="flex:1 1 180px"><label for="f-kw">标题关键词（本页内）</label><input type="text" id="f-kw" placeholder="中英文标题过滤…"></div>
+      <div class="field"><label>&nbsp;</label><button class="btn" id="f-reset">重置</button></div>
+      <div class="field"><label>&nbsp;</label><button class="btn primary" id="f-refresh">刷新</button></div>
+    </div>
+  </div>
+
+  <div class="meta-line">
+    <span>共 <b id="m-total">—</b> 条匹配 · 当前 <b id="m-range">—</b></span>
+    <div class="active-f" id="activeFilters"></div>
+    <span class="mspacer"></span>
+    <span class="mono" id="m-latency" style="color:var(--tx-4);font-size:11px"></span>
+    <button class="btn sm" id="p-prev" disabled>← 上一页</button>
+    <button class="btn sm" id="p-next" disabled>下一页 →</button>
+  </div>
+
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr>
+        <th class="c-rank">#</th>
+        <th class="c-score">重要性</th>
+        <th class="c-title">事件标题</th>
+        <th class="c-tags">板块 / 币种</th>
+        <th class="c-src">信源</th>
+        <th class="c-time">事件时间</th>
+        <th class="c-x"></th>
+      </tr></thead>
+      <tbody id="tbody"></tbody>
+    </table>
+  </div>
+  <p style="font-size:11.5px;color:var(--tx-4);margin-top:11px">点击任意行展开完整摘要、五因子明细与原文链接。</p>
+</div>
+
+<!-- ══════════════════ TAB 3 · API 服务 ══════════════════ -->
+<div role="tabpanel" id="panel-3" aria-labelledby="tab-3" hidden>
+
+  <div class="section-head">
+    <span class="eyebrow">API</span>
+    <h2>REST API 接入说明</h2>
+    <span class="sub">线上可用，所有示例链接可直接点开</span>
+  </div>
+
+  <div class="grid g2 section">
+    <div class="card">
+      <div class="eyebrow" style="margin-bottom:11px">Base URL</div>
+      <div class="try" style="margin-top:0">
+        <div class="urlbox" id="baseUrlBox">—</div>
+        <button class="copy" data-copy="#baseUrlBox">复制</button>
+      </div>
+      <p style="font-size:12px;color:var(--tx-3);margin-top:12px;line-height:1.7">
+        HTTP / JSON，UTF-8。全部端点均为 <code style="color:var(--green)">GET</code>，幂等无副作用。
+        响应体统一为 <code style="color:var(--gold)">{"data": [...], "meta": {...}}</code>（详情端点直接返回对象）。
+      </p>
+    </div>
+    <div class="card">
+      <div class="eyebrow" style="margin-bottom:11px">鉴权 · 两种方式</div>
+      <div style="margin-bottom:11px">
+        <div style="font-size:12px;color:var(--tx-2);margin-bottom:6px">① 请求头（程序化调用推荐）</div>
+        <div class="urlbox" id="authHeader">Authorization: Bearer ***REMOVED***</div>
+      </div>
+      <div>
+        <div style="font-size:12px;color:var(--tx-2);margin-bottom:6px">② URL 参数（浏览器直接点开）</div>
+        <div class="urlbox">?token=***REMOVED***</div>
+      </div>
+      <div class="note" style="margin-top:13px">
+        方式 ② 是为非技术同事加的 —— 浏览器地址栏发不出自定义请求头。代价是 token 会进浏览器历史与访问日志；
+        当前 API 本身即 HTTP 明文 + 单一静态 token，安全模型是<b>「仅内部可信网络使用」</b>。
+        生产化时需连同 HTTPS 与分级 token 一并改造。
+      </div>
+    </div>
+  </div>
+
+  <section class="section">
+    <div class="section-head"><span class="eyebrow">Endpoints</span><h2>端点清单</h2><span class="sub">点「试一下」即时发起真实请求</span></div>
+    <div id="epList"></div>
+  </section>
+
+  <section class="section">
+    <div class="section-head"><span class="eyebrow">Schema</span><h2>事件对象字段字典</h2><span class="sub">/api/news 返回的 data[] 元素</span></div>
+    <div class="tbl-wrap"><table class="dict"><thead><tr><th>字段</th><th>类型</th><th>说明</th></tr></thead><tbody id="dictBody"></tbody></table></div>
+  </section>
+
+  <section class="section">
+    <div class="section-head"><span class="eyebrow">Snippets</span><h2>接入示例</h2></div>
+    <div class="grid g3">
+      <div>
+        <div class="code-head"><span class="cl">cURL</span><button class="copy" data-copy="#c-curl">复制</button></div>
+        <pre class="code" id="c-curl"></pre>
+      </div>
+      <div>
+        <div class="code-head"><span class="cl">Python</span><button class="copy" data-copy="#c-py">复制</button></div>
+        <pre class="code" id="c-py"></pre>
+      </div>
+      <div>
+        <div class="code-head"><span class="cl">JavaScript</span><button class="copy" data-copy="#c-js">复制</button></div>
+        <pre class="code" id="c-js"></pre>
+      </div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="section-head"><span class="eyebrow">Notes</span><h2>接入注意事项</h2></div>
+    <div class="grid g2">
+      <div class="card">
+        <dl class="kv" style="grid-template-columns:104px 1fr;font-size:12.5px;line-height:1.75">
+          <dt>limit 上限</dt><dd style="font-family:var(--sans)">单次最多 100 条，超出按 100 处理；翻页用 offset</dd>
+          <dt>鉴权失败</dt><dd style="font-family:var(--sans)">返回 401 <code>{"error":"Unauthorized"}</code></dd>
+          <dt>中文参数</dt><dd style="font-family:var(--sans)">source 传中文信源名需 URL 编码</dd>
+          <dt>is_rumor</dt><dd style="font-family:var(--sans)">不筛选时必须<b style="color:var(--gold)">整个省略该参数</b>；传空串会被当作 0 处理</dd>
+          <dt>sectors/coins</dt><dd style="font-family:var(--sans)">JSON 数组，可能为空数组</dd>
+          <dt>embedding</dt><dd style="font-family:var(--sans)">刻意不对外暴露，仅服务端去重使用</dd>
+        </dl>
+      </div>
+      <div class="card">
+        <div class="eyebrow" style="margin-bottom:11px">数据更新节奏</div>
+        <p style="font-size:12.5px;color:var(--tx-2);line-height:1.75">
+          Pipeline 每天 UTC 00:00 / 12:00 各跑一轮，单轮耗时约 15–20 分钟。
+          建议下游<b>按 <code style="color:var(--gold)">time_get_data</code> 增量拉取</b>，
+          或直接 <code style="color:var(--gold)">sort=date</code> 取最新。
+        </p>
+        <div class="note" style="margin-top:13px">
+          同一事件跨轮会<b>原地更新</b>（信源合并、分数刷新），<code>id</code> 保持稳定 ——
+          下游可安全地以 <code>id</code> 作为主键做 upsert，不会产生重复条目。
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
+
+</main>
+
+<footer>
+  <div class="wrap fbar">
+    <span>Lawrence Crypto News Crawler · Binance B9 内容推荐数据底座</span>
+    <span class="mono" id="footMeta">—</span>
+  </div>
+</footer>
+
+<script>
+"use strict";
+/* ══════════════════════════════════════════════════════════════════════
+   Config
+   ══════════════════════════════════════════════════════════════════════ */
+var TOKEN = "***REMOVED***";
+var FALLBACK = "http://34.138.247.158:8080";
+var API = (location.protocol === "http:" || location.protocol === "https:")
+          ? location.origin.replace(/\/+$/, "") : FALLBACK;
+
+var SECTORS = ["New Listing","bStocks","Seed","tCommodities","BSC","DeFi","Gaming","NFT",
+  "Layer1/Layer2","Launchpad","Payments","Monitoring","RWA","Solana","Fan Token",
+  "Infrastructure","AI","Launchpool","Megadrop","MEME"];
+
+var TIERS = [
+  {k:"S", d:"极重大 —— 全市场级别，改变主要资产定价逻辑", c:"var(--gold)"},
+  {k:"A", d:"重大 —— 影响面广，值得推荐位头部曝光",       c:"var(--amber)"},
+  {k:"B", d:"重要 —— 对特定板块或资产有明确影响",         c:"var(--blue)"},
+  {k:"C", d:"一般 —— 有信息价值但影响有限",               c:"#6E7A8A"},
+  {k:"D", d:"次要 —— 泛科技 / 例行公告，防火墙降级区",    c:"var(--tx-4)"}
+];
+var TYPES = [
+  {k:"macro",   n:"宏观"},   {k:"policy", n:"政策监管"}, {k:"market",  n:"市场行情"},
+  {k:"project", n:"项目动态"},{k:"security",n:"安全事件"}, {k:"other",   n:"其他"}
+];
+
+/* ── tiny helpers ─────────────────────────────────────────────────── */
+function $(s, r){ return (r||document).querySelector(s); }
+function $$(s, r){ return Array.prototype.slice.call((r||document).querySelectorAll(s)); }
+function esc(s){
+  if (s === null || s === undefined) return "";
+  return String(s).replace(/[&<>"']/g, function(c){
+    return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];
+  });
+}
+function nf(n){ return (n===null||n===undefined||isNaN(n)) ? "—" : Number(n).toLocaleString("en-US"); }
+function pct(n){ return (n*100).toFixed(1) + "%"; }
+function fmtTime(s){
+  if (!s) return "—";
+  var m = String(s).match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})/);
+  if (m) return {d: m[1].slice(2)+"-"+m[2]+"-"+m[3], t: m[4]+":"+m[5]};
+  var d = new Date(s);
+  if (!isNaN(d)) {
+    var p = function(x){ return String(x).padStart(2,"0"); };
+    return {d: String(d.getFullYear()).slice(2)+"-"+p(d.getMonth()+1)+"-"+p(d.getDate()),
+            t: p(d.getHours())+":"+p(d.getMinutes())};
+  }
+  return {d: String(s).slice(0,16), t:""};
+}
+function qs(params){
+  var parts = [];
+  Object.keys(params).forEach(function(k){
+    var v = params[k];
+    if (v === "" || v === null || v === undefined) return;   // 关键：空值整个省略
+    parts.push(encodeURIComponent(k) + "=" + encodeURIComponent(v));
+  });
+  return parts.join("&");
+}
+function apiUrl(path, params){
+  var p = Object.assign({}, params || {});
+  p.token = TOKEN;
+  return API + path + "?" + qs(p);
+}
+function apiGet(path, params, timeoutMs){
+  var url = apiUrl(path, params);
+  var ctl = ("AbortController" in window) ? new AbortController() : null;
+  var timer = ctl ? setTimeout(function(){ ctl.abort(); }, timeoutMs || 25000) : null;
+  return fetch(url, ctl ? {signal: ctl.signal} : undefined).then(function(r){
+    if (timer) clearTimeout(timer);
+    if (!r.ok) {
+      return r.text().then(function(t){
+        var msg = "HTTP " + r.status;
+        if (r.status === 401) msg += " · 鉴权失败，token 不正确";
+        throw new Error(msg + (t ? " · " + t.slice(0,160) : ""));
+      });
+    }
+    return r.json();
+  }).catch(function(e){
+    if (timer) clearTimeout(timer);
+    if (e.name === "AbortError") throw new Error("请求超时（>25s），服务可能无响应");
+    if (e instanceof TypeError) throw new Error("网络不可达：无法连接 " + API + "（服务未启动 / 网络阻断 / 跨域限制）");
+    throw e;
+  });
+}
+/* limited-concurrency runner —— 避免一次性打爆单实例 Flask */
+function pool(tasks, size){
+  var out = new Array(tasks.length), i = 0;
+  function next(){
+    if (i >= tasks.length) return Promise.resolve();
+    var idx = i++;
+    return tasks[idx]().then(function(v){ out[idx] = v; }, function(){ out[idx] = null; }).then(next);
+  }
+  var runners = [];
+  for (var k = 0; k < Math.min(size, tasks.length); k++) runners.push(next());
+  return Promise.all(runners).then(function(){ return out; });
+}
+function errState(msg, retryFn){
+  var d = document.createElement("div");
+  d.className = "state err";
+  d.innerHTML = '<div class="ic">!</div><div class="ti">数据加载失败</div>' +
+                '<div class="ds">接口没有正常返回。请确认 API 服务在线，或稍后重试。</div>' +
+                '<button class="btn primary" type="button">重新加载</button>' +
+                '<div class="err-code">' + esc(msg) + '</div>';
+  if (retryFn) $("button", d).addEventListener("click", retryFn);
+  return d;
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   Tabs
+   ══════════════════════════════════════════════════════════════════════ */
+var loaded = {1:false, 2:false, 3:false};
+function showTab(n){
+  $$(".tab").forEach(function(t){
+    var on = t.id === "tab-" + n;
+    t.setAttribute("aria-selected", on ? "true" : "false");
+  });
+  [1,2,3].forEach(function(i){ $("#panel-"+i).hidden = (i !== n); });
+  if (location.hash !== "#tab"+n) history.replaceState(null, "", "#tab"+n);
+  if (!loaded[n]) { loaded[n] = true; ({1:loadOverview, 2:loadDataTab, 3:loadApiTab})[n](); }
+  window.scrollTo({top:0, behavior:"smooth"});
+}
+$$(".tab").forEach(function(t){
+  t.addEventListener("click", function(){ showTab(Number(t.id.split("-")[1])); });
+});
+document.addEventListener("keydown", function(e){
+  if (e.target.tagName === "INPUT" || e.target.tagName === "SELECT") return;
+  if (e.key >= "1" && e.key <= "3" && !e.metaKey && !e.ctrlKey && !e.altKey) showTab(Number(e.key));
+});
+
+/* ══════════════════════════════════════════════════════════════════════
+   Health
+   ══════════════════════════════════════════════════════════════════════ */
+function loadHealth(){
+  return fetch(API + "/health").then(function(r){ return r.json(); }).then(function(d){
+    var ok = d.status === "ok";
+    $("#healthDot").className = "dot " + (ok ? "ok" : "bad");
+    $("#healthTx").textContent = ok ? ("SERVICE ONLINE · " + nf(d.news_count) + " events") : "SERVICE ERROR";
+    $("#k-total").innerHTML = nf(d.news_count) + '<span class="u">条</span>';
+    $("#footMeta").textContent = "API " + API + " · 快照 " + String(d.time || "").slice(0,19).replace("T"," ") + " UTC";
+    return d;
+  }).catch(function(e){
+    $("#healthDot").className = "dot bad";
+    $("#healthTx").textContent = "SERVICE UNREACHABLE";
+    $("#footMeta").textContent = "API " + API + " · 不可达";
+    throw e;
+  });
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   TAB 1 · Overview
+   ══════════════════════════════════════════════════════════════════════ */
+function countOf(params){
+  return apiGet("/api/news", Object.assign({limit:1}, params)).then(function(d){
+    return (d && d.meta && typeof d.meta.total === "number") ? d.meta.total : null;
+  });
+}
+function loadOverview(){
+  // sector chips
+  $("#sectorChips").innerHTML = SECTORS.map(function(s){
+    return '<span class="chip">' + esc(s) + '</span>';
+  }).join("");
+  // animate weight bars
+  setTimeout(function(){
+    $$(".factor .bar > i").forEach(function(el){ el.style.width = el.getAttribute("data-w") + "%"; });
+  }, 120);
+
+  /* sources */
+  apiGet("/api/sources").then(function(d){
+    var list = (d && d.data) || [];
+    $("#k-src").innerHTML = nf(list.length) + '<span class="u">个</span>';
+    var top = list.slice(0, 14);
+    var max = top.length ? top[0].event_count : 1;
+    $("#srcMeta").textContent = "Top " + top.length + " / 共 " + list.length + " 个信源";
+    $("#srcChart").innerHTML = top.map(function(s){
+      var w = Math.max(2, Math.round(s.event_count / max * 100));
+      var isX = /^X\//.test(s.source);
+      return '<div class="srcbar"><div class="sn" title="' + esc(s.source) + '">' + esc(s.source) + '</div>' +
+             '<div class="bar' + (isX ? ' blue' : '') + '"><i style="width:' + w + '%"></i></div>' +
+             '<div class="sc">' + s.event_count + '</div></div>';
+    }).join("");
+    // filter dropdown reuse
+    var sel = $("#f-source");
+    if (sel && sel.options.length <= 1) {
+      list.forEach(function(s){
+        var o = document.createElement("option");
+        o.value = s.source; o.textContent = s.source + " (" + s.event_count + ")";
+        sel.appendChild(o);
+      });
+    }
+  }).catch(function(e){
+    $("#srcMeta").textContent = "加载失败";
+    $("#srcChart").innerHTML = "";
+    $("#srcChart").appendChild(errState(e.message, function(){ loaded[1]=false; showTab(1); }));
+    $("#k-src").textContent = "—";
+  });
+
+  /* runs */
+  apiGet("/api/runs").then(function(d){
+    var runs = (d && d.data) || [];
+    var r = null;
+    for (var i = 0; i < runs.length; i++){ if (runs[i].events_count > 0) { r = runs[i]; break; } }
+    if (!r) r = runs[0];
+    if (!r) throw new Error("暂无运行记录");
+    $("#runMeta").textContent = "run #" + r.id + " · " + String(r.run_at||"").replace("T"," ").slice(0,19) +
+                                " · " + (r.status === "success" ? "成功" : r.status);
+    var cells = [
+      {l:"原始抓取", v:nf(r.raw_count),                     n:"多源合并后的原始条目"},
+      {l:"粗去重后", v:nf(r.deduped_count),                 n:"进入 LLM 的条目数"},
+      {l:"唯一事件", v:nf(r.events_count),                  n:"结构化 + 语义聚合产出"},
+      {l:"耗时",     v:(r.duration_seconds!=null? (r.duration_seconds/60).toFixed(1):"—"), u:"分钟", n:"单轮端到端"}
+    ];
+    $("#runStats").innerHTML = cells.map(function(c, i){
+      var cls = ["", "b", "g", ""][i];
+      return '<div class="kpi ' + cls + '" style="padding:14px"><div class="lbl">' + c.l + '</div>' +
+             '<div class="val" style="font-size:21px">' + c.v + (c.u ? '<span class="u">'+c.u+'</span>' : '') + '</div>' +
+             '<div class="note">' + c.n + '</div></div>';
+    }).join("");
+    if (r.raw_count && r.events_count){
+      var fold = (1 - r.events_count / r.raw_count) * 100;
+      $("#k-dedup").innerHTML = fold.toFixed(1) + '<span class="u">%</span>';
+      $("#k-dedup").parentNode.querySelector(".note").textContent =
+        nf(r.raw_count) + " 条原始 → " + nf(r.events_count) + " 个唯一事件";
+    }
+  }).catch(function(e){
+    $("#runMeta").textContent = "加载失败";
+    $("#runStats").innerHTML = "";
+    $("#runStats").appendChild(errState(e.message, function(){ loaded[1]=false; showTab(1); }));
+  });
+
+  /* rumor count */
+  countOf({is_rumor:1}).then(function(n){
+    if (n === null) return;
+    $("#k-rumor").innerHTML = nf(n) + '<span class="u">条</span>';
+  }).catch(function(){ $("#k-rumor").textContent = "—"; });
+
+  /* tier distribution */
+  pool(TIERS.map(function(t){ return function(){ return countOf({event_tier:t.k}); }; }), 3).then(function(vals){
+    var total = vals.reduce(function(a,b){ return a + (b||0); }, 0) || 1;
+    $("#tierMeta").textContent = "样本 " + nf(total) + " 条";
+    $("#tierList").innerHTML = TIERS.map(function(t, i){
+      var v = vals[i] || 0, w = Math.max(1, Math.round(v/total*100));
+      return '<div class="tier-row"><span class="tier tier-'+t.k+'">'+t.k+'</span>' +
+             '<div class="desc">'+esc(t.d)+'</div>' +
+             '<div class="mini"><i style="width:'+w+'%;background:'+t.c+'"></i></div>' +
+             '<div class="cnt">'+nf(v)+' · '+(v/total*100).toFixed(1)+'%</div></div>';
+    }).join("");
+  }).catch(function(e){
+    $("#tierList").innerHTML = ""; $("#tierList").appendChild(errState(e.message));
+  });
+
+  /* type distribution */
+  pool(TYPES.map(function(t){ return function(){ return countOf({news_type:t.k}); }; }), 3).then(function(vals){
+    var rows = TYPES.map(function(t,i){ return {k:t.k, n:t.n, v:vals[i]||0}; })
+                    .sort(function(a,b){ return b.v - a.v; });
+    var total = rows.reduce(function(a,b){ return a + b.v; }, 0) || 1;
+    $("#typeList").innerHTML = rows.map(function(r){
+      var w = Math.max(1, Math.round(r.v/total*100));
+      return '<div class="srcbar" style="grid-template-columns:132px 1fr 82px"><div class="sn">' +
+             '<span class="mono" style="color:var(--gold);font-size:11px">'+esc(r.k)+'</span> <span style="color:var(--tx-4);font-size:11px">'+esc(r.n)+'</span></div>' +
+             '<div class="bar blue"><i style="width:'+w+'%"></i></div>' +
+             '<div class="sc">'+nf(r.v)+' · '+(r.v/total*100).toFixed(1)+'%</div></div>';
+    }).join("");
+  }).catch(function(e){
+    $("#typeList").innerHTML = ""; $("#typeList").appendChild(errState(e.message));
+  });
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   TAB 2 · Data table
+   ══════════════════════════════════════════════════════════════════════ */
+var state = { offset:0, limit:50, total:0, rows:[], seq:0 };
+var FILTER_LABELS = {
+  sector:"板块", event_tier:"级别", news_type:"类型",
+  is_rumor:"谣言", source:"信源", date_from:"起始", date_to:"截止"
+};
+
+function readFilters(){
+  return {
+    sector:     $("#f-sector").value,
+    event_tier: $("#f-tier").value,
+    news_type:  $("#f-type").value,
+    is_rumor:   $("#f-rumor").value,
+    source:     $("#f-source").value,
+    date_from:  $("#f-from").value,
+    date_to:    $("#f-to").value
+  };
+}
+function renderActiveFilters(f){
+  var box = $("#activeFilters");
+  var keys = Object.keys(f).filter(function(k){ return f[k] !== ""; });
+  if (!keys.length){ box.innerHTML = ""; return; }
+  box.innerHTML = keys.map(function(k){
+    var v = f[k];
+    if (k === "is_rumor") v = (v === "1" ? "仅谣言" : "仅已核实");
+    return '<span class="fchip">' + esc(FILTER_LABELS[k]) + ' · ' + esc(v) +
+           '<button type="button" data-clear="' + esc(k) + '" title="移除">×</button></span>';
+  }).join("");
+  $$("[data-clear]", box).forEach(function(b){
+    b.addEventListener("click", function(){
+      var k = b.getAttribute("data-clear");
+      ({sector:"#f-sector", event_tier:"#f-tier", news_type:"#f-type", is_rumor:"#f-rumor",
+        source:"#f-source", date_from:"#f-from", date_to:"#f-to"})[k] &&
+        ($(({sector:"#f-sector", event_tier:"#f-tier", news_type:"#f-type", is_rumor:"#f-rumor",
+             source:"#f-source", date_from:"#f-from", date_to:"#f-to"})[k]).value = "");
+      state.offset = 0; fetchRows();
+    });
+  });
+}
+
+function fetchRows(){
+  var f = readFilters();
+  state.limit = Number($("#f-limit").value);
+  var params = Object.assign({}, f, {
+    limit: state.limit, offset: state.offset, sort: $("#f-sort").value
+  });
+  renderActiveFilters(f);
+  $("#tbody").innerHTML = '<tr><td colspan="7"><div class="state">' +
+    '<div class="ic">◌</div><div class="ti">正在查询…</div>' +
+    '<div class="ds">GET /api/news · ' + esc(qs(Object.assign({}, params))) + '</div></div></td></tr>';
+  $("#p-prev").disabled = $("#p-next").disabled = true;
+
+  // 请求序号：快速连续改筛选时，先发的请求可能后到。只认最后一次发出的请求，
+  // 否则会出现「界面显示的是上一组筛选条件的结果」这种极难排查的错位。
+  var mySeq = ++state.seq;
+  var t0 = performance.now();
+  apiGet("/api/news", params).then(function(d){
+    if (mySeq !== state.seq) return;               // 已被更新的请求取代，丢弃
+    var ms = Math.round(performance.now() - t0);
+    state.rows = (d && d.data) || [];
+    state.total = (d && d.meta && d.meta.total) || 0;
+    $("#m-latency").textContent = ms + " ms";
+    $("#m-total").textContent = nf(state.total);
+    $("#m-range").textContent = state.total
+      ? (nf(state.offset + 1) + "–" + nf(Math.min(state.offset + state.rows.length, state.total)))
+      : "0";
+    $("#p-prev").disabled = state.offset <= 0;
+    $("#p-next").disabled = (state.offset + state.limit) >= state.total;
+    renderRows();
+  }).catch(function(e){
+    if (mySeq !== state.seq) return;
+    $("#m-latency").textContent = "";
+    $("#m-total").textContent = "—"; $("#m-range").textContent = "—";
+    var tr = document.createElement("tr");
+    var td = document.createElement("td"); td.colSpan = 7;
+    td.appendChild(errState(e.message, fetchRows));
+    tr.appendChild(td);
+    $("#tbody").innerHTML = ""; $("#tbody").appendChild(tr);
+  });
+}
+
+function renderRows(){
+  var kw = $("#f-kw").value.trim().toLowerCase();
+  var rows = state.rows;
+  if (kw) rows = rows.filter(function(r){
+    return ((r.title_zh||"") + " " + (r.title_en||"")).toLowerCase().indexOf(kw) >= 0;
+  });
+  var tb = $("#tbody");
+  if (!rows.length){
+    tb.innerHTML = '<tr><td colspan="7"><div class="state"><div class="ic">∅</div>' +
+      '<div class="ti">没有匹配的事件</div><div class="ds">当前筛选条件下事件库为空。放宽条件或点「重置」恢复默认视图。</div>' +
+      '<button class="btn" type="button" onclick="document.getElementById(\'f-reset\').click()">重置筛选</button></div></td></tr>';
+    return;
+  }
+  tb.innerHTML = rows.map(function(r, i){
+    var tier  = r.event_tier || "D";
+    var score = (r.importance_score != null) ? Number(r.importance_score) : 0;
+    var t     = fmtTime(r.time_event || r.time_get_data);
+    var secs  = (r.sectors || []).slice(0,3).map(function(s){ return '<span class="tag-s">'+esc(s)+'</span>'; }).join("");
+    var coins = (r.coins || []).slice(0,4).map(function(c){ return '<span class="tag-s tag-c">'+esc(c)+'</span>'; }).join("");
+    if (!secs && !coins) secs = '<span class="tag-s tag-n">未标注</span>';
+    var srcs  = r.source_names || [];
+    var srcTx = srcs.slice(0,2).map(esc).join("、");
+    if (srcs.length > 2) srcTx += ' <span class="more">+' + (srcs.length - 2) + '</span>';
+    if (!srcs.length) srcTx = '<span class="more">—</span>';
+    var flags = "";
+    if (r.is_rumor) flags += ' <span class="tag-s tag-r">谣言</span>';
+    else if (r.is_verified) flags += ' <span class="tag-s tag-v">已核实</span>';
+
+    return '<tr class="row" data-i="' + i + '">' +
+      '<td class="c-rank">' + (state.offset + i + 1) + '</td>' +
+      '<td class="c-score"><div class="score-cell"><span class="tier tier-' + tier + '">' + tier + '</span>' +
+        '<span class="score-num">' + score.toFixed(3) + '</span></div>' +
+        '<div class="bar" style="margin-top:6px"><i style="width:' + Math.round(score*100) + '%"></i></div></td>' +
+      '<td class="c-title"><div class="t-zh">' + esc(r.title_zh || r.title_en || "(无标题)") + flags + '</div>' +
+        '<div class="t-en">' + esc(r.title_en || "") + '</div></td>' +
+      '<td class="c-tags">' + secs + coins +
+        '<div style="margin-top:4px"><span class="tag-s tag-n">' + esc(r.news_type || "—") + '</span></div></td>' +
+      '<td class="c-src"><div class="src-list">' + srcTx + '</div>' +
+        '<div class="tm" style="margin-top:3px">' + (r.source_count || srcs.length || 0) + ' 源 · 互动 ' + nf(r.social_interactions||0) + '</div></td>' +
+      '<td class="c-time"><div class="tm"><span class="d">' + t.d + '</span></div><div class="tm">' + t.t + '</div></td>' +
+      '<td class="c-x"><span class="caret">▶</span></td>' +
+    '</tr>';
+  }).join("");
+
+  $$("tr.row", tb).forEach(function(tr){
+    tr.addEventListener("click", function(){ toggleDetail(tr, rows[Number(tr.getAttribute("data-i"))]); });
+  });
+}
+
+function toggleDetail(tr, r){
+  var nxt = tr.nextElementSibling;
+  if (nxt && nxt.classList.contains("detail")){ nxt.remove(); tr.classList.remove("open"); return; }
+  $$("tr.detail").forEach(function(d){ d.remove(); });
+  $$("tr.row.open").forEach(function(o){ o.classList.remove("open"); });
+  tr.classList.add("open");
+
+  var factors = [
+    {n:"影响面 M", v:r.score_market_impact}, {n:"时效 T", v:r.score_timeliness},
+    {n:"热度 H",   v:r.score_hotness},       {n:"权威 A", v:r.score_authority},
+    {n:"质量 Q",   v:r.score_quality}
+  ];
+  var fHtml = factors.map(function(f){
+    var v = (f.v != null) ? Number(f.v) : 0;
+    return '<div class="mini-f"><div class="mn">'+f.n+'</div>' +
+           '<div class="bar" style="height:6px"><i style="width:'+Math.round(v*100)+'%"></i></div>' +
+           '<div class="mv">'+v.toFixed(2)+'</div></div>';
+  }).join("");
+
+  var srcHtml = (r.sources || []).map(function(s){
+    var nm = esc(s.name || "未知源");
+    var au = (s.authority != null) ? '<span class="au">权威 '+s.authority+'/5</span>' : "";
+    if (s.url) return '<a class="srclink" href="'+esc(s.url)+'" target="_blank" rel="noopener noreferrer">→ '+nm+au+'</a>';
+    return '<div class="srclink" style="color:var(--tx-3)">· '+nm+au+'</div>';
+  }).join("") || '<div style="font-size:11.5px;color:var(--tx-4)">未记录原文链接</div>';
+
+  var longTx = r.description_long_zh || r.description_long_en || "";
+  var shortTx = r.description_short_zh || r.description_short_en || "(无摘要)";
+
+  var td = '<td colspan="7"><div class="detail-in"><div class="d-grid"><div>' +
+    '<div class="d-sec"><div class="d-h">短摘要 · description_short_zh</div>' +
+      '<div class="d-short">' + esc(shortTx) + '</div></div>' +
+    (longTx ? '<div class="d-sec"><div class="d-h">长摘要 · description_long_zh</div>' +
+      '<div class="d-txt">' + esc(longTx) + '</div></div>' : "") +
+    (r.title_en ? '<div class="d-sec"><div class="d-h">英文标题 · title_en</div>' +
+      '<div class="d-txt" style="color:var(--tx-3)">' + esc(r.title_en) + '</div></div>' : "") +
+    (r.is_rumor ? '<div class="rumor-box"><b>⚠ 谣言标记</b> —— ' +
+      esc(r.rumor_reason || "可信度校验未通过，下游建议过滤或降权处理。") + '</div>' : "") +
+    '</div><div>' +
+    '<div class="d-sec"><div class="d-h">五因子明细</div>' + fHtml +
+      '<div class="mini-f" style="margin-top:9px;border-top:1px solid var(--line-soft);padding-top:9px">' +
+      '<div class="mn" style="color:var(--gold)">综合分</div><div class="bar" style="height:6px"><i style="width:' +
+      Math.round((r.importance_score||0)*100) + '%"></i></div><div class="mv" style="color:var(--gold)">' +
+      Number(r.importance_score||0).toFixed(3) + '</div></div></div>' +
+    '<div class="d-sec"><div class="d-h">元数据</div><dl class="kv">' +
+      '<dt>event id</dt><dd>' + esc(r.id) + '</dd>' +
+      '<dt>cluster</dt><dd>' + esc(r.cluster_id || "—") + '</dd>' +
+      '<dt>级别</dt><dd>' + esc(r.event_tier || "—") + '</dd>' +
+      '<dt>类型</dt><dd>' + esc(r.news_type || "—") + '</dd>' +
+      '<dt>板块</dt><dd>' + esc((r.sectors||[]).join(", ") || "—") + '</dd>' +
+      '<dt>币种</dt><dd>' + esc((r.coins||[]).join(", ") || "—") + '</dd>' +
+      '<dt>可信度</dt><dd>' + (r.credibility_score != null ? Number(r.credibility_score).toFixed(2) : "—") + '</dd>' +
+      '<dt>信源数</dt><dd>' + (r.source_count || 0) + ' · 合并 ' + (r.merged_sources_count || 0) + '</dd>' +
+      '<dt>社交互动</dt><dd>' + nf(r.social_interactions || 0) + '</dd>' +
+      '<dt>事件时间</dt><dd>' + esc(String(r.time_event || "—").replace("T"," ")) + '</dd>' +
+      '<dt>采集时间</dt><dd>' + esc(String(r.time_get_data || "—").replace("T"," ")) + '</dd>' +
+      '</dl></div>' +
+    '<div class="d-sec"><div class="d-h">原文信源 · ' + ((r.sources||[]).length) + '</div>' + srcHtml + '</div>' +
+    '<div class="d-sec"><a class="btn sm" style="display:inline-block" href="' +
+      esc(apiUrl("/api/news/" + encodeURIComponent(r.id), {})) +
+      '" target="_blank" rel="noopener noreferrer">查看该事件的原始 JSON →</a></div>' +
+    '</div></div></div></td>';
+
+  var dtr = document.createElement("tr");
+  dtr.className = "detail";
+  dtr.innerHTML = td;
+  tr.parentNode.insertBefore(dtr, tr.nextSibling);
+  $$(".bar > i", dtr).forEach(function(b){ var w = b.style.width; b.style.width = "0"; setTimeout(function(){ b.style.width = w; }, 30); });
+}
+
+function loadDataTab(){
+  var sel = $("#f-sector");
+  SECTORS.forEach(function(s){
+    var o = document.createElement("option"); o.value = s; o.textContent = s; sel.appendChild(o);
+  });
+  if ($("#f-source").options.length <= 1){
+    apiGet("/api/sources").then(function(d){
+      ((d && d.data) || []).forEach(function(s){
+        var o = document.createElement("option");
+        o.value = s.source; o.textContent = s.source + " (" + s.event_count + ")";
+        $("#f-source").appendChild(o);
+      });
+    }).catch(function(){});
+  }
+  ["#f-sector","#f-tier","#f-type","#f-rumor","#f-source","#f-sort","#f-limit","#f-from","#f-to"].forEach(function(id){
+    $(id).addEventListener("change", function(){ state.offset = 0; fetchRows(); });
+  });
+  var kwT;
+  $("#f-kw").addEventListener("input", function(){ clearTimeout(kwT); kwT = setTimeout(renderRows, 180); });
+  $("#f-refresh").addEventListener("click", fetchRows);
+  $("#f-reset").addEventListener("click", function(){
+    ["#f-sector","#f-tier","#f-type","#f-rumor","#f-source","#f-from","#f-to","#f-kw"].forEach(function(id){ $(id).value = ""; });
+    $("#f-sort").value = "importance"; $("#f-limit").value = "50";
+    state.offset = 0; fetchRows();
+  });
+  $("#p-prev").addEventListener("click", function(){
+    state.offset = Math.max(0, state.offset - state.limit); fetchRows();
+  });
+  $("#p-next").addEventListener("click", function(){
+    state.offset = state.offset + state.limit; fetchRows();
+  });
+  fetchRows();
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   TAB 3 · API
+   ══════════════════════════════════════════════════════════════════════ */
+var ENDPOINTS = [
+  { m:"GET", path:"/health", noauth:true, desc:"健康检查 —— 返回服务状态与事件库总量，无需鉴权",
+    params:[], sample:{} },
+  { m:"GET", path:"/api/news", desc:"事件列表 —— 主接口，支持多维筛选、排序与分页",
+    params:[
+      ["limit","int","单页条数，默认 20，上限 100"],
+      ["offset","int","偏移量，配合 limit 翻页，默认 0"],
+      ["sort","string","importance（按重要性分降序，默认）｜ date（按采集时间降序）"],
+      ["sector","string","板块标签精确匹配，如 DeFi / RWA / Infrastructure"],
+      ["source","string","信源名匹配，中文需 URL 编码；末尾加 * 做前缀匹配"],
+      ["news_type","string","macro / policy / market / project / security / other"],
+      ["event_tier","string","事件级别 S / A / B / C / D"],
+      ["is_rumor","0|1","谣言过滤。不筛选时请整个省略该参数"],
+      ["date_from","YYYY-MM-DD","事件日期下界（含）"],
+      ["date_to","YYYY-MM-DD","事件日期上界（含）"]
+    ],
+    sample:{limit:5, sort:"importance", event_tier:"A"} },
+  { m:"GET", path:"/api/news/{id}", desc:"事件详情 —— 按事件 id 返回单个完整对象",
+    params:[["id","path","事件 id，取自列表接口的 data[].id"]], sample:null, pathSample:true },
+  { m:"GET", path:"/api/news/{id}/x-sources", desc:"该事件关联的 X 原始推文（含互动量）",
+    params:[["id","path","事件 id"]], sample:null, pathSample:true, sub:"/x-sources" },
+  { m:"GET", path:"/api/sources", desc:"信源分布统计 —— 各信源产出的事件数，按数量降序",
+    params:[], sample:{} },
+  { m:"GET", path:"/api/x-posts", desc:"X KOL 原始推文库",
+    params:[
+      ["limit","int","条数，上限 100"],
+      ["kol","string","KOL 用户名精确匹配，如 lookonchain"],
+      ["sort","string","date（默认）｜ likes ｜ impressions"]
+    ],
+    sample:{limit:5, sort:"likes"} },
+  { m:"GET", path:"/api/runs", desc:"Pipeline 运行记录 —— 最近 20 轮的抓取量、产出量、耗时与状态",
+    params:[], sample:{} }
+];
+
+var DICT = [
+  ["id","string","事件唯一 ID，由「主体 / 动作 / 日期」三元组 sha256 派生，跨轮稳定，可直接作主键 upsert"],
+  ["title_zh / title_en","string","LLM 生成的中英双语标题"],
+  ["description_short_zh / _en","string","短摘要，50–100 字，适合信息流卡片"],
+  ["description_long_zh / _en","string","长摘要，数百字，含市场传导逻辑与后续关注点"],
+  ["date","string","事件日期（RFC 1123 格式）"],
+  ["time_event","datetime","事件实际发生 / 首次报道时间"],
+  ["time_get_data","datetime","本服务采集入库时间，建议下游用它做增量拉取"],
+  ["event_tier","enum","S / A / B / C / D 五级，由 importance_score 映射"],
+  ["importance_score","float 0–1","五因子加权综合分，排序主键"],
+  ["score_market_impact","float 0–1","M · 影响面，权重 0.35"],
+  ["score_timeliness","float 0–1","T · 时效，24h 半衰期衰减，权重 0.20"],
+  ["score_hotness","float 0–1","H · 热度，社交互动 + 多源交叉，权重 0.15"],
+  ["score_authority","float 0–1","A · 信源权威分级，权重 0.15"],
+  ["score_quality","float 0–1","Q · 体裁质量，深度分析 > 快讯 > 价格播报，权重 0.15"],
+  ["sectors","string[]","板块标签数组，取值来自 20 个 B9 线上标签，可能为空"],
+  ["coins","string[]","涉及币种代码数组，如 [\"BTC\",\"ETH\"]"],
+  ["news_type","enum","macro / policy / market / project / security / other"],
+  ["source_names","string[]","全部报道该事件的信源名（去重后）"],
+  ["sources","object[]","信源明细：name / url / type / authority / published_at / x_tweet_id"],
+  ["source_count","int","独立信源数量，热度因子的输入之一"],
+  ["merged_sources_count","int","本事件累计合并过的原始条目数"],
+  ["cluster_id","string","语义聚类簇 ID，同簇为同一事件的不同表述"],
+  ["is_rumor","0|1","谣言标记，1 表示可信度校验未通过"],
+  ["rumor_reason","string","谣言判定原因，is_rumor=0 时为空串"],
+  ["credibility_score","float 0–1","可信度评分"],
+  ["is_verified","0|1","是否经多源交叉确认"],
+  ["social_interactions","int","社交互动总量（点赞 + 转发 + 回复）"],
+  ["language_origin","string","原始报道语种 zh / en"],
+  ["created_at / updated_at","datetime","记录创建 / 最后更新时间"]
+];
+
+function jsonHl(txt){
+  return esc(txt)
+    .replace(/&quot;([^&]*?)&quot;(\s*:)/g, '<span class="k">&quot;$1&quot;</span>$2')
+    .replace(/:\s*&quot;((?:[^&]|&(?!quot;))*)&quot;/g, ': <span class="s">&quot;$1&quot;</span>')
+    .replace(/:\s*(-?\d+\.?\d*)/g, ': <span class="n">$1</span>')
+    .replace(/:\s*(true|false|null)/g, ': <span class="b">$1</span>');
+}
+
+function loadApiTab(){
+  $("#baseUrlBox").textContent = API;
+
+  $("#epList").innerHTML = ENDPOINTS.map(function(ep, i){
+    var pRows = ep.params.length
+      ? '<table class="ptable"><thead><tr><th>参数</th><th>类型</th><th>说明</th></tr></thead><tbody>' +
+        ep.params.map(function(p){
+          return '<tr><td>' + esc(p[0]) + '</td><td>' + esc(p[1]) + '</td><td>' + esc(p[2]) + '</td></tr>';
+        }).join("") + '</tbody></table>'
+      : '<p style="font-size:12px;color:var(--tx-4);margin-top:12px">无查询参数。</p>';
+    return '<div class="ep"><div class="ep-head">' +
+      '<span class="method">' + ep.m + '</span>' +
+      '<span class="ep-path">' + esc(ep.path).replace(/\{id\}/, '<span class="p">{id}</span>') + '</span>' +
+      '<span class="ep-desc">' + esc(ep.desc) + '</span>' +
+      (ep.noauth ? '<span class="noauth">无需鉴权</span>' : '') +
+      '</div><div class="ep-body">' + pRows +
+      '<div class="try">' +
+        '<div class="urlbox" id="u-' + i + '">—</div>' +
+        '<button class="copy" data-copy="#u-' + i + '">复制</button>' +
+        '<a class="btn sm" id="a-' + i + '" href="#" target="_blank" rel="noopener noreferrer">浏览器打开 ↗</a>' +
+        '<button class="btn sm primary" data-try="' + i + '">试一下</button>' +
+      '</div><div class="out" id="o-' + i + '" hidden></div></div></div>';
+  }).join("");
+
+  // 需要真实 id 的端点，先取一条最新事件填充示例
+  apiGet("/api/news", {limit:1, sort:"importance"}).then(function(d){
+    var id = (d && d.data && d.data[0]) ? d.data[0].id : null;
+    ENDPOINTS.forEach(function(ep, i){
+      var url;
+      if (ep.pathSample){
+        var realId = id || "{id}";
+        url = apiUrl("/api/news/" + realId + (ep.sub || ""), {});
+        $("#u-"+i).textContent = url;
+        $("#a-"+i).href = url;
+        $("#u-"+i).setAttribute("data-url", url);
+      }
+    });
+  }).catch(function(){});
+
+  ENDPOINTS.forEach(function(ep, i){
+    if (ep.pathSample) { $("#u-"+i).textContent = "加载示例 id…"; return; }
+    var url = apiUrl(ep.path, ep.sample || {});
+    if (ep.path === "/health") url = API + "/health";
+    $("#u-"+i).textContent = url;
+    $("#u-"+i).setAttribute("data-url", url);
+    $("#a-"+i).href = url;
+  });
+
+  $$("[data-try]").forEach(function(b){
+    b.addEventListener("click", function(){
+      var i = Number(b.getAttribute("data-try"));
+      var out = $("#o-"+i);
+      var url = $("#u-"+i).getAttribute("data-url") || $("#u-"+i).textContent;
+      out.hidden = false; out.className = "out"; out.textContent = "请求中…";
+      if (url.indexOf("{id}") >= 0){ out.className = "out error"; out.textContent = "示例 id 尚未加载完成，请稍后重试。"; return; }
+      var t0 = performance.now();
+      fetch(url).then(function(r){
+        return r.text().then(function(t){ return {ok:r.ok, status:r.status, t:t}; });
+      }).then(function(res){
+        var ms = Math.round(performance.now() - t0);
+        var body;
+        try { body = JSON.stringify(JSON.parse(res.t), null, 2); } catch(e){ body = res.t; }
+        var head = "HTTP " + res.status + "  ·  " + ms + " ms  ·  " + (res.t.length/1024).toFixed(1) + " KB\n\n";
+        if (body.length > 9000) body = body.slice(0, 9000) + "\n\n… 响应已截断，完整内容请点「浏览器打开」";
+        out.className = "out" + (res.ok ? "" : " error");
+        out.innerHTML = '<span style="color:var(--tx-4)">' + esc(head) + '</span>' + jsonHl(body);
+      }).catch(function(e){
+        out.className = "out error";
+        out.textContent = "请求失败：" + e.message + "\n\n可能原因：API 服务未运行、网络阻断，或页面以 file:// 打开导致跨域被拦截。";
+      });
+    });
+  });
+
+  $("#dictBody").innerHTML = DICT.map(function(d){
+    return '<tr><td>' + esc(d[0]) + '</td><td>' + esc(d[1]) + '</td><td>' + esc(d[2]) + '</td></tr>';
+  }).join("");
+
+  var curl = '# 取重要性最高的 5 条 A 级事件\n' +
+    'curl -s "' + API + '/api/news?limit=5&sort=importance&event_tier=A" \\\n' +
+    '  -H "Authorization: Bearer ' + TOKEN + '"\n\n' +
+    '# 浏览器直接点开（token 走 URL 参数）\n' +
+    'open "' + API + '/api/news?limit=5&token=' + TOKEN + '"';
+  var py = 'import requests\n\n' +
+    'BASE = "' + API + '"\n' +
+    'H = {"Authorization": "Bearer ' + TOKEN + '"}\n\n' +
+    'r = requests.get(f"{BASE}/api/news", headers=H, params={\n' +
+    '    "limit": 50, "sort": "importance", "sector": "DeFi",\n' +
+    '})\n' +
+    'r.raise_for_status()\n' +
+    'payload = r.json()\n' +
+    'print(payload["meta"]["total"])\n' +
+    'for e in payload["data"]:\n' +
+    '    print(e["event_tier"], round(e["importance_score"], 3), e["title_zh"])';
+  var js = 'const BASE = "' + API + '";\n' +
+    'const TOKEN = "' + TOKEN + '";\n\n' +
+    'async function fetchNews(filters = {}) {\n' +
+    '  const q = new URLSearchParams({ limit: 50, sort: "importance", ...filters });\n' +
+    '  const res = await fetch(`${BASE}/api/news?${q}`, {\n' +
+    '    headers: { Authorization: `Bearer ${TOKEN}` },\n' +
+    '  });\n' +
+    '  if (!res.ok) throw new Error(`API ${res.status}`);\n' +
+    '  return res.json();   // { data: [...], meta: { total, limit, offset } }\n' +
+    '}\n\n' +
+    'const { data, meta } = await fetchNews({ event_tier: "A" });';
+
+  function hlCode(s){
+    return esc(s)
+      .replace(/(^|\n)(\s*#[^\n]*)/g, '$1<span class="cm">$2</span>')
+      .replace(/(^|\n)(\s*\/\/[^\n]*)/g, '$1<span class="cm">$2</span>');
+  }
+  $("#c-curl").innerHTML = hlCode(curl);
+  $("#c-py").innerHTML   = hlCode(py);
+  $("#c-js").innerHTML   = hlCode(js);
+
+  $$("[data-copy]").forEach(function(b){
+    b.addEventListener("click", function(){
+      var el = $(b.getAttribute("data-copy"));
+      var tx = el ? (el.getAttribute("data-url") || el.textContent) : "";
+      var done = function(){
+        var o = b.textContent; b.textContent = "已复制"; b.classList.add("done");
+        setTimeout(function(){ b.textContent = o; b.classList.remove("done"); }, 1400);
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(tx).then(done, function(){});
+      } else {
+        var ta = document.createElement("textarea");
+        ta.value = tx; document.body.appendChild(ta); ta.select();
+        try { document.execCommand("copy"); done(); } catch(e){}
+        document.body.removeChild(ta);
+      }
+    });
+  });
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   Boot
+   ══════════════════════════════════════════════════════════════════════ */
+(function(){
+  // 顶栏健康指示灯常驻，与当前 tab 无关 —— 深链直达 #tab2 / #tab3 时也要亮起
+  loadHealth().catch(function(){});
+  var m = String(location.hash || "").match(/^#tab([123])$/);
+  showTab(m ? Number(m[1]) : 1);
+})();
+</script>
+</body>
+</html>

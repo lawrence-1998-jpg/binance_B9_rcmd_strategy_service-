@@ -106,7 +106,7 @@ def load_recent_events(conn, hours: int = LOOKBACK_HOURS) -> list[dict]:
     since = (datetime.now(timezone.utc) - timedelta(hours=hours)).strftime("%Y-%m-%d %H:%M:%S")
     cursor = conn.cursor()
     cursor.execute(
-        """SELECT id, event_fingerprint, embedding, source_names,
+        """SELECT id, event_fingerprint, embedding, source_names, sources,
                   source_count, merged_sources_count, time_event
            FROM news_events WHERE time_get_data >= %s""",
         (since,),
@@ -114,18 +114,26 @@ def load_recent_events(conn, hours: int = LOOKBACK_HOURS) -> list[dict]:
     rows = cursor.fetchall()
     cursor.close()
 
+    def _load_json(raw, fallback):
+        try:
+            return json.loads(raw) if raw else fallback
+        except (json.JSONDecodeError, TypeError):
+            return fallback
+
     recent = []
     for row in rows:
-        event_id, fingerprint, blob, source_names, source_count, merged, time_event = row
-        try:
-            names = json.loads(source_names) if source_names else []
-        except (json.JSONDecodeError, TypeError):
-            names = []
+        (event_id, fingerprint, blob, source_names, sources,
+         source_count, merged, time_event) = row
         recent.append({
             "id": event_id,
             "fingerprint": fingerprint or "",
             "embedding": blob_to_embedding(blob),
-            "source_names": names,
+            "source_names": _load_json(source_names, []),
+            # sources 是带 url/authority 的完整明细。必须一并读出来，否则跨轮归并
+            # 时新一轮只会写入自己这批 sources，把历史轮次的明细覆盖掉——而
+            # source_names 走的是并集，两者会长期不同步（实测 508 行里有 59 行
+            # 长度对不上，下游若只读 sources 会把多源事件误判成孤证）。
+            "sources": _load_json(sources, []),
             "source_count": source_count or 1,
             "merged_sources_count": merged or 1,
             "published_at": time_event.isoformat() if time_event else None,
@@ -199,6 +207,9 @@ def merge_with_existing(events: list[dict], recent: list[dict]) -> tuple[list[di
                                            set(existing["source_names"]))
             event["merged_sources_count"] = (existing["merged_sources_count"] +
                                              event.get("merged_sources_count", 1))
+            # sources 明细同样取并集，和 source_names 保持同步
+            event["sources"] = _merge_sources(event.get("sources", []),
+                                              existing.get("sources", []))
             _refresh_source_count(event, existing["source_count"])
             claimed[existing["id"]] = event
             output.append(event)
@@ -206,7 +217,8 @@ def merge_with_existing(events: list[dict], recent: list[dict]) -> tuple[list[di
             # 后续命中者：并入首个，不再单独写一行
             target["source_names"] = sorted(set(target["source_names"]) |
                                             set(event.get("source_names", [])))
-            target["sources"] = target.get("sources", []) + event.get("sources", [])
+            target["sources"] = _merge_sources(target.get("sources", []),
+                                               event.get("sources", []))
             target["merged_sources_count"] += event.get("merged_sources_count", 1)
             _refresh_source_count(target, existing["source_count"])
 
@@ -218,8 +230,33 @@ def merge_with_existing(events: list[dict], recent: list[dict]) -> tuple[list[di
     return output, merged_count
 
 
+def _merge_sources(*source_lists) -> list[dict]:
+    """按 url 去重合并多份 sources 明细，保持稳定顺序。
+
+    跨轮归并时新旧两轮各有一份 sources，必须并集而非覆盖——否则 sources 只留
+    最后一轮的明细，而 source_names 是并集，两个字段会长期不一致，下游读 sources
+    判断信源数就会把多源事件误判成孤证。
+    """
+    merged, seen = [], set()
+    for sources in source_lists:
+        for src in sources or []:
+            url = (src or {}).get("url", "")
+            key = url or json.dumps(src, sort_keys=True, ensure_ascii=False)
+            if key in seen:
+                continue
+            seen.add(key)
+            merged.append(src)
+    return merged
+
+
 def _refresh_source_count(event: dict, existing_count: int) -> None:
-    """信源名单变动后同步 source_count / is_verified。"""
+    """信源名单变动后同步 source_count / is_verified。
+
+    注意这里对 existing_count 取 max 是为了不让已确认的多源事件因某轮抓取
+    不全而掉档；代价是若历史值本身偏高（早期 bug 留下的），会一直保留。
+    verification.py 另算了一个 independent_source_count（按机构去重），
+    需要精确机构数时以那个为准。
+    """
     event["source_count"] = max(
         len({name.split("/")[0] for name in event["source_names"]}), existing_count
     )

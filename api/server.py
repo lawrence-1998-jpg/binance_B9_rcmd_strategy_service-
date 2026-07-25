@@ -5,7 +5,7 @@ import os, json, logging
 from datetime import datetime
 from functools import wraps
 
-from flask import Flask, request, jsonify, g
+from flask import Flask, request, jsonify, g, send_from_directory
 import mysql.connector
 
 logging.basicConfig(level=logging.INFO)
@@ -264,6 +264,22 @@ def health():
         return jsonify({"status": "ok", "news_count": count, "time": datetime.utcnow().isoformat()})
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
+
+
+# ─── 前端展示页（静态单文件，无需鉴权）──────────────────────────────────────
+# web/index.html 是自包含的单文件站点（内联全部 CSS/JS，零外部 CDN 依赖），
+# 页面内的数据请求走 ?token= 参数命中上面的 require_api_key。
+# 这里只做静态吐出，不碰任何既有端点的逻辑。
+WEB_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "web")
+
+
+@app.route("/", methods=["GET"])
+@app.route("/dashboard", methods=["GET"])
+def dashboard():
+    resp = send_from_directory(WEB_DIR, "index.html")
+    # 单文件站点会频繁迭代，禁掉缓存免得改完刷新还是旧版
+    resp.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    return resp
 
 
 if __name__ == "__main__":
