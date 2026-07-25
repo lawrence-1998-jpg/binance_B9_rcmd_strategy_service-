@@ -106,10 +106,35 @@ curl -s "http://34.138.247.158:8080/health"
 
 | 字段 | 类型 | 说明 |
 |---|---|---|
-| `sectors` | array | 板块标签，见下方枚举 |
+| `sectors` | array | 板块标签，见下方枚举。已按相关度阈值（≥0.55）过滤，"真相关才打" |
+| `sector_relevance` | array of object | 板块判定明细，每个含 `sector`/`relevance`/`anchor`（本条新闻里支撑该标签的具体锚点，如成分币/机制名）。低于阈值未进 `sectors` 的候选也留在这里，供复盘 |
 | `coins` | array | 相关币种 ticker，如 `["BTC","ETH"]` |
+| `entities` | array of object | 结构化实体，每个含 `name`/`type`（`person`/`organization`/`project`/`chain`/`region`/`product`） |
+| `sentiment` | string | `bullish`/`bearish`/`neutral`，**对加密市场的方向性影响**，不是原文语气 |
+| `sentiment_score` | number | -1（极度利空）~ +1（极度利多），符号与 `sentiment` 一致 |
+| `impact_horizon` | string | `immediate`/`short_term`/`medium_term`/`long_term`，影响生效的时间尺度 |
 | `news_type` | string | `market`/`policy`/`security`/`project`/`macro`/`other` |
 | `event_tier` | string | S/A/B/C/D 五级，S 最重要 |
+
+### 币种市值标签（2026-07-26 新增，`crawler/market_cap.py`，纯查表零 LLM 成本）
+
+| 字段 | 说明 |
+|---|---|
+| `coin_metrics` | array of object，事件涉及的每个币各一条，含 `symbol`/`status`（`ok`/`ambiguous`/`equity`/`unknown`）/`market_cap_usd`/`btc_ratio`/`cap_tier`/`asset_class`。**`status` 不是 `ok` 时其余字段可能为空**——匹配不到明确的币不会瞎猜，宁可空着 |
+| `primary_coin` | string，事件里市值最大的已匹配币（下面三个字段都是它的） |
+| `primary_coin_market_cap` | number，市值 USD |
+| `primary_coin_btc_ratio` | number，**相对 BTC 的市值倍数**（BTC 自己 = 1.0，如 0.05 即"BTC 市值的 5%"） |
+| `coin_cap_tier` | string，`mega`/`large`/`mid`/`small`/`micro` 市值档位 |
+
+### 真实性校验字段（2026-07-26 新增，`crawler/verification.py`，五个客观信号零 LLM 成本）
+
+| 字段 | 说明 |
+|---|---|
+| `verification_status` | `VERIFIED`/`PROBABLE`/`UNVERIFIED`/`DISPUTED`。基于按机构去重的多源交叉验证、信源可信度分层、时间一致性、矛盾检测综合判定，**不依赖 LLM 主观判断** |
+| `verification_score` | 0-1，校验综合分 |
+| `verification_reason` | string，人类可读的判定依据 |
+| `verification_flags` | array，触发的具体异常码（如 `TIME_STALE`/`LLM_RUMOR`/`SINGLE_LOW_TRUST_SOURCE`） |
+| `independent_source_count` | int，按**机构**去重后的独立信源数（比 `source_count` 更严格——同一机构的多个 feed/账号只算一个） |
 
 ### 打分字段（Macro Insight v1）
 
@@ -124,7 +149,7 @@ curl -s "http://34.138.247.158:8080/health"
 
 `importance_score = 0.35M + 0.20T + 0.15H + 0.15A + 0.15Q`
 
-**注意 T 因子随时间衰减**：同一事件的 `importance_score` 会随着变旧而下降，每轮 pipeline 会刷新。下游若做缓存，建议 TTL 不超过一轮（4 小时）。
+**注意 T 因子随时间衰减**：同一事件的 `importance_score` 会随着变旧而下降，每轮 pipeline 会刷新。下游若做缓存，建议 TTL 不超过一轮（当前节奏 12 小时）。
 
 ### 信源与可信度字段
 
