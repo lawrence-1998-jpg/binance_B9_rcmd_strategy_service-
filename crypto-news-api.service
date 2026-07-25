@@ -1,0 +1,18 @@
+[Unit]
+Description=Crypto News API Service
+After=network.target mysql.service
+Wants=mysql.service
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu/crypto-news-crawler
+EnvironmentFile=/home/ubuntu/crypto-news-crawler/config/.env
+ExecStart=/usr/bin/python3 /home/ubuntu/crypto-news-crawler/api/server.py
+Restart=always
+RestartSec=10
+StandardOutput=append:/home/ubuntu/crypto-news-crawler/logs/api.log
+StandardError=append:/home/ubuntu/crypto-news-crawler/logs/api.log
+
+[Install]
+WantedBy=multi-user.target
