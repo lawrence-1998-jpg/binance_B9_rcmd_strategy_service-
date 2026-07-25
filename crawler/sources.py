@@ -38,6 +38,47 @@ RSS_SOURCES_P1 = [
     ("https://www.cnbc.com/id/10000664/device/rss/rss.html",           "CNBC-Finance","en", 4),
 ]
 
+# ── P2 二线英文加密媒体（2026-07-26 新增）───────────────────────────
+#
+# 起因：召回覆盖率交叉验证实测（31 个独立源 vs 本系统）显示事件级覆盖率仅
+# 29.9%，其中 77.4% 的漏召是"任何抓取路径都没有这条内容"（信源盘子太小，
+# 不是新鲜度过滤或粗去重误杀——两者实测误杀率均为 0）。
+#
+# 这 10 个源全部满足：①对照测试里实测 HTTP 200、标准 RSS、零改造成本；
+# ②量化贡献扎实——199 个漏召事件里有 47 条的对照源就是这 10 家，仅
+# Bitcoinist 一家就贡献 6 条协议治理类漏召（Frax/EigenLayer/Uniswap/Arbitrum
+# 提案动态，这是现有信源体系的成片空白）。
+#
+# 权威分参考 crawler/pipeline.py SYSTEM_PROMPT 里的权威分级：二线独立采编
+# 英文媒体给 3（介于头部媒体 4 和聚合/搜索 2~3 之间）。
+RSS_SOURCES_P2 = [
+    ("https://beincrypto.com/feed/",       "BeInCrypto",     "en", 3),
+    ("https://cryptoslate.com/feed/",      "CryptoSlate",    "en", 3),
+    ("https://news.bitcoin.com/feed/",     "Bitcoin.com",    "en", 3),
+    ("https://coinjournal.net/feed/",      "CoinJournal",    "en", 3),
+    ("https://bitcoinist.com/feed/",       "Bitcoinist",     "en", 3),
+    ("https://www.newsbtc.com/feed/",      "NewsBTC",        "en", 3),
+    ("https://cryptobriefing.com/feed/",   "CryptoBriefing", "en", 3),
+    ("https://ambcrypto.com/feed/",        "AMBCrypto",      "en", 3),
+    ("https://u.today/rss",                "U.Today",        "en", 3),
+    ("https://protos.com/feed/",           "Protos",         "en", 3),
+]
+
+# ── P3 宏观财经源（2026-07-26 新增）──────────────────────────────────
+#
+# 起因：同一次覆盖率测试显示宏观美股交叉类覆盖率最差（34.8%，五类里最低），
+# 而这恰恰是 B9 的差异化卖点。漏召的都是"先发生在传统财经媒体、几小时后才被
+# 加密媒体转述"的内容——油价、关税、芯片股、央行政策。此前只接了
+# YahooFinance / CNBC-Finance 两个泛财经源，专门做宏观快讯的媒体一个没有。
+#
+# 路透社评估过：feeds.reuters.com 的 DNS 已注销，主站 Akamai 反爬返回 401，
+# 直连不可行；Google News site: 代理测试显示其内容对加密/宏观范围的贡献很小
+# （92 条里仅 2 条在范围内），故不接入，仅记录评估结论。
+RSS_SOURCES_MACRO = [
+    ("https://www.investing.com/rss/news_301.rss", "Investing-Crypto", "en", 3),
+    ("https://www.investing.com/rss/news_14.rss",  "Investing-Econ",   "en", 3),
+]
+
 # ── HTML 抓取源（无 RSS，直接解析页面）───────────────────────────────
 HTML_SOURCES = [
     {

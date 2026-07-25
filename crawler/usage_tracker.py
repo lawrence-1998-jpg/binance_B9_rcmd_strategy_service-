@@ -34,7 +34,12 @@ class UsageTracker:
     """单轮 pipeline 内的用量累加器。跨线程安全。"""
 
     def __init__(self):
-        self._lock = threading.Lock()
+        # 必须是 RLock 而非 Lock：snapshot() 持锁期间会调用同样要持锁的
+        # estimated_cost_usd()，用不可重入的 Lock 会自死锁 —— 实测
+        # `UsageTracker().snapshot()` 直接永久挂起，而 run_pipeline() 结尾的
+        # tracker.log_summary() / storage.record_run(usage=tracker.snapshot())
+        # 正好走这条路径，会把整轮 pipeline 卡在最后一步。
+        self._lock = threading.RLock()
         self.chat_calls = 0
         self.chat_input_tokens = 0
         self.chat_output_tokens = 0

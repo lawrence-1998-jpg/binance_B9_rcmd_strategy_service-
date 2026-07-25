@@ -25,6 +25,8 @@ from sklearn.metrics.pairwise import cosine_similarity
 
 from . import storage
 from .dedup import aggregate_events, build_fingerprint, fallback_id
+from .market_cap import annotate_events as annotate_market_cap
+from .market_cap import persist_coin_metrics
 from .scoring import score_events
 from .sources import SECTOR_LABELS
 from .usage_tracker import UsageTracker
@@ -119,8 +121,45 @@ NEWS_SCHEMA = {
                 "description_short_zh": {"type": "string"},
                 "description_long_en":  {"type": "string"},
                 "description_long_zh":  {"type": "string"},
-                "sectors": {"type": "array", "items": {"type": "string", "enum": SECTOR_LABELS}},
+                # sector_tags 取代了原来的 sectors 字符串数组：每个板块必须附相关度
+                # 与判定锚点，这是产品要求的「真相关才打」的量化落地。对外的
+                # `sectors` 列由 filter_sector_tags() 按阈值过滤生成，前端不变。
+                "sector_tags": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "sector":    {"type": "string", "enum": SECTOR_LABELS},
+                            "relevance": {"type": "number"},
+                            "anchor":    {"type": "string"},
+                        },
+                        "required": ["sector", "relevance", "anchor"],
+                        "additionalProperties": False,
+                    },
+                },
                 "coins":   {"type": "array", "items": {"type": "string"}},
+                # 结构化实体。比 coins 丰富：人物/机构/项目/公链/地区/产品都进来，
+                # 供前端做实体聚合页与「同一主体的历史新闻」召回。
+                "entities": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "name": {"type": "string"},
+                            "type": {"type": "string",
+                                     "enum": ["person", "organization", "project",
+                                              "chain", "region", "product"]},
+                        },
+                        "required": ["name", "type"],
+                        "additionalProperties": False,
+                    },
+                },
+                # 情绪 = 对市场的方向性影响，不是文章语气
+                "sentiment":       {"type": "string", "enum": ["bullish", "bearish", "neutral"]},
+                "sentiment_score": {"type": "number"},
+                "impact_horizon":  {"type": "string",
+                                    "enum": ["immediate", "short_term",
+                                             "medium_term", "long_term"]},
                 "news_type": {"type": "string",
                               "enum": ["market", "policy", "security", "project", "macro", "other"]},
                 "event_tier": {"type": "string", "enum": ["S", "A", "B", "C", "D"]},
@@ -137,7 +176,8 @@ NEWS_SCHEMA = {
             },
             "required": [
                 "title_en", "title_zh", "description_short_en", "description_short_zh",
-                "description_long_en", "description_long_zh", "sectors", "coins",
+                "description_long_en", "description_long_zh", "sector_tags", "coins",
+                "entities", "sentiment", "sentiment_score", "impact_horizon",
                 "news_type", "event_tier", "event_subject", "event_action", "event_date",
                 "score_market_impact", "score_authority", "score_quality",
                 "credibility_score", "is_rumor", "rumor_reason",
@@ -154,8 +194,9 @@ SYSTEM_PROMPT = """You are a senior crypto news analyst for Binance's news recom
 - title_zh: ≤25 characters, 简体中文
 - description_short_en / description_short_zh: 50-100 words/characters, key facts with NUMBERS (amounts, prices, percentages, multiples)
 - description_long_en / description_long_zh: 200-400 words/characters, full context + market implications
-- sectors: ALL applicable Binance B9 sector labels from the enum
-- coins: standard ticker symbols (BTC, ETH, SOL, DOGE...)
+- sector_tags: see SECTOR-BOUNDARY rules below — scored, evidence-backed, AT MOST 3
+- coins: see COIN TICKER rules below
+- entities / sentiment / sentiment_score / impact_horizon: see CONTENT TAGS below
 - news_type: market/policy/security/project/macro/other
 
 ## EVENT FINGERPRINT — read this carefully, it drives de-duplication
@@ -208,10 +249,90 @@ Worked example — these two headlines describe ONE event and must produce ident
 ## GENERIC-TECH FIREWALL
 Generic AI/big-tech/stock-market news WITHOUT a clear crypto transmission path (requires ≥2 inference hops to affect crypto) → event_tier=D, score_market_impact ≤0.20. Examples: AI company fundraising, chip earnings, generic macro commentary. EXCEPTION: news about crypto-listed AI tokens (WLD, FET, TAO...), bStocks-relevant equities (tokenized stocks on Binance), or explicit crypto-market spillover keeps normal tiering.
 
-## SECTOR-BOUNDARY rules (for `sectors` field)
-- Track sectors (MEME/AI/Gaming/DeFi/NFT/RWA/Payments): tag only if a constituent coin or the track theme is the SUBJECT of the event
-- Chain-ecosystem sectors (Solana/BSC/Layer1/Layer2): tag only if the chain itself or a top ecosystem project's major event; "merely deployed on that chain" does NOT count
-- Platform-mechanism sectors (Launchpool/Launchpad/Megadrop/New Listing/bStocks/Seed): tag only for mechanism changes (new period/rules/yields) or constituent-project major events
+## SECTOR-BOUNDARY rules (for `sector_tags`) — TAG ONLY WHAT IS GENUINELY RELATED
+Over-tagging is the single most damaging failure mode of this system: a wrong sector tag
+routes the item into a feed where it does not belong, and users lose trust in the whole
+sector view. An empty `sector_tags` array is a perfectly good answer and is much better
+than a plausible-looking wrong tag. Most news items deserve 0 or 1 sector tag.
+
+Hard limits: AT MOST 3 tags. Never emit a tag whose relevance would be below 0.55.
+
+For every tag you MUST fill `anchor` — the concrete coin ticker, project name, chain, or
+platform mechanism PRESENT IN THIS ITEM that justifies the tag (≤4 words).
+If you cannot name a specific anchor from the item's own text, the tag is wrong: drop it.
+"the topic feels related", "crypto in general", "market sentiment" are NOT valid anchors.
+
+`relevance` scale (0-1), same rubric as the downstream sector-recommendation skill:
+- 0.90-1.00  a constituent asset / the sector mechanism IS the subject of the event
+             (e.g. "Binance opens new Launchpool period" → Launchpool 0.95, anchor="Launchpool new period")
+- 0.70-0.89  the event directly changes the sector's fundamentals, flows or rules, and a
+             named constituent is involved (e.g. "PNUT surges 60% on volume spike" → MEME 0.8)
+- 0.55-0.69  the sector is materially affected but is NOT the subject; a named constituent
+             appears only as context (e.g. a DeFi-wide TVL report that names Aave → DeFi 0.6)
+- below 0.55 mere mention, adjacency, or thematic vibe → DO NOT OUTPUT
+
+Transmission-hop caps (these OVERRIDE the scale above):
+- 1 hop (event touches a constituent asset/mechanism directly): no cap
+- 1 hop but the asset is NOT a constituent of that sector: cap 0.55
+- 2+ hops (equity markets, Web2 tech, macro mood, "narrative feels similar"): cap 0.40
+  → which means the tag is dropped. This is the intended outcome.
+
+Two labels are chronic over-tagging magnets — treat them as NARROW, not as catch-alls:
+- Infrastructure = L1 base layer / oracles / cross-chain messaging / node & data infra
+  ONLY. It is NOT "anything technical". An exchange outage, a wallet feature, a payment
+  integration, a hack of an app-layer protocol are NOT Infrastructure.
+- Monitoring = on-chain monitoring & alerting as the sector theme (whale / exploit tracking
+  products and their assets). A single security firm being quoted in a story does NOT make
+  the story a Monitoring event.
+
+Boundary anchors per sector family (unchanged, these decide WHETHER a tag is admissible
+at all — the relevance score then decides how strongly):
+- Track sectors (MEME/AI/Gaming/NFT/RWA/Payments/DeFi/Infrastructure/tCommodities/Fan Token):
+  tag only if a constituent coin or the track theme is the SUBJECT of the event
+- Chain-ecosystem sectors (Solana/BSC/Layer1/Layer2): tag only if the chain itself or a top
+  ecosystem project has a major event; "merely deployed on that chain" does NOT count
+- Platform-mechanism sectors (Launchpool/Launchpad/Megadrop/New Listing/bStocks/Seed/Monitoring):
+  tag only for mechanism changes (new period/rules/yields) or constituent-project major events
+
+Worked NEGATIVE examples — these must produce ZERO sector tags:
+- "OpenAI raises $40B at $300B valuation" → not AI (no crypto AI-token anchor; AI sector
+  means crypto AI tokens like WLD/FET/TAO, not AI companies)
+- "Fed holds rates steady, BTC dips 2%" → not any sector (macro; BTC is not a sector)
+- "SEC delays decision on a spot XRP ETF" → not Payments, not RWA (regulatory event about
+  one asset; XRP being a payments coin does not make an ETF ruling a Payments-sector event)
+- "Solana-based DEX raises $5M seed round" → not Seed (the Seed sector is Binance's Seed Tag
+  listing mechanism, not venture seed rounds — a pure name collision), and Solana only if
+  the project is a top ecosystem project
+
+## COIN TICKER rules (for `coins`) — feeds an exact market-cap lookup, so precision matters
+- Only tickers of assets that ACTUALLY EXIST and are central to the event. Max 6.
+  A ranking / comparison / roundup piece IS about the assets it ranks — list them.
+- Never invent a ticker, never abbreviate a project name into a ticker you are unsure of,
+  never emit a ticker for a product/index/pair that has no token. If unsure, omit it.
+- Use the CURRENT ticker after any token migration: Polygon → POL (not MATIC).
+- Wrapped/staked derivatives keep their own ticker (WBTC, WETH, stETH) — do not fold to BTC/ETH.
+- For a tokenized equity (bStocks), emit the tokenized asset's ticker if the item names one,
+  otherwise the underlying stock ticker; do not translate a company name into a guessed ticker.
+- Do NOT output market-cap, price or valuation numbers here — those are looked up from
+  market data downstream, never from your memory.
+
+## CONTENT TAGS
+- entities: up to 6 named entities that matter to the event, canonical English names.
+  type ∈ person / organization / project / chain / region / product.
+  Include only entities that ACT or are ACTED UPON in the event. NEVER include the outlet
+  named in the `Source:` line of the input — that is the reporter, not a participant.
+  Skip entities that only appear as background comparison.
+  Canonicalize: "美国证券交易委员会" → "SEC", "币安" → "Binance", "以太坊基金会" → "Ethereum Foundation".
+- sentiment / sentiment_score: the DIRECTIONAL EFFECT ON CRYPTO MARKETS of the assets or
+  sectors involved — NOT the article's tone, and NOT whether the story is pleasant.
+  bullish (score +0.1..+1.0) / bearish (-1.0..-0.1) / neutral (-0.1..+0.1).
+  |score| encodes strength: 0.8+ regime-changing, 0.4-0.8 clearly directional,
+  0.1-0.4 mild tilt. A hack is bearish for the victim's assets even if funds were recovered.
+  Routine data reports, neutral explainers and balanced coverage → neutral, score ~0.
+  Sign MUST agree with the label.
+- impact_horizon: when the market effect mainly plays out —
+  immediate (<24h, price reacts now), short_term (1-7d), medium_term (1-4w),
+  long_term (>1 month, e.g. legislation taking effect next year).
 
 ## Scoring
 - score_market_impact: within tier bounds above
@@ -222,6 +343,103 @@ Generic AI/big-tech/stock-market news WITHOUT a clear crypto transmission path (
 - rumor_reason: explain why, or empty string
 
 Chinese newsflash items (快讯) are often the FIRST report of hot events — treat them as timely primary signals, not low-quality content."""
+
+
+# ── LLM 输出后处理（标签口径收口）─────────────────────────────────────
+#
+# 对外发布阈值 0.55，和 docs/sector-news-mock-evaluation.md 里下游板块推荐 skill
+# 的 Rel 硬门保持一致——两边用同一把尺子，分数才可比。
+# 低于阈值的标签仍**完整保留**在 sector_relevance 列里（LLM 已经算了，扔掉可惜），
+# 只是不进前端可见的 sectors。两级设计的目的是让阈值改代码就能调，不必重跑 LLM。
+SECTOR_PUBLISH_THRESHOLD = 0.55
+MAX_PUBLISHED_SECTORS = 3
+
+
+def filter_sector_tags(sector_tags: list) -> tuple[list[str], list[dict]]:
+    """sector_tags → (对外 sectors 数组, 完整 sector_relevance 明细)。
+
+    「真相关才打」的最后一道闸：除了分数门槛，还要求 anchor 非空 —— prompt 里
+    锚点是强制项，交不出锚点的标签按定义就是拍脑袋打的。
+    """
+    detail, published = [], []
+    for tag in sector_tags or []:
+        if not isinstance(tag, dict):
+            continue
+        sector = (tag.get("sector") or "").strip()
+        if not sector:
+            continue
+        try:
+            relevance = round(float(tag.get("relevance", 0.0)), 3)
+        except (TypeError, ValueError):
+            relevance = 0.0
+        anchor = (tag.get("anchor") or "").strip()
+        detail.append({"sector": sector, "relevance": relevance, "anchor": anchor})
+        if relevance >= SECTOR_PUBLISH_THRESHOLD and anchor:
+            published.append((relevance, sector))
+
+    detail.sort(key=lambda d: -d["relevance"])
+    published.sort(key=lambda p: -p[0])
+    seen, sectors = set(), []
+    for _, sector in published[:MAX_PUBLISHED_SECTORS]:
+        if sector not in seen:
+            seen.add(sector)
+            sectors.append(sector)
+    return sectors, detail
+
+
+def normalize_tags(enriched: dict, source: str = "") -> None:
+    """就地把 LLM 原始输出规整成下游要的形状。
+
+    下游（storage.write_events / api）读的仍是 `sectors` 字符串数组，形状不变；
+    新增的明细放在 sector_relevance / entities / sentiment 等新字段里。
+
+    `source` 是这条新闻的信源名，用来把"发这条稿的媒体自己"从 entities 里剔掉
+    —— prompt 已经写了不要带，但 Source: 就摆在输入里，实测 20 条样本中有 7 条
+    仍把 CoinDesk / Blockworks / Yahoo Finance 这类出口当成事件实体输出。
+    信源信息在 sources 列里已经完整存着，实体列表里再来一份既冗余又会污染
+    "同一主体历史新闻"的召回。
+    """
+    sectors, detail = filter_sector_tags(enriched.pop("sector_tags", []))
+    enriched["sectors"] = sectors
+    enriched["sector_relevance"] = detail
+
+    # 情绪分与标签互相校正：schema 管不住"标 bullish 却给负分"这类不一致，
+    # 以数值为准重算标签（数值参与排序，标签只是展示）。
+    try:
+        score = max(-1.0, min(1.0, float(enriched.get("sentiment_score", 0.0))))
+    except (TypeError, ValueError):
+        score = 0.0
+    enriched["sentiment_score"] = round(score, 3)
+    if score >= 0.1:
+        enriched["sentiment"] = "bullish"
+    elif score <= -0.1:
+        enriched["sentiment"] = "bearish"
+    else:
+        enriched["sentiment"] = "neutral"
+
+    outlet = _outlet_key(source)
+    entities = []
+    for entity in enriched.get("entities") or []:
+        if not isinstance(entity, dict):
+            continue
+        name = (entity.get("name") or "").strip()
+        if not name or (outlet and _outlet_key(name) == outlet):
+            continue
+        entities.append({"name": name[:128],
+                         "type": entity.get("type", "organization")})
+    enriched["entities"] = entities[:6]
+
+
+def _outlet_key(name: str) -> str:
+    """媒体名归一化，用于把信源自身从实体里剔除。
+
+    去掉 X/ 前缀、空格、大小写差异，让 "X/TheBlock__" / "TheBlock" /
+    "The Block" 归一到同一个 key。
+    """
+    key = (name or "").strip().lower()
+    if key.startswith("x/"):
+        key = key[2:]
+    return "".join(ch for ch in key if ch.isalnum())
 
 
 def enrich_one(item: dict, tracker=None) -> dict | None:
@@ -252,6 +470,8 @@ def enrich_one(item: dict, tracker=None) -> dict | None:
             if tracker is not None:
                 tracker.record_chat(getattr(resp, "usage", None))
             enriched = json.loads(resp.choices[0].message.content)
+            # sector_tags → sectors + sector_relevance，并剔除信源自身实体
+            normalize_tags(enriched, source=item.get("source", ""))
             # 保留原始抓取元数据，后续聚合/打分要用
             enriched.update({
                 "source":       item.get("source"),
@@ -308,11 +528,70 @@ def attach_fingerprints(items: list[dict]) -> None:
         logger.warning(f"{missing}/{len(items)} items lacked a usable event triple")
 
 
+# ── 内容理解标签落库 ─────────────────────────────────────────────────
+#
+# 单独走 UPDATE 而不是改 storage._INSERT_EVENT_SQL：storage.py 是多方共用的热点
+# 文件，新增字段各自用 UPDATE 收口，互不打架（verification.persist_verification
+# 与 market_cap.persist_coin_metrics 是同一个路子）。
+# `sectors` 列不在这里写 —— 它由 storage.write_events 正常写入，形状没变。
+
+_CONTENT_TAG_SQL = """
+UPDATE news_events
+   SET entities         = %s,
+       sentiment        = %s,
+       sentiment_score  = %s,
+       sector_relevance = %s,
+       impact_horizon   = %s
+ WHERE id = %s
+"""
+
+
+def persist_content_tags(events: list[dict], conn) -> int:
+    """把实体/情绪/板块相关度写回 news_events。必须在 write_events 之后调用。"""
+    if not events:
+        return 0
+    cursor = conn.cursor()
+    written = 0
+    for event in events:
+        if "sector_relevance" not in event and "entities" not in event:
+            continue
+        try:
+            cursor.execute(_CONTENT_TAG_SQL, (
+                json.dumps(event.get("entities") or [], ensure_ascii=False),
+                event.get("sentiment") or None,
+                event.get("sentiment_score"),
+                json.dumps(event.get("sector_relevance") or [], ensure_ascii=False),
+                event.get("impact_horizon") or None,
+                event["id"],
+            ))
+            written += cursor.rowcount
+        except Exception as e:
+            logger.warning(f"content tags write failed [{event.get('id')}]: {e}")
+    conn.commit()
+    cursor.close()
+    logger.info(f"MySQL: content tags written for {written}/{len(events)} events")
+    return written
+
+
 # ── Pipeline 编排 ────────────────────────────────────────────────────
 
 def run_pipeline() -> dict:
-    """跑完整一轮，返回各阶段水位统计。"""
-    from .main import run_rss_and_scraper_crawler
+    """跑完整一轮，返回各阶段水位统计。
+
+    2026-07-26 起 Step 1 改为「消费存档 + 实时抓 X」，不再每轮重新抓一遍免费源。
+    背景：免费源（RSS/HTML/搜索引擎/行情信号）现在由独立的高频 cron
+    （`scripts/stage_fetch.py`，建议每 1-2 小时）抓取后先存进 `raw_items_staging`
+    表，本函数只负责取出上一轮以来新存的、还没处理过的条目——这样抓取节奏和
+    LLM 处理节奏解耦，高频源不再受本 pipeline 12 小时一次的周期限制而滚屏丢失
+    （详见 crawler/staging.py 顶部说明）。X 是唯一例外：按用户要求维持原节奏，
+    不接入高频存档路径，仍在本函数里实时抓取。
+
+    如果存档表是空的（比如高频 cron 还没跑过，或数据库刚初始化），自动回退到
+    `run_rss_and_scraper_crawler()` 做一次性全量抓取，保证 pipeline 任何时候都
+    能独立跑通，不依赖另一个 cron 的状态。
+    """
+    from . import staging
+    from .main import fetch_x_sources, run_rss_and_scraper_crawler
 
     start = time.time()
     conn = storage.get_mysql_conn()
@@ -321,8 +600,22 @@ def run_pipeline() -> dict:
     tracker = UsageTracker()  # 本轮 OpenAI 用量，见 usage_tracker.py
 
     try:
-        # 1. 抓取
-        raw_items, x_raw_posts = run_rss_and_scraper_crawler()
+        # 1. 抓取：消费存档的免费源 + 实时抓 X
+        staged_items = staging.consume_staged_items(conn)
+        x_items, x_raw_posts = fetch_x_sources()
+
+        if staged_items:
+            raw_items = staged_items + x_items
+            logger.info(f"Step 1: {len(staged_items)} staged + {len(x_items)} X (live)")
+        else:
+            # 存档表为空（高频 cron 尚未运行过等）—— 回退到一次性全量抓取，
+            # 保证 pipeline 独立可用。此时 fetch_x_sources 已经抓过一次 X，
+            # 这里再用 run_rss_and_scraper_crawler 会重复抓 X，可接受
+            # （回退路径本就是异常情况，不追求最优，追求能跑通）。
+            logger.warning("Step 1: staging table empty, falling back to full live fetch")
+            raw_items, fallback_x_posts = run_rss_and_scraper_crawler()
+            x_raw_posts = x_raw_posts or fallback_x_posts
+
         stats["raw"] = len(raw_items)
         logger.info(f"Step 1 crawl: {stats['raw']} raw items")
 
@@ -362,12 +655,26 @@ def run_pipeline() -> dict:
                                + verification_stats.get("DISPUTED", 0))
         logger.info(f"Step 7.5 verification: {verification_stats}")
 
+        # 7.6 币种市值标签。纯查表（CoinGecko 快照 + 币安现货交叉校验），
+        #     0 次 LLM 调用，行情快照 6 小时缓存，多数轮次 0 次 HTTP 请求。
+        try:
+            annotate_market_cap(events)
+        except Exception as e:
+            # 行情源挂掉不该拖垮整条 pipeline：少几个标签，事件照常入库
+            logger.warning(f"Step 7.6 market cap tagging skipped: {e}")
+
         # 8. 打分 + 入库
         score_events(events)
         storage.write_events(events, conn)
 
-        # 9. 校验结论落库。必须在 write_events 之后——它是 UPDATE，行得先存在
+        # 9. 校验结论 + 新增标签落库。必须在 write_events 之后——都是 UPDATE，行得先存在
         persist_verification(events, conn)
+        persist_content_tags(events, conn)
+        storage.persist_x_post_links(events, conn)
+        try:
+            persist_coin_metrics(events, conn)
+        except Exception as e:
+            logger.warning(f"coin metrics persist skipped: {e}")
 
         duration = round(time.time() - start, 2)
         tracker.log_summary()

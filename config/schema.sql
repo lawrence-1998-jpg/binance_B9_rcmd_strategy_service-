@@ -47,6 +47,24 @@ CREATE TABLE IF NOT EXISTS news_events (
     event_fingerprint    VARCHAR(64),           -- sha256(subject|action|event_date)[:16]，= id
     embedding            BLOB,                  -- 256 维 float32 向量（1024 字节），跨轮语义归并用
     social_interactions  INT          DEFAULT 0,-- 关联 X 推文互动总量（赞+转+评+引），H 因子用
+    -- ── v1.5 币种市值标签（迁移 005，crawler/market_cap.py，纯查表 0 次 LLM 调用）──
+    coin_metrics            JSON,               -- 每个 coin 一个对象：symbol/status/market_cap_usd/
+                                                -- btc_ratio/cap_tier/asset_class/binance_spot/flags
+                                                -- status ∈ ok/ambiguous/equity/unknown，匹配不到明确标记不猜
+    primary_coin            VARCHAR(32),        -- 事件里市值最大的已匹配币（下面三列都是它的）
+    primary_coin_market_cap DECIMAL(24,2),      -- 市值 USD。用 DECIMAL 是因为 FLOAT 7 位有效数字
+                                                -- 存不下 1.29e12 而会在百万位抖动
+    primary_coin_btc_ratio  DOUBLE,             -- 相对 BTC 的市值倍数（BTC 自己 = 1.0）
+    coin_cap_tier           VARCHAR(16),        -- mega/large/mid/small/micro，阈值见 market_cap.CAP_TIERS
+    -- ── v1.5 内容理解标签（迁移 005，crawler/pipeline.py 的 NEWS_SCHEMA）────────
+    entities                JSON,               -- [{"name":"SEC","type":"organization"}, ...]
+                                                -- type ∈ person/organization/project/chain/region/product
+    sentiment               VARCHAR(16),        -- bullish/bearish/neutral，指对市场的方向性影响
+    sentiment_score         FLOAT,              -- -1(极度利空) ~ +1(极度利多)，符号与 sentiment 一致
+    sector_relevance        JSON,               -- [{"sector":"MEME","relevance":0.9,"anchor":"PNUT"}, ...]
+                                                -- 「真相关才打」的量化：relevance < 0.55 的不进 sectors 列，
+                                                -- 但仍留在这里供调阈值与 badcase 复盘
+    impact_horizon          VARCHAR(16),        -- immediate/short_term/medium_term/long_term
     created_at           DATETIME     DEFAULT CURRENT_TIMESTAMP,
     updated_at           DATETIME     DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     INDEX idx_date (date),
@@ -55,7 +73,10 @@ CREATE TABLE IF NOT EXISTS news_events (
     INDEX idx_event_tier (event_tier),
     INDEX idx_is_rumor (is_rumor),
     INDEX idx_created (created_at DESC),
-    INDEX idx_fingerprint (event_fingerprint)
+    INDEX idx_fingerprint (event_fingerprint),
+    INDEX idx_primary_coin (primary_coin),
+    INDEX idx_cap_tier (coin_cap_tier),
+    INDEX idx_sentiment (sentiment)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS x_raw_posts (

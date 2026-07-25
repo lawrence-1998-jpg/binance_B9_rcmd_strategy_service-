@@ -138,6 +138,7 @@ curl -s "http://34.138.247.158:8080/health"
 | `credibility_score` | 0-1，可信度 |
 | `is_rumor` / `rumor_reason` | 谣言标记与原因。**谣言不会被删除，只降权**，下游可自行决定是否展示 |
 | `social_interactions` | int，关联 X 推文的互动总量（赞+转+评+引） |
+| `x_posts` | array of object，该事件关联的 **X 原贴完整信息**（2026-07-26 新增）。每个含 `tweet_id`/`kol_username`/`kol_display_name`/`kol_verified`/`kol_followers_count`/`tweet_body`/`tweet_url`/`tweet_lang`/`like_count`/`retweet_count`/`reply_count`/`quote_count`/`impression_count`/`published_at`。非 X 来源的事件此字段为空数组 `[]`。`/api/news` 和 `/api/news/<id>` 都会带上，不需要再调 `/api/news/<id>/x-sources` 单独请求 |
 
 ### 去重字段
 

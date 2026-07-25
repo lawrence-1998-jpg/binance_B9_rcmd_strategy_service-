@@ -11,7 +11,7 @@ from bs4 import BeautifulSoup
 from datetime import datetime, timezone
 
 from .sources import (
-    RSS_SOURCES_P0, RSS_SOURCES_P1, RSS_SOURCES_RSSHUB,
+    RSS_SOURCES_P0, RSS_SOURCES_P1, RSS_SOURCES_P2, RSS_SOURCES_MACRO, RSS_SOURCES_RSSHUB,
     HTML_SOURCES, BINANCE_SQUARE_QUERIES, CRYPTO_KOLS, X_TWEETS_PER_KOL,
 )
 from .x_search import fetch_x_search
@@ -325,11 +325,24 @@ def filter_by_freshness(items: list[dict]) -> list[dict]:
     return kept
 
 
-def run_rss_and_scraper_crawler() -> tuple[list[dict], list[dict]]:
-    """运行全部爬虫。返回 (all_items, x_raw_posts)"""
+def fetch_cheap_sources() -> list[dict]:
+    """跑所有**不花钱**的抓取源：RSS/HTML/币安广场/CoinMarketCal/行情信号/搜索引擎。
+
+    2026-07-26 拆出这个函数是为了解耦"抓取频率"和"处理频率"。背景：cron 从
+    每 4 小时改成每 12 小时降本后，排查漏召时发现高频 RSS 源（吴说等）的服务端
+    窗口是固定的（约 30-50 条），12 小时间隔会让发布密集的源把窗口内容挤掉、
+    永久错过（不是 bug，是滚屏丢失，详见 docs/PROJECT_PLAN.md 的已知风险章节）。
+    这些源本身抓取不花钱（相对昂贵的是下游 LLM 结构化），完全可以更高频跑，
+    抓到就先存档（见 crawler/staging.py），LLM 处理仍按现有节奏批量消费存档。
+
+    唯一**不放在这里**的是 X（KOL 时间线 + 全网搜索）——按用户要求，付费/限额
+    类 API 维持现有节奏，不跟着提速，避免额度消耗加快。X 抓取仍在
+    `run_rss_and_scraper_crawler()` 里，只在主 pipeline 节奏下调用一次。
+    """
     all_items = []
 
-    for url, name, lang, authority in RSS_SOURCES_P0 + RSS_SOURCES_RSSHUB + RSS_SOURCES_P1:
+    for url, name, lang, authority in (RSS_SOURCES_P0 + RSS_SOURCES_RSSHUB + RSS_SOURCES_P1
+                                      + RSS_SOURCES_P2 + RSS_SOURCES_MACRO):
         all_items.extend(fetch_rss(url, name, lang, authority))
         time.sleep(0.5)
 
@@ -358,10 +371,22 @@ def run_rss_and_scraper_crawler() -> tuple[list[dict], list[dict]]:
     except Exception as e:
         logger.warning(f"Web search failed, continuing without: {e}")
 
-    # X 召回分两条腿：KOL 时间线（固定 32 个账号，深度）+ 全网关键词搜索（广度）。
-    # 搜索这条腿补的是"新闻发生了但 KOL 名单里没人发"的缺口。两边会大量撞车
-    # （同一条推文），把 KOL 侧的 tweet_id 传下去让搜索侧提前跳过，比事后去重
-    # 省一遍质量过滤，也保证撞车时保留 KOL 侧的版本（权威分是人工标注的，更准）。
+    all_items = [item for item in all_items if item.get("title", "").strip()]
+    all_items = filter_by_freshness(all_items)
+    logger.info(f"Cheap sources: {len(all_items)} items")
+    return all_items
+
+
+def fetch_x_sources() -> tuple[list[dict], list[dict]]:
+    """X 召回分两条腿：KOL 时间线（固定 32 个账号，深度）+ 全网关键词搜索（广度）。
+
+    搜索这条腿补的是"新闻发生了但 KOL 名单里没人发"的缺口。两边会大量撞车
+    （同一条推文），把 KOL 侧的 tweet_id 传下去让搜索侧提前跳过，比事后去重
+    省一遍质量过滤，也保证撞车时保留 KOL 侧的版本（权威分是人工标注的，更准）。
+
+    单独成函数是因为它**不参与** fetch_cheap_sources 的高频抓取——X 维持
+    主 pipeline 节奏，不跟着提速。
+    """
     x_items, x_raw_posts = fetch_x_kols()
     kol_ids = {p["tweet_id"] for p in x_raw_posts}
 
@@ -371,15 +396,25 @@ def run_rss_and_scraper_crawler() -> tuple[list[dict], list[dict]]:
     if len(new_search_items) != len(search_items):
         logger.info(f"X search: {len(search_items) - len(new_search_items)} overlapped with KOL feed")
 
-    all_items.extend(x_items)
-    all_items.extend(new_search_items)
-    x_raw_posts.extend(new_search_posts)
-    x_total = len(x_items) + len(new_search_items)
+    all_items = x_items + new_search_items
+    all_raw_posts = x_raw_posts + new_search_posts
+    all_items = filter_by_freshness([i for i in all_items if i.get("title", "").strip()])
+    logger.info(f"X sources: {len(all_items)} items ({len(x_items)} KOL + {len(new_search_items)} search)")
+    return all_items, all_raw_posts
 
-    all_items = [item for item in all_items if item.get("title", "").strip()]
-    all_items = filter_by_freshness(all_items)
-    logger.info(f"Total raw items: {len(all_items)} (incl. up to {x_total} X: "
-                f"{len(x_items)} KOL + {len(new_search_items)} search)")
+
+def run_rss_and_scraper_crawler() -> tuple[list[dict], list[dict]]:
+    """运行全部爬虫（一次性拉全量，不走存档）。返回 (all_items, x_raw_posts)。
+
+    保留这个函数是为了向后兼容——原本 `pipeline.run_pipeline()` 只调这一个入口。
+    现在生产 pipeline 优先走 `crawler.staging` 的存档消费路径（见
+    `scripts/stage_fetch.py` 与 `pipeline.py` Step 1 的改动），这个函数仍可用于
+    手动单轮全量抓取（调试、补数据）。
+    """
+    cheap_items = fetch_cheap_sources()
+    x_items, x_raw_posts = fetch_x_sources()
+    all_items = cheap_items + x_items
+    logger.info(f"Total raw items: {len(all_items)} (cheap {len(cheap_items)} + X {len(x_items)})")
     return all_items, x_raw_posts
 
 

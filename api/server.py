@@ -1,12 +1,23 @@
 """
 REST API 服务 - 对外提供新闻数据查询接口
 """
-import os, json, logging
+import os, sys, json, logging
 from datetime import datetime
 from functools import wraps
 
+# systemd/run_api.sh 都用 `python3 api/server.py` 直接跑这个文件，此时
+# sys.path[0] 是 api/ 目录本身（脚本所在目录），项目根目录（api/ 的上一级，
+# crawler/ 所在的地方）不在 sys.path 里。子模块（lab_tools.py / eval_tools.py）
+# 需要 `from crawler import ...`，必须先把项目根目录塞进 sys.path，否则
+# ModuleNotFoundError: No module named 'crawler'。必须放在两个 blueprint
+# import 之前。两次 dirname：第一次剥掉文件名到 api/，第二次剥到项目根目录。
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from flask import Flask, request, jsonify, g, send_from_directory
 import mysql.connector
+
+from lab_tools import lab_bp
+from eval_tools import eval_bp
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -71,15 +82,28 @@ EVENT_COLUMNS = """
     sources, source_names, source_count, is_verified, language_origin,
     cluster_id, merged_sources_count,
     event_subject, event_action, event_fingerprint, social_interactions,
+    -- 真实性校验（crawler/verification.py，五个客观信号，零 LLM 成本）
+    verification_status, verification_score, verification_reason,
+    verification_flags, independent_source_count,
+    -- 币种市值标签（crawler/market_cap.py）：市值、相对 BTC 倍数、市值档位
+    coin_metrics, primary_coin, primary_coin_market_cap,
+    primary_coin_btc_ratio, coin_cap_tier,
+    -- 内容理解增强：结构化实体、情绪、板块相关度明细
+    entities, sentiment, sentiment_score, sector_relevance,
     created_at, updated_at
 """
+
+# 上面列表里值为 JSON 类型的列。mysql-connector 把 JSON 列取回来是字符串，
+# 需要显式反序列化才能在响应里得到嵌套对象而不是转义字符串。
+_JSON_FIELDS = ["sectors", "coins", "sources", "source_names",
+               "verification_flags", "coin_metrics", "entities", "sector_relevance"]
 
 
 def row_to_dict(cursor, row):
     cols = [d[0] for d in cursor.description]
     d = dict(zip(cols, row))
     # JSON 字段反序列化
-    for field in ["sectors", "coins", "sources", "source_names"]:
+    for field in _JSON_FIELDS:
         if isinstance(d.get(field), str):
             try:
                 d[field] = json.loads(d[field])
@@ -92,6 +116,53 @@ def row_to_dict(cursor, row):
         elif isinstance(v, (bytes, bytearray)):
             d.pop(k)
     return d
+
+
+def attach_x_posts(events: list[dict], cursor) -> None:
+    """给每个事件挂上 `x_posts`：其 X 来源的原贴完整信息（正文/互动量/链接）。
+
+    起因：事件的 `sources` 字段里 X 来源只有 `x_tweet_id`，调用方要看原贴内容
+    此前得再调一次 `/api/news/<id>/x-sources`。现在直接内嵌，常见场景不用
+    二次请求；`/x-sources` 端点保留，供需要单独按点赞排序或分页的场景使用。
+
+    批量处理：先收集这一批事件里出现的全部 tweet_id 去重后一次查询，而不是
+    每个事件单独查一次——避免 `limit=100` 时打出 100 次 x_raw_posts 查询。
+    """
+    tweet_ids = {
+        src.get("x_tweet_id")
+        for event in events
+        for src in (event.get("sources") or [])
+        if src.get("x_tweet_id")
+    }
+    for event in events:
+        event["x_posts"] = []
+    if not tweet_ids:
+        return
+
+    placeholders = ",".join(["%s"] * len(tweet_ids))
+    cursor.execute(
+        f"""SELECT tweet_id, kol_username, kol_display_name, kol_verified,
+                   kol_followers_count, tweet_body, tweet_url, tweet_lang,
+                   like_count, retweet_count, reply_count, quote_count,
+                   impression_count, published_at
+            FROM x_raw_posts WHERE tweet_id IN ({placeholders})""",
+        tuple(tweet_ids),
+    )
+    cols = [d[0] for d in cursor.description]
+    posts_by_id = {}
+    for row in cursor.fetchall():
+        post = dict(zip(cols, row))
+        if isinstance(post.get("published_at"), datetime):
+            post["published_at"] = post["published_at"].isoformat()
+        posts_by_id[post["tweet_id"]] = post
+
+    for event in events:
+        seen = set()
+        for src in (event.get("sources") or []):
+            tid = src.get("x_tweet_id")
+            if tid and tid in posts_by_id and tid not in seen:
+                seen.add(tid)
+                event["x_posts"].append(posts_by_id[tid])
 
 
 # ─── 主新闻列表 ───────────────────────────────────────────────────────────────
@@ -149,6 +220,7 @@ def get_news():
     cursor.execute(sql, params)
     rows = cursor.fetchall()
     data = [row_to_dict(cursor, r) for r in rows]
+    attach_x_posts(data, cursor)
 
     # 总数
     cursor.execute(f"SELECT COUNT(*) FROM news_events WHERE {' AND '.join(where)}", params[:-2])
@@ -190,6 +262,7 @@ def get_news_detail(event_id):
         return jsonify({"error": "Not found"}), 404
     # row_to_dict 依赖 cursor.description，必须在 close 之前调用
     data = row_to_dict(cursor, row)
+    attach_x_posts([data], cursor)
     cursor.close()
     return jsonify(data)
 
@@ -266,20 +339,43 @@ def health():
         return jsonify({"status": "error", "message": str(e)}), 500
 
 
-# ─── 前端展示页（静态单文件，无需鉴权）──────────────────────────────────────
-# web/index.html 是自包含的单文件站点（内联全部 CSS/JS，零外部 CDN 依赖），
-# 页面内的数据请求走 ?token= 参数命中上面的 require_api_key。
-# 这里只做静态吐出，不碰任何既有端点的逻辑。
+# ─── 前端展示页（静态，无需鉴权）────────────────────────────────────────────
+# web/*.html 是自包含页面（内联 CSS/JS，零外部 CDN 依赖），页面内的数据请求走
+# ?token= 参数命中上面的 require_api_key。这里只做静态吐出，不碰既有端点逻辑。
+#
+# 路径白名单而非通配：通配会把所有拼错的 URL 都吞成 200 首页，掩盖真实的 404。
 WEB_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "web")
+WEB_PAGES = {
+    "": "index.html",           # 主页面：生成流程 / 数据展示 / API 接入
+    "dashboard": "index.html",
+    "eval": "eval.html",        # 评测工具
+    "lab": "lab.html",          # 策略实验室
+}
+
+
+def _nocache(resp):
+    # 页面会频繁迭代，禁掉缓存免得改完刷新还是旧版
+    resp.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    return resp
 
 
 @app.route("/", methods=["GET"])
-@app.route("/dashboard", methods=["GET"])
-def dashboard():
-    resp = send_from_directory(WEB_DIR, "index.html")
-    # 单文件站点会频繁迭代，禁掉缓存免得改完刷新还是旧版
-    resp.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
-    return resp
+@app.route("/<page>", methods=["GET"])
+def web_page(page=""):
+    filename = WEB_PAGES.get(page)
+    if not filename:
+        return jsonify({"error": "Not found"}), 404
+    return _nocache(send_from_directory(WEB_DIR, filename))
+
+
+@app.route("/assets/<path:filename>", methods=["GET"])
+def web_assets(filename):
+    """共享静态资源（如 web/assets/app.css）。"""
+    return _nocache(send_from_directory(os.path.join(WEB_DIR, "assets"), filename))
+
+
+app.register_blueprint(lab_bp)
+app.register_blueprint(eval_bp)
 
 
 if __name__ == "__main__":

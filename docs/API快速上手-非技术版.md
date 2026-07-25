@@ -135,6 +135,7 @@ http://34.138.247.158:8080/api/news?sector=MEME&is_rumor=0&limit=10&token=***REM
 | `coins` | 涉及币种 | `["BTC", "ETH"]` |
 | `source_names` | **哪些媒体报道了** | `["CoinDesk", "TheBlock", "吴说区块链"]` |
 | `source_count` | **几家独立媒体报道** | `5`（数字越大越可信） |
+| `x_posts` | **如果这条新闻来自 X（推特），这里是原贴的完整内容** | 含发推人、原文、点赞/转发数、发布时间。不是 X 来源的新闻这里是空的 |
 | `is_rumor` | 是否谣言 | `0` 不是 / `1` 是 |
 | `time_event` | 事件发生时间 | |
 | `date` | 日期 | |

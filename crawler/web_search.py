@@ -124,6 +124,11 @@ GOOGLE_NEWS_QUERIES: list[tuple[str, str, str, str, str]] = [
     ("brk_en_hack",    "breaking", "crypto hack",        "en", "when:6h"),
     ("brk_en_exploit", "breaking", "crypto exploit",     "en", "when:6h"),
     ("brk_en_exchange","breaking", "exchange hacked",    "en", "when:6h"),
+    # 2026-07-26 新增：覆盖率测试实测千万美元级安全事故会漏（$31.7M 双桥被盗、
+    # $280M Drift 漏洞均不在信源盘子里），"bridge/protocol" 是这类事故的高频措辞，
+    # 现有查询只覆盖了"交易所/crypto"层面，桥和协议层面完全没覆盖
+    ("brk_en_bridge",  "breaking", '"bridge exploit" crypto', "en", "when:6h"),
+    ("brk_en_drained", "breaking", '"protocol drained"',      "en", "when:6h"),
 
     # ── 监管 ─────────────────────────────────────────────────────────
     ("reg_zh_sec",     "regulation", "SEC 加密货币",    "zh", "when:1d"),
@@ -131,6 +136,17 @@ GOOGLE_NEWS_QUERIES: list[tuple[str, str, str, str, str]] = [
     ("reg_en_sec",     "regulation", "SEC crypto",       "en", "when:1d"),
     ("reg_en_general", "regulation", "crypto regulation","en", "when:1d"),
     ("reg_en_bill",    "regulation", "crypto bill congress", "en", "when:1d"),
+
+    # ── 协议治理（2026-07-26 新增）───────────────────────────────────
+    # 起因：覆盖率交叉验证实测发现这是一个成片空白——仅 Bitcoinist 一家媒体就
+    # 贡献了 6 条漏召（Frax 提案、EigenLayer ELIP、Uniswap RFC、Arbitrum 安全
+    # 委员会投票），现有查询集里没有任何一条覆盖"链上治理动态"这个方向。
+    # 用治理场景的专有名词（ELIP/RFC/DAO vote/governance proposal）而非泛泛的
+    # "governance"，避免捞回大量与加密无关的公司治理新闻。
+    ("gov_en_proposal","governance", '"governance proposal" crypto', "en", "when:1d"),
+    ("gov_en_dao_vote","governance", '"DAO vote"',                   "en", "when:1d"),
+    ("gov_en_elip_rfc","governance", "ELIP OR RFC protocol upgrade",  "en", "when:1d"),
+    ("gov_zh_proposal","governance", "DAO 治理提案",                  "zh", "when:1d"),
 ]
 
 # ── ddgs 补充查询（仅英文，见模块头部选型说明）──────────────────────

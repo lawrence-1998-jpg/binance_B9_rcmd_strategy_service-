@@ -359,6 +359,39 @@ def write_events(events: list[dict], conn) -> int:
     return written
 
 
+_UPDATE_X_POST_LINK_SQL = "UPDATE x_raw_posts SET news_event_id = %s WHERE tweet_id = %s"
+
+
+def persist_x_post_links(events: list[dict], conn) -> int:
+    """把事件最终 id 写回它引用的 x_raw_posts 行，建立 news_event_id 关联。
+
+    必须在 write_events 之后调用（此时跨轮归并已把事件 id 定型为既有行 id 或新
+    id）。此前 write_x_posts 只落推文本身，从不写这一列，导致 /api/news/<id>/
+    x-sources 永远查不到数据——关联信息其实一直都在 event['sources'] 的
+    x_tweet_id 里，只是没回写。按 tweet_id 做 UPDATE 天然幂等，重复调用安全。
+    """
+    if not events:
+        return 0
+    cursor = conn.cursor()
+    written = 0
+    for event in events:
+        tweet_ids = {
+            src.get("x_tweet_id")
+            for src in event.get("sources", [])
+            if src.get("x_tweet_id")
+        }
+        for tweet_id in tweet_ids:
+            try:
+                cursor.execute(_UPDATE_X_POST_LINK_SQL, (event["id"], tweet_id))
+                written += cursor.rowcount
+            except Exception as e:
+                logger.warning(f"x_raw_posts link write failed [{tweet_id}]: {e}")
+    conn.commit()
+    cursor.close()
+    logger.info(f"MySQL: news_event_id linked for {written} x_raw_posts rows")
+    return written
+
+
 _INSERT_X_POST_SQL = """
 INSERT INTO x_raw_posts (
     tweet_id, kol_username, kol_display_name, kol_followers_count,
