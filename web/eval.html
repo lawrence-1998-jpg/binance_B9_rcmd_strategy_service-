@@ -1,0 +1,730 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>评测工具 · B9 新闻推荐服务</title>
+<meta name="description" content="Binance B9 新闻推荐服务评测工具 —— Duplicate Tester 去重检测 与 LLM 评测室 多 persona 新闻评测。">
+<style>
+/* ══════════════════════════════════════════════════════════════════════
+   Design tokens —— 浅色主题，延用主站的字体栈与金色点缀，配色独立设计
+   ══════════════════════════════════════════════════════════════════════ */
+:root{
+  --bg:#F7F8FA;
+  --bg-1:#FFFFFF;
+  --bg-2:#F1F3F5;
+  --bg-3:#EAECEF;
+  --line:#E6E8EB;
+  --line-soft:#EFF1F3;
+  --tx:#1E2329;
+  --tx-2:#5E6673;
+  --tx-3:#848E9C;
+  --tx-4:#B7BDC6;
+  --gold:#B8860B;
+  --gold-bright:#F0B90B;
+  --gold-dim:rgba(240,185,11,.12);
+  --gold-line:rgba(184,134,11,.30);
+  --green:#0A9A63;
+  --green-dim:rgba(10,154,99,.10);
+  --red:#D6304A;
+  --red-dim:rgba(214,48,74,.09);
+  --blue:#2F6FE0;
+  --blue-dim:rgba(47,111,224,.09);
+  --amber:#B9660A;
+  --amber-dim:rgba(185,102,10,.10);
+  --r:10px;
+  --r-lg:14px;
+  --shadow:0 1px 2px rgba(16,24,40,.04), 0 4px 16px -6px rgba(16,24,40,.10);
+  --shadow-lg:0 4px 8px rgba(16,24,40,.04), 0 16px 40px -12px rgba(16,24,40,.16);
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#F7F8FA; --bg-1:#FFFFFF; --bg-2:#F1F3F5; --bg-3:#EAECEF;
+    /* 页面主动选择保持浅色（需求明确要求浅色主题），深色系统偏好下不切黑底，
+       仅由用户在页面内的主题切换（若后续加）才改变。这里显式锁定，避免误跟随系统变暗。 */
+  }
+}
+*,*::before,*::after{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{
+  margin:0;background:var(--bg);color:var(--tx);font-family:var(--sans);
+  font-size:14px;line-height:1.6;-webkit-font-smoothing:antialiased;overflow-x:hidden;
+}
+body::before{
+  content:"";position:fixed;inset:0;pointer-events:none;z-index:0;
+  background:
+    radial-gradient(760px 420px at 12% -8%, rgba(240,185,11,.10), transparent 62%),
+    radial-gradient(680px 400px at 94% -6%, rgba(47,111,224,.06), transparent 60%);
+}
+h1,h2,h3,h4{margin:0;font-weight:650;letter-spacing:-.01em;line-height:1.3;color:var(--tx)}
+p{margin:0}
+a{color:var(--gold);text-decoration:none}
+a:hover{color:var(--gold-bright);text-decoration:underline}
+button{font-family:inherit;font-size:inherit;cursor:pointer}
+code,pre,.mono{font-family:var(--mono)}
+::selection{background:rgba(240,185,11,.25)}
+:focus-visible{outline:2px solid var(--gold);outline-offset:2px;border-radius:4px}
+*::-webkit-scrollbar{width:10px;height:10px}
+*::-webkit-scrollbar-track{background:var(--bg-2)}
+*::-webkit-scrollbar-thumb{background:#D2D6DB;border-radius:6px;border:2px solid var(--bg-2)}
+*::-webkit-scrollbar-thumb:hover{background:#B7BDC6}
+
+.wrap{position:relative;z-index:1;max-width:1320px;margin:0 auto;padding:0 24px}
+
+/* ── Header ─────────────────────────────────────────────────────────── */
+header{
+  position:sticky;top:0;z-index:50;background:rgba(247,248,250,.88);
+  backdrop-filter:saturate(160%) blur(14px);-webkit-backdrop-filter:saturate(160%) blur(14px);
+  border-bottom:1px solid var(--line);
+}
+.hbar{display:flex;align-items:center;gap:16px;padding:13px 0;flex-wrap:wrap}
+.brand{display:flex;align-items:center;gap:11px;min-width:0}
+.mark{width:28px;height:28px;flex:none}
+.brand-tx .n{font-size:14px;font-weight:650;letter-spacing:-.02em;white-space:nowrap;color:var(--tx)}
+.brand-tx .n b{color:var(--gold);font-weight:650}
+.brand-tx .s{font-size:10.5px;color:var(--tx-3);letter-spacing:.05em;white-space:nowrap}
+.hspacer{flex:1}
+.home-link{
+  display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border-radius:100px;
+  background:var(--bg-1);border:1px solid var(--line);font-size:12.5px;color:var(--tx-2);
+  font-weight:550;transition:all .15s;
+}
+.home-link:hover{border-color:var(--gold-line);color:var(--gold);text-decoration:none;background:var(--gold-dim)}
+
+nav.subtabs{display:flex;gap:2px;overflow-x:auto;scrollbar-width:none;padding-top:2px}
+nav.subtabs::-webkit-scrollbar{display:none}
+.stab{
+  position:relative;background:none;border:0;padding:11px 4px 12px;margin-right:30px;
+  color:var(--tx-3);font-size:13.5px;font-weight:600;white-space:nowrap;letter-spacing:.01em;
+  transition:color .16s;display:flex;align-items:center;gap:8px;
+}
+.stab:last-child{margin-right:0}
+.stab .idx{font-family:var(--mono);font-size:10.5px;color:var(--tx-4)}
+.stab:hover{color:var(--tx-2)}
+.stab[aria-selected="true"]{color:var(--tx)}
+.stab[aria-selected="true"] .idx{color:var(--gold)}
+.stab::after{
+  content:"";position:absolute;left:0;right:0;bottom:0;height:2px;border-radius:2px;
+  background:var(--gold);transform:scaleX(0);transition:transform .2s cubic-bezier(.4,0,.2,1);
+}
+.stab[aria-selected="true"]::after{transform:scaleX(1)}
+
+main{padding:28px 0 72px}
+.panel{display:none}
+.panel.active{display:block}
+.section{margin:0 0 28px}
+.section-head{margin-bottom:16px}
+.section-head h2{font-size:18px}
+.section-head .sub{font-size:12.5px;color:var(--tx-3);margin-top:4px}
+.eyebrow{
+  font-size:10.5px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--gold);font-family:var(--mono);
+}
+
+.card{
+  background:var(--bg-1);border:1px solid var(--line);border-radius:var(--r-lg);
+  padding:20px;box-shadow:var(--shadow);
+}
+.card + .card{margin-top:16px}
+
+/* ── Duplicate Tester: upload zone ───────────────────────────────────── */
+.dropzone{
+  border:2px dashed var(--line);border-radius:var(--r-lg);padding:36px 20px;text-align:center;
+  background:var(--bg-2);cursor:pointer;transition:all .15s;
+}
+.dropzone:hover,.dropzone.dragover{border-color:var(--gold);background:var(--gold-dim)}
+.dropzone .ic{font-size:30px;margin-bottom:10px;opacity:.7}
+.dropzone .t1{font-size:14px;font-weight:600;color:var(--tx)}
+.dropzone .t2{font-size:12px;color:var(--tx-3);margin-top:5px}
+.dropzone input[type=file]{display:none}
+
+.thumbgrid{display:flex;flex-wrap:wrap;gap:10px;margin-top:16px}
+.thumb{
+  position:relative;width:88px;height:88px;border-radius:8px;overflow:hidden;
+  border:1px solid var(--line);background:var(--bg-2);flex:none;
+}
+.thumb img{width:100%;height:100%;object-fit:cover;display:block}
+.thumb .rm{
+  position:absolute;top:3px;right:3px;width:20px;height:20px;border-radius:50%;
+  background:rgba(30,35,41,.65);color:#fff;border:0;font-size:12px;line-height:1;
+  display:flex;align-items:center;justify-content:center;
+}
+.thumb .idxlabel{
+  position:absolute;bottom:0;left:0;right:0;background:rgba(30,35,41,.65);color:#fff;
+  font-size:9.5px;font-family:var(--mono);text-align:center;padding:2px 0;
+}
+.upload-meta{display:flex;align-items:center;justify-content:space-between;margin-top:12px;flex-wrap:wrap;gap:10px}
+.count-pill{font-family:var(--mono);font-size:11.5px;color:var(--tx-2);padding:4px 10px;border-radius:100px;background:var(--bg-2);border:1px solid var(--line)}
+.count-pill.warn{color:var(--red);border-color:rgba(214,48,74,.3);background:var(--red-dim)}
+
+.btn{
+  display:inline-flex;align-items:center;gap:7px;padding:10px 20px;border-radius:9px;
+  border:1px solid var(--line);background:var(--bg-1);color:var(--tx);font-size:13px;font-weight:600;
+  transition:all .15s;
+}
+.btn:hover:not(:disabled){border-color:var(--gold-line);background:var(--gold-dim)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn.primary{background:var(--gold-bright);border-color:var(--gold-bright);color:#1E2329}
+.btn.primary:hover:not(:disabled){background:#FFC91C;border-color:#FFC91C}
+.btn.small{padding:6px 12px;font-size:12px}
+
+.progress-wrap{margin-top:16px;display:none}
+.progress-wrap.active{display:block}
+.progress-bar{height:6px;border-radius:4px;background:var(--bg-3);overflow:hidden}
+.progress-bar .fill{height:100%;background:linear-gradient(90deg,var(--gold-bright),var(--gold));width:0%;transition:width .3s ease;border-radius:4px}
+.progress-tx{font-size:12px;color:var(--tx-3);margin-top:8px;font-family:var(--mono)}
+
+.kpi-row{display:flex;gap:12px;flex-wrap:wrap;margin:20px 0}
+.kpi{
+  flex:1;min-width:120px;background:var(--bg-2);border:1px solid var(--line);border-radius:var(--r);
+  padding:14px 16px;
+}
+.kpi .l{font-size:10.5px;color:var(--tx-3);text-transform:uppercase;letter-spacing:.06em;font-family:var(--mono)}
+.kpi .v{font-size:22px;font-weight:650;font-family:var(--mono);margin-top:4px;color:var(--tx)}
+.kpi .v.gold{color:var(--gold)}
+
+.table-actions{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:10px}
+.table-scroll{overflow-x:auto;border:1px solid var(--line);border-radius:var(--r)}
+table.restbl{width:100%;border-collapse:collapse;font-size:12.5px;min-width:720px}
+table.restbl th{
+  text-align:left;padding:9px 12px;background:var(--bg-2);color:var(--tx-3);font-size:10.5px;
+  text-transform:uppercase;letter-spacing:.06em;font-family:var(--mono);border-bottom:1px solid var(--line);
+  white-space:nowrap;position:sticky;top:0;
+}
+table.restbl td{padding:9px 12px;border-bottom:1px solid var(--line-soft);vertical-align:top}
+table.restbl tr:last-child td{border-bottom:0}
+table.restbl td.title-cell{max-width:420px}
+.grp-badge{
+  display:inline-flex;align-items:center;justify-content:center;min-width:22px;height:20px;padding:0 6px;
+  border-radius:6px;font-family:var(--mono);font-size:10.5px;font-weight:700;
+}
+.grp-badge.single{background:var(--bg-3);color:var(--tx-3)}
+.sim-val{font-family:var(--mono);font-size:11.5px;color:var(--tx-2)}
+.src-tag{font-size:11px;color:var(--tx-3)}
+
+.legend{display:flex;gap:8px;flex-wrap:wrap;font-size:11px;color:var(--tx-3);align-items:center}
+.legend .sw{width:11px;height:11px;border-radius:3px;display:inline-block;margin-right:4px;vertical-align:-1.5px}
+
+.empty-state{padding:40px 20px;text-align:center;color:var(--tx-3)}
+.empty-state .ic{font-size:26px;margin-bottom:10px;opacity:.5}
+.err-box{
+  background:var(--red-dim);border:1px solid rgba(214,48,74,.25);color:var(--red);
+  border-radius:var(--r);padding:12px 14px;font-size:12.5px;margin-top:14px;
+}
+
+/* ── LLM 评测室 ─────────────────────────────────────────────────────── */
+.mode-toggle{display:flex;gap:6px;margin-bottom:14px}
+.mode-btn{
+  padding:7px 16px;border-radius:8px;border:1px solid var(--line);background:var(--bg-1);
+  font-size:12.5px;font-weight:600;color:var(--tx-3);
+}
+.mode-btn[aria-selected="true"]{background:var(--tx);color:#fff;border-color:var(--tx)}
+textarea.news-input{
+  width:100%;min-height:120px;border:1px solid var(--line);border-radius:var(--r);padding:14px;
+  font-family:var(--sans);font-size:13.5px;color:var(--tx);background:var(--bg-1);resize:vertical;
+}
+textarea.news-input:focus{outline:none;border-color:var(--gold);box-shadow:0 0 0 3px var(--gold-dim)}
+.sample-row{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.eval-actions{display:flex;align-items:center;gap:12px;margin-top:16px;flex-wrap:wrap}
+
+.persona-grid{
+  display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;margin-top:20px;
+}
+.persona-card{
+  background:var(--bg-1);border:1px solid var(--line);border-radius:var(--r-lg);padding:18px;
+  box-shadow:var(--shadow);display:flex;flex-direction:column;gap:12px;
+}
+.pc-head{display:flex;align-items:center;gap:10px}
+.pc-emoji{font-size:26px;line-height:1;flex:none}
+.pc-name{font-size:14.5px;font-weight:700;color:var(--tx)}
+.pc-tagline{font-size:11px;color:var(--tx-3);margin-top:1px}
+.pc-score-row{display:flex;align-items:center;gap:10px}
+.score-track{flex:1;height:8px;border-radius:4px;background:var(--bg-3);overflow:hidden}
+.score-fill{height:100%;border-radius:4px;transition:width .4s ease}
+.score-num{font-family:var(--mono);font-size:15px;font-weight:700;white-space:nowrap}
+.pc-badge{
+  display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;padding:4px 9px;
+  border-radius:100px;width:fit-content;
+}
+.pc-badge.yes{background:var(--green-dim);color:var(--green)}
+.pc-badge.no{background:var(--red-dim);color:var(--red)}
+.pc-block .l{font-size:10px;color:var(--tx-3);text-transform:uppercase;letter-spacing:.06em;font-family:var(--mono);margin-bottom:4px}
+.pc-block .t{font-size:12.5px;color:var(--tx-2);line-height:1.55}
+.pc-block{border-top:1px solid var(--line-soft);padding-top:10px}
+.news-preview{
+  background:var(--bg-2);border:1px solid var(--line);border-radius:var(--r);padding:14px 16px;
+  font-size:12.5px;color:var(--tx-2);line-height:1.6;margin-bottom:18px;white-space:pre-wrap;
+  max-height:160px;overflow-y:auto;
+}
+
+.spinner{
+  width:14px;height:14px;border-radius:50%;border:2px solid rgba(30,35,41,.15);
+  border-top-color:var(--tx);animation:spin .7s linear infinite;flex:none;
+}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+.toast{
+  position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);
+  background:var(--tx);color:#fff;padding:10px 18px;border-radius:9px;font-size:12.5px;
+  opacity:0;pointer-events:none;transition:all .25s ease;z-index:200;box-shadow:var(--shadow-lg);
+}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+footer{padding:24px 0 40px;text-align:center;font-size:11px;color:var(--tx-4)}
+
+@media(max-width:640px){
+  .wrap{padding:0 16px}
+  .kpi-row{flex-direction:column}
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <div class="hbar">
+      <div class="brand">
+        <svg class="mark" viewBox="0 0 64 64" aria-hidden="true">
+          <g fill="#F0B90B">
+            <rect x="26.4" y="4"    width="11.2" height="11.2" rx="1.6" transform="rotate(45 32 9.6)"/>
+            <rect x="4"    y="26.4" width="11.2" height="11.2" rx="1.6" transform="rotate(45 9.6 32)"/>
+            <rect x="48.8" y="26.4" width="11.2" height="11.2" rx="1.6" transform="rotate(45 54.4 32)"/>
+            <rect x="26.4" y="48.8" width="11.2" height="11.2" rx="1.6" transform="rotate(45 32 54.4)"/>
+            <rect x="25.6" y="25.6" width="12.8" height="12.8" rx="1.8" transform="rotate(45 32 32)"/>
+          </g>
+        </svg>
+        <div class="brand-tx">
+          <div class="n">Lawrence Crypto News <b>评测工具</b></div>
+          <div class="s">TAB 04 · EVALUATION TOOLKIT</div>
+        </div>
+      </div>
+      <div class="hspacer"></div>
+      <a class="home-link" href="/">← 返回主站</a>
+    </div>
+    <nav class="subtabs" role="tablist" aria-label="评测工具子导航">
+      <button class="stab" role="tab" id="stab-1" aria-controls="spanel-1" aria-selected="true"><span class="idx">01</span>Duplicate Tester</button>
+      <button class="stab" role="tab" id="stab-2" aria-controls="spanel-2" aria-selected="false"><span class="idx">02</span>LLM 评测室</button>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <div class="wrap">
+
+    <!-- ══════════════════════════ Sub-tab 1: Duplicate Tester ══════════════════════════ -->
+    <section class="panel active" id="spanel-1" role="tabpanel" aria-labelledby="stab-1">
+      <div class="section">
+        <div class="section-head">
+          <span class="eyebrow">DUPLICATE TESTER</span>
+          <h2>新闻去重检测</h2>
+          <div class="sub">上传新闻列表截图（App 信息流截图，一张图可包含多条新闻），自动提取标题并检测跨图 / 图内重复新闻。单次最多 20 张图片。</div>
+        </div>
+
+        <div class="card">
+          <div class="dropzone" id="dropzone">
+            <div class="ic">🖼️</div>
+            <div class="t1">点击选择图片，或将截图拖拽到此处</div>
+            <div class="t2">支持 PNG / JPG / WebP / GIF，单张最大 8MB，单次最多 20 张</div>
+            <input type="file" id="fileInput" accept="image/png,image/jpeg,image/jpg,image/webp,image/gif" multiple>
+          </div>
+          <div class="upload-meta">
+            <span class="count-pill" id="countPill">未选择图片</span>
+            <button class="btn small" id="clearBtn" style="display:none">清空</button>
+          </div>
+          <div class="thumbgrid" id="thumbGrid"></div>
+
+          <div class="eval-actions">
+            <button class="btn primary" id="runDedupBtn" disabled>开始检测</button>
+            <span id="dedupSpinnerWrap" style="display:none" class="pc-score-row"><span class="spinner"></span><span class="progress-tx" id="dedupSpinnerTx">处理中…</span></span>
+          </div>
+          <div class="progress-wrap" id="dedupProgressWrap">
+            <div class="progress-bar"><div class="fill" id="dedupProgressFill"></div></div>
+            <div class="progress-tx" id="dedupProgressTx"></div>
+          </div>
+          <div id="dedupError"></div>
+        </div>
+
+        <div id="dedupResults"></div>
+      </div>
+    </section>
+
+    <!-- ══════════════════════════ Sub-tab 2: LLM 评测室 ══════════════════════════ -->
+    <section class="panel" id="spanel-2" role="tabpanel" aria-labelledby="stab-2">
+      <div class="section">
+        <div class="section-head">
+          <span class="eyebrow">LLM 评测室</span>
+          <h2>多 Persona 新闻评测</h2>
+          <div class="sub">粘贴新闻文本或上传新闻截图，5 个不同画像的币圈用户会分别给出打分、定性评估、是否看得懂、优化建议 —— 用于判断一条新闻对不同受众的实际体验。</div>
+        </div>
+
+        <div class="card">
+          <div class="mode-toggle" role="tablist" aria-label="输入方式">
+            <button class="mode-btn" id="modeText" aria-selected="true">粘贴文本</button>
+            <button class="mode-btn" id="modeImage" aria-selected="false">上传截图</button>
+          </div>
+
+          <div id="textInputWrap">
+            <textarea class="news-input" id="newsTextInput" placeholder="粘贴新闻标题 + 正文/摘要……"></textarea>
+            <div class="sample-row">
+              <button class="btn small" id="sampleA">填入示例：机构 ETF 资金流（高信息密度）</button>
+              <button class="btn small" id="sampleB">填入示例：匿名喊单帖（低质量营销）</button>
+            </div>
+          </div>
+          <div id="imageInputWrap" style="display:none">
+            <div class="dropzone" id="dropzoneEval">
+              <div class="ic">📰</div>
+              <div class="t1">点击选择新闻截图，或拖拽到此处</div>
+              <div class="t2">会先用视觉模型提取标题+正文文本，再交给 5 个 persona 评测</div>
+              <input type="file" id="fileInputEval" accept="image/png,image/jpeg,image/jpg,image/webp,image/gif">
+            </div>
+            <div id="evalThumbWrap" style="margin-top:12px"></div>
+          </div>
+
+          <div class="eval-actions">
+            <button class="btn primary" id="runEvalBtn">开始评测</button>
+            <span id="evalSpinnerWrap" style="display:none" class="pc-score-row"><span class="spinner"></span><span class="progress-tx">5 个 persona 并发评测中…</span></span>
+          </div>
+          <div id="evalError"></div>
+        </div>
+
+        <div id="evalResults"></div>
+      </div>
+    </section>
+
+  </div>
+</main>
+
+<footer>Binance B9 新闻推荐服务 · 评测工具 · 内部使用</footer>
+<div class="toast" id="toast"></div>
+
+<script>
+(function(){
+"use strict";
+
+// ── 通用：sub-tab 切换 ──────────────────────────────────────────────
+const stabs = [document.getElementById('stab-1'), document.getElementById('stab-2')];
+const spanels = [document.getElementById('spanel-1'), document.getElementById('spanel-2')];
+stabs.forEach((btn, i) => {
+  btn.addEventListener('click', () => {
+    stabs.forEach((b, j) => b.setAttribute('aria-selected', j === i ? 'true' : 'false'));
+    spanels.forEach((p, j) => p.classList.toggle('active', j === i));
+  });
+});
+
+function toast(msg){
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 2200);
+}
+
+function escapeHtml(s){
+  return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+// ══════════════════════════════════════════════════════════════════
+// Duplicate Tester
+// ══════════════════════════════════════════════════════════════════
+const MAX_IMAGES = 20;
+let selectedFiles = []; // File objects
+
+const dropzone = document.getElementById('dropzone');
+const fileInput = document.getElementById('fileInput');
+const thumbGrid = document.getElementById('thumbGrid');
+const countPill = document.getElementById('countPill');
+const clearBtn = document.getElementById('clearBtn');
+const runDedupBtn = document.getElementById('runDedupBtn');
+
+dropzone.addEventListener('click', () => fileInput.click());
+dropzone.addEventListener('dragover', e => { e.preventDefault(); dropzone.classList.add('dragover'); });
+dropzone.addEventListener('dragleave', () => dropzone.classList.remove('dragover'));
+dropzone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropzone.classList.remove('dragover');
+  addFiles(Array.from(e.dataTransfer.files));
+});
+fileInput.addEventListener('change', () => { addFiles(Array.from(fileInput.files)); fileInput.value = ''; });
+
+function addFiles(files){
+  const imgFiles = files.filter(f => /^image\//.test(f.type));
+  selectedFiles = selectedFiles.concat(imgFiles);
+  renderThumbs();
+}
+
+function removeFile(idx){
+  selectedFiles.splice(idx, 1);
+  renderThumbs();
+}
+
+function renderThumbs(){
+  thumbGrid.innerHTML = '';
+  selectedFiles.forEach((f, idx) => {
+    const div = document.createElement('div');
+    div.className = 'thumb';
+    const img = document.createElement('img');
+    img.src = URL.createObjectURL(f);
+    const rm = document.createElement('button');
+    rm.className = 'rm'; rm.textContent = '×';
+    rm.onclick = () => removeFile(idx);
+    const lbl = document.createElement('div');
+    lbl.className = 'idxlabel'; lbl.textContent = 'img' + idx;
+    div.appendChild(img); div.appendChild(rm); div.appendChild(lbl);
+    thumbGrid.appendChild(div);
+  });
+  const n = selectedFiles.length;
+  if (n === 0){
+    countPill.textContent = '未选择图片';
+    countPill.classList.remove('warn');
+    clearBtn.style.display = 'none';
+  } else {
+    countPill.textContent = `已选择 ${n} / ${MAX_IMAGES} 张`;
+    countPill.classList.toggle('warn', n > MAX_IMAGES);
+    clearBtn.style.display = 'inline-flex';
+  }
+  runDedupBtn.disabled = (n === 0 || n > MAX_IMAGES);
+}
+
+clearBtn.addEventListener('click', () => { selectedFiles = []; renderThumbs(); document.getElementById('dedupResults').innerHTML=''; });
+
+const GROUP_COLORS = [
+  {bg:'#FFF6D9', fg:'#8A6300'}, {bg:'#E3F0FF', fg:'#1E4FA3'}, {bg:'#E5F8EE', fg:'#0A7A4E'},
+  {bg:'#FDE9EC', fg:'#B01A3B'}, {bg:'#F1E9FB', fg:'#6B3FA0'}, {bg:'#FFEEE0', fg:'#B0530A'},
+  {bg:'#E0F7F5', fg:'#0A7A72'}, {bg:'#F4E9F1', fg:'#9C3E80'},
+];
+
+runDedupBtn.addEventListener('click', async () => {
+  const n = selectedFiles.length;
+  if (n === 0 || n > MAX_IMAGES) return;
+  runDedupBtn.disabled = true;
+  document.getElementById('dedupSpinnerWrap').style.display = 'inline-flex';
+  document.getElementById('dedupSpinnerTx').textContent = `正在识别 ${n} 张图片并检测重复（视觉模型 + embedding）…`;
+  document.getElementById('dedupError').innerHTML = '';
+  document.getElementById('dedupResults').innerHTML = '';
+
+  const fd = new FormData();
+  selectedFiles.forEach(f => fd.append('images', f, f.name));
+
+  try{
+    const resp = await fetch('/api/tools/dedup-test', {method:'POST', body: fd});
+    const body = await resp.json();
+    if (!resp.ok){
+      document.getElementById('dedupError').innerHTML = `<div class="err-box">${escapeHtml(body.error || ('请求失败：HTTP ' + resp.status))}</div>`;
+      return;
+    }
+    renderDedupResults(body);
+  }catch(e){
+    document.getElementById('dedupError').innerHTML = `<div class="err-box">网络错误：${escapeHtml(e.message)}</div>`;
+  }finally{
+    runDedupBtn.disabled = false;
+    document.getElementById('dedupSpinnerWrap').style.display = 'none';
+  }
+});
+
+let lastTsv = '';
+
+function renderDedupResults(body){
+  const wrap = document.getElementById('dedupResults');
+  const rows = [];
+  body.groups.forEach(g => {
+    g.items.forEach(it => rows.push({group_id: g.group_id, size: g.size, is_dup: g.is_duplicate_group, ...it}));
+  });
+  lastTsv = body.table_csv || '';
+
+  let html = '';
+  html += `<div class="kpi-row">
+    <div class="kpi"><div class="l">图片数</div><div class="v">${body.images_processed}</div></div>
+    <div class="kpi"><div class="l">提取标题数</div><div class="v">${body.total_headlines_extracted}</div></div>
+    <div class="kpi"><div class="l">重复组数</div><div class="v gold">${body.duplicate_group_count}</div></div>
+    <div class="kpi"><div class="l">本次成本</div><div class="v">$${body.cost_usd.toFixed(4)}</div></div>
+  </div>`;
+
+  if (Object.keys(body.image_errors || {}).length){
+    html += `<div class="err-box">部分图片处理失败：${escapeHtml(JSON.stringify(body.image_errors))}</div>`;
+  }
+
+  html += `<div class="table-actions">
+    <div class="legend"><span class="sw" style="background:${GROUP_COLORS[0].bg};border:1px solid ${GROUP_COLORS[0].fg}"></span>彩色 = 重复组　<span class="sw" style="background:var(--bg-3)"></span>灰色 = 无重复</div>
+    <button class="btn small" id="copyTsvBtn">📋 复制表格（TSV，可直接粘贴 Excel）</button>
+  </div>`;
+
+  html += `<div class="table-scroll"><table class="restbl"><thead><tr>
+    <th>组</th><th>图片</th><th>来源</th><th>提取标题</th><th>组内相似度</th><th>是否重复</th>
+  </tr></thead><tbody>`;
+
+  if (rows.length === 0){
+    html += `<tr><td colspan="6"><div class="empty-state"><div class="ic">🔍</div>未提取到任何标题</div></td></tr>`;
+  } else {
+    rows.forEach(r => {
+      const color = r.is_dup ? GROUP_COLORS[(r.group_id - 1) % GROUP_COLORS.length] : null;
+      const badgeStyle = color ? `background:${color.bg};color:${color.fg}` : '';
+      const rowStyle = color ? `background:${color.bg}22` : '';
+      html += `<tr style="${rowStyle}">
+        <td><span class="grp-badge ${color ? '' : 'single'}" style="${badgeStyle}">${r.group_id}</span></td>
+        <td class="src-tag">img${r.image_index}<br><span style="opacity:.7">${escapeHtml(r.image_name)}</span></td>
+        <td class="src-tag">${escapeHtml(r.source || '—')}</td>
+        <td class="title-cell">${escapeHtml(r.title)}</td>
+        <td class="sim-val">${r.similarity_to_group.toFixed(3)}</td>
+        <td>${r.is_dup ? '是（' + r.size + ' 条）' : '否'}</td>
+      </tr>`;
+    });
+  }
+  html += `</tbody></table></div>`;
+
+  wrap.innerHTML = html;
+  document.getElementById('copyTsvBtn').addEventListener('click', () => copyToClipboard(lastTsv));
+}
+
+function copyToClipboard(text){
+  if (navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(text).then(() => toast('已复制到剪贴板，可直接粘贴到 Excel')).catch(() => fallbackCopy(text));
+  } else {
+    fallbackCopy(text);
+  }
+}
+function fallbackCopy(text){
+  const ta = document.createElement('textarea');
+  ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+  document.body.appendChild(ta); ta.select();
+  try { document.execCommand('copy'); toast('已复制到剪贴板'); } catch(e){ toast('复制失败，请手动选择表格文本'); }
+  document.body.removeChild(ta);
+}
+
+// ══════════════════════════════════════════════════════════════════
+// LLM 评测室
+// ══════════════════════════════════════════════════════════════════
+const modeText = document.getElementById('modeText');
+const modeImage = document.getElementById('modeImage');
+const textInputWrap = document.getElementById('textInputWrap');
+const imageInputWrap = document.getElementById('imageInputWrap');
+let evalMode = 'text';
+let evalImageFile = null;
+
+modeText.addEventListener('click', () => {
+  evalMode = 'text';
+  modeText.setAttribute('aria-selected', 'true'); modeImage.setAttribute('aria-selected', 'false');
+  textInputWrap.style.display = ''; imageInputWrap.style.display = 'none';
+});
+modeImage.addEventListener('click', () => {
+  evalMode = 'image';
+  modeImage.setAttribute('aria-selected', 'true'); modeText.setAttribute('aria-selected', 'false');
+  textInputWrap.style.display = 'none'; imageInputWrap.style.display = '';
+});
+
+const dropzoneEval = document.getElementById('dropzoneEval');
+const fileInputEval = document.getElementById('fileInputEval');
+dropzoneEval.addEventListener('click', () => fileInputEval.click());
+dropzoneEval.addEventListener('dragover', e => { e.preventDefault(); dropzoneEval.classList.add('dragover'); });
+dropzoneEval.addEventListener('dragleave', () => dropzoneEval.classList.remove('dragover'));
+dropzoneEval.addEventListener('drop', e => {
+  e.preventDefault(); dropzoneEval.classList.remove('dragover');
+  if (e.dataTransfer.files[0]) setEvalImage(e.dataTransfer.files[0]);
+});
+fileInputEval.addEventListener('change', () => { if (fileInputEval.files[0]) setEvalImage(fileInputEval.files[0]); });
+
+function setEvalImage(f){
+  evalImageFile = f;
+  const wrap = document.getElementById('evalThumbWrap');
+  wrap.innerHTML = '';
+  const div = document.createElement('div');
+  div.className = 'thumb'; div.style.width = '140px'; div.style.height = '140px';
+  const img = document.createElement('img'); img.src = URL.createObjectURL(f);
+  const rm = document.createElement('button'); rm.className = 'rm'; rm.textContent = '×';
+  rm.onclick = () => { evalImageFile = null; wrap.innerHTML = ''; };
+  div.appendChild(img); div.appendChild(rm);
+  wrap.appendChild(div);
+}
+
+const SAMPLE_A = `美国比特币以太坊现货ETF净流出3.11亿美元
+据 SoSoValue 数据，美东时间7月24日，美国比特币现货ETF单日总净流出2.40亿美元，以太坊现货ETF总净流出7061.79万美元，两类产品合计净流出约3.1062亿美元。其中，比特币ETF方面，贝莱德IBIT净流出2.12亿美元居首，富达FBTC净流出2791.16万美元，显示主流基金产品均出现明显赎回。
+现货ETF资金流一向被视为观察美国机构资金风险偏好的核心指标。此次BTC与ETH ETF同步转为净流出，且单日规模超过3亿美元，说明短线机构需求有所降温，也可能对BTC、ETH现货价格形成情绪压制。`;
+const SAMPLE_B = `匿名 Telegram 频道称某头部交易所明早10点将上线meme新币 $FROG，目标100倍，错过不再有！`;
+
+document.getElementById('sampleA').addEventListener('click', () => { document.getElementById('newsTextInput').value = SAMPLE_A; });
+document.getElementById('sampleB').addEventListener('click', () => { document.getElementById('newsTextInput').value = SAMPLE_B; });
+
+const SCORE_COLOR = s => s >= 7 ? 'var(--green)' : (s >= 4 ? 'var(--amber)' : 'var(--red)');
+
+document.getElementById('runEvalBtn').addEventListener('click', async () => {
+  const fd = new FormData();
+  if (evalMode === 'text'){
+    const txt = document.getElementById('newsTextInput').value.trim();
+    if (!txt){ toast('请先粘贴新闻文本'); return; }
+    fd.append('text', txt);
+  } else {
+    if (!evalImageFile){ toast('请先上传新闻截图'); return; }
+    fd.append('image', evalImageFile, evalImageFile.name);
+  }
+
+  const btn = document.getElementById('runEvalBtn');
+  btn.disabled = true;
+  document.getElementById('evalSpinnerWrap').style.display = 'inline-flex';
+  document.getElementById('evalError').innerHTML = '';
+  document.getElementById('evalResults').innerHTML = '';
+
+  try{
+    const resp = await fetch('/api/tools/persona-eval', {method:'POST', body: fd});
+    const body = await resp.json();
+    if (!resp.ok){
+      document.getElementById('evalError').innerHTML = `<div class="err-box">${escapeHtml(body.error || ('请求失败：HTTP ' + resp.status))}</div>`;
+      return;
+    }
+    renderEvalResults(body);
+  }catch(e){
+    document.getElementById('evalError').innerHTML = `<div class="err-box">网络错误：${escapeHtml(e.message)}</div>`;
+  }finally{
+    btn.disabled = false;
+    document.getElementById('evalSpinnerWrap').style.display = 'none';
+  }
+});
+
+function renderEvalResults(body){
+  const wrap = document.getElementById('evalResults');
+  let html = `<div class="news-preview">${escapeHtml(body.news_text)}</div>`;
+  html += `<div class="kpi-row" style="margin-bottom:4px">
+    <div class="kpi"><div class="l">评测 Persona 数</div><div class="v">${body.personas.length}</div></div>
+    <div class="kpi"><div class="l">本次成本</div><div class="v">$${body.cost_usd.toFixed(4)}</div></div>
+    <div class="kpi"><div class="l">模型</div><div class="v" style="font-size:14px">${escapeHtml(body.model)}</div></div>
+  </div>`;
+  html += `<div class="persona-grid">`;
+  body.personas.forEach(p => {
+    const color = SCORE_COLOR(p.score);
+    html += `<div class="persona-card">
+      <div class="pc-head">
+        <div class="pc-emoji">${p.emoji}</div>
+        <div>
+          <div class="pc-name">${escapeHtml(p.name)}</div>
+          <div class="pc-tagline">${escapeHtml(p.tagline)}</div>
+        </div>
+      </div>
+      <div class="pc-score-row">
+        <div class="score-track"><div class="score-fill" style="width:${p.score*10}%;background:${color}"></div></div>
+        <div class="score-num" style="color:${color}">${p.score}/10</div>
+      </div>
+      <span class="pc-badge ${p.is_understandable ? 'yes' : 'no'}">${p.is_understandable ? '✓ 看得懂' : '✗ 看不懂'}</span>
+      <div class="pc-block">
+        <div class="l">定性评估</div>
+        <div class="t">${escapeHtml(p.qualitative_assessment)}</div>
+      </div>
+      <div class="pc-block">
+        <div class="l">看懂/看不懂原因</div>
+        <div class="t">${escapeHtml(p.understandable_reason)}</div>
+      </div>
+      <div class="pc-block">
+        <div class="l">优化建议</div>
+        <div class="t">${escapeHtml(p.improvement_suggestion)}</div>
+      </div>
+    </div>`;
+  });
+  html += `</div>`;
+  if ((body.persona_errors || []).length){
+    html += `<div class="err-box">部分 persona 评测失败：${escapeHtml(JSON.stringify(body.persona_errors))}</div>`;
+  }
+  wrap.innerHTML = html;
+}
+
+})();
+</script>
+</body>
+</html>

@@ -1,108 +1,122 @@
 # B9 项目工作台账
 
-> 记录 Lawrence 提出的全部需求及其跟进状态。最后更新：2026-07-26（晚间批次）
+> 记录 Lawrence 提出的全部需求及其跟进状态。最后更新：2026-07-26（晚间批次收尾）
+> 图例：✅ 已完成并验证 ｜ 🔄 进行中 ｜ ⏸️ 阻塞（等确认/等额度）
 
-## 晚间批次新增需求跟进（用户睡前一次性提了 5 件事）
+配合阅读：`docs/PROJECT_PLAN.md`（做什么/为什么）、`docs/REQUIREMENTS_LOG.md`
+（原始需求原文）、`docs/OPEN_QUESTIONS.md`（**待你 review 的决策点，务必看一眼**）。
+
+---
+
+## 一、晚间批次五项需求（睡前一次性提的）
 
 | # | 需求 | 状态 |
 |---|---|---|
-| 1 | 保障稳定全面的召回源，去重入库落表 | ✅ 召回覆盖率交叉验证（29.9%→归因77.4%信源不足）+ 12个新RSS源 + 抓取/处理频率解耦（staging.py，高频存档 2h/次，LLM 处理仍 12h/次） |
-| 2 | 内容理解打标签：实体/情绪/币种/板块相关度 + 市值标签 | ✅ crawler/market_cap.py（市值+BTC倍数+档位）+ NEWS_SCHEMA 新增 entities/sentiment/sector_tags |
-| 3 | 重要性打分排序（参考 Macro Insight 文档） | ✅ 已实现，且原始方案文档（用户提供）确认打分公式一致 |
-| 4 | 生产化 API | ✅ 已上线，见 docs/api-integration-guide.md；已知限制见文档「已知限制」章节（无HTTPS、单一token） |
-| 5 | 前端网站（5 tab，浅色设计） | 🔄 index.html（流程+数据+API）、lab.html（策略实验室）已完成部署；eval.html（评测工具）进行中 |
+| 1 | 保障稳定全面的召回源，去重入库落表 | ✅ 覆盖率交叉验证（真实数字 29.9%，见 §4 F5）+ 12个新RSS源接入 + 抓取/处理频率解耦（`crawler/staging.py`，免费源2h/次高频存档，LLM处理仍12h/次） |
+| 2 | 内容理解打标签：实体/情绪/币种/板块相关度 + 市值标签 | ✅ `crawler/market_cap.py`（市值+BTC倍数+档位，含ticker消歧五道闸）+ `sector_tags`（真相关才打，强制锚点）/`entities`/`sentiment`/`impact_horizon`。实测过度打标 14→6 板块（-57%），成本 +30%（见 OPEN_QUESTIONS #1） |
+| 3 | 重要性打分排序 | ✅ 已实现，原始方案文档（用户提供）确认打分公式一致 |
+| 4 | 生产化 API | ✅ 已上线；已知限制见 OPEN_QUESTIONS #2（无HTTPS/单token） |
+| 5 | 前端网站（5 tab，浅色设计） | 🔄 4/5 完成：生成流程+数据展示+API接入（`web/index.html`）、策略实验室（`web/lab.html`）已部署验证；评测工具（`web/eval.html`）后端已交付注册，前端页面待完成 |
 
+## 二、当晚追加的四项需求
 
-
-图例：✅ 已完成并验证 ｜ 🔄 进行中 ｜ ⏸️ 阻塞（等确认/等额度）｜ 📋 待开始
-
----
-
-## 一、已完成（含实测证据）
-
-| # | 需求 | 状态 | 交付物与实测结果 |
-|---|---|---|---|
-| 1 | 连接 GitHub 仓库，建 start 文件记录时间 | ✅ | 已 clone 并 push，commit `f911506` |
-| 2 | 安装 Claude Code CLI | ✅ | v2.1.220，装在 `/opt/homebrew/bin/claude`（先补装了 Node.js） |
-| 3 | 连接虚拟机 | ✅ | 已配 SSH 密钥 + 别名 `manus-vm`，后又加了连接复用（见问题记录 P1） |
-| 4 | 深读项目背景，准备接手 | ✅ | 读完 7 份文档 + 全部代码 + 38 张截图材料，理解写入 memory |
-| 5 | MySQL 事件库导出 Excel | ✅ | `materials/exports/B9事件库_导出_20260726.xlsx`，841 事件 × 8 sheet |
-| 6 | 事件 ID 换成稳定指纹 | ✅ | LLM 输出三元组 →`sha256(subject\|action\|date)`，`crawler/dedup.py` |
-| 7 | 聚合层换成真 embedding | ✅ | `text-embedding-3-small` 256 维，替换原 TF-IDF 词频 |
-| 8 | 入库前跨轮归并 | ✅ | `crawler/storage.py`，实测单轮 349 事件中 267 条并入既有行 |
-| 9 | H 因子接入社交互动 | ✅ | `H = 0.6×log归一(社交互动) + 0.4×min(信源数/8,1)`，实测 social=236 → H=0.461 |
-| 10 | 修掉日期异常 | ✅ | 抓取层 7 天时间窗，实测单轮拦掉 79 条陈年内容 |
-| 11 | 优化代码结构与注释 | ✅ | 530 行的 pipeline.py 拆成 dedup / scoring / storage / pipeline 四个模块 |
-| 12 | 读图片材料 + 写 memory | ✅ | 6 条 memory：项目形态、VM 接入、去重经验、X 额度、SSH 坑、安全偏好 |
-| 13 | 任务多久跑一次 | ✅ | 原每 4 小时 → **已按要求改为每天 2 次**（UTC 0/12 = 北京 8点/20点） |
-| 14 | API 是否真实可用、下游怎么用 | ✅ | 公网实测 4 端点全 200、无鉴权 401、延迟 0.55s；文档 `docs/api-integration-guide.md` |
-| 15 | 量化欠召情况 | ✅ | 见下方「关键发现 F1」 |
-| 16 | 降低运行成本 | ✅ | 频率减为 1/3；同步调大 RSS 取数上限与 X 回看窗口防掉召回 |
-
----
-
-## 二、进行中
-
-| # | 需求 | 状态 | 当前进度 / 卡点 |
-|---|---|---|---|
-| 17 | X 全网搜索召回 | 🔄 | 模块已完成（`crawler/x_search.py` 443 行），实测 21 请求 → 1496 原始 → 过滤 86% → 剩 208 条。**但抽样发现留存作者多为低质账号，正在收紧过滤** |
-| 18 | 行情异动事件生成 | 🔄 | `crawler/market_signals.py` 已有初版，尚未验收。**关键约束：币安 API 在 VM 上返回 451（美国 IP 地域封锁）**，需改用 CoinGecko/OKX/Bybit |
-| 19 | 搜索引擎新闻召回 | 🔄 | 已探明 Google News RSS 可用，**但默认按相关性排序、结果中位年龄 50 天，必须加 `when:1h`/`when:1d` 算子**。模块待实现 |
-| 20 | OpenAI 用量与成本监控 | 🔄 | 官方 `/v1/organization/usage`、`/costs` 均 403（缺 `api.usage.read` scope），`/v1/usage` 返回空。改为在 pipeline 内埋点统计 token |
-| 21 | 补充 RSS 信源 | 🔄 | 本机实测 21 个候选，14 个可用，待接入并在 VM 复测 |
-| 22 | 调研可采购数据源 API | 🔄 | 线索：CoinMarketCal 官网有 CAPTCHA；BWEnews 疑似有免费 websocket 待核实 |
-
----
-
-## 三、阻塞项（需要你决策）
-
-| # | 事项 | 卡在哪 |
+| # | 需求 | 状态 |
 |---|---|---|
-| 23 | 清理存量 416 行重复数据 | **破坏性操作，需你确认**。干跑结果：855 行中 306 个重复簇、416 行冗余（48.7%）。阈值已标定到 0.82 且误合并已消除，执行命令 `python3 scripts/backfill_dedup.py --apply` |
+| 6 | X API 成本控制（"钱烧得很快"） | ✅ 查明真实成本大头是下游LLM结构化非X本身；`x_search.py` 加 `MAX_ITEMS_PER_RUN=200` 硬顶 |
+| 7 | 抓取频率与召回稳定性的折中方案 | ✅ 免费源改高频抓取存档（2h/次）+ LLM低频批量处理（12h/次不变），X维持原节奏不提速 |
+| 8 | 前端补充完善 + 加导航栏 | ✅ 5-tab导航栏已实现（含跳转eval/lab） |
+| 9 | 所有X来源要有具体字段 + 数据展示要有X原贴信息 | ✅ `attach_x_posts()` 内嵌完整原贴（正文/互动量/链接）进事件响应，前端详情展开渲染 |
 
 ---
 
-## 四、关键发现
+## 三、已完成清单（含关键实测证据，按完成顺序）
 
-### F1：欠召的根因不是信源不够，是信号类型缺失
-
-对照 6 个未接入的主流平台实测，我们的新闻覆盖率 **91.9%**，漏掉的几乎全是 MarketWatch/Yahoo 的生活理财文。但库里：
-
-- **行情异动类只占 3.9%**（33/855）
-- **宏观美股类只占 4.7%**（40/855）
-
-原因是没有任何媒体会把"BTC 24h 跌 5%""某币爆仓 2 亿"写成新闻。**这类信号必须主动从行情 API 生成事件**，靠加新闻源补不上。这直接决定了 #18 行情异动模块的优先级高于 #21 加信源。
-
-> ⚠️ 该 91.9% 的置信度有限：样本仅 86 条、匹配用关键词重合（偏宽松）、且 CryptoPanic/Odaily/Reuters 三个源没抓到属于未测量盲区。不能当强证据用。
-
-### F2：去重实现与文档严重不符，实测 48.7% 冗余
-
-`news_events` 855 行里 416 行是同事件重复，单个事件最多占 8 行。三个叠加根因：ID 用 LLM 改写后的标题做 hash、聚合用 TF-IDF 冒充 embedding、只在单轮内去重不管跨轮。已全部修复。
-
-### F3：文档写的语义阈值 0.65 是错的，实测应取 0.82
-
-在 855 条真实事件、28 万配对上分档标定：cosine 0.65 会把"油价破100美元"和"特斯拉周跌18%"当成同一事件。人工标注 13 组配对，"应合并"最低 0.859、"应分开"最高 0.761，中间有 0.098 干净空隙。已改为 0.82 并更新 skill 文档。
-
-### F4：X API 有大量闲置额度
-
-`search/recent` 端点限额 450 请求/15 分钟（≈43,200/天），此前完全没用过——只用了 KOL 时间线的 192 请求/天。这是**免费已有**的能力，优先级高于任何付费采购。
+| # | 事项 | 证据 |
+|---|---|---|
+| 连接GitHub+建start文件 | | commit `f911506` |
+| 装Claude Code CLI | | v2.1.220 |
+| 连接VM | | SSH密钥+别名`manus-vm`+ControlMaster连接复用 |
+| 深读背景+MySQL导出Excel | | 841事件×8sheet |
+| 事件ID稳定指纹 | | `sha256(subject\|action\|date)`，`crawler/dedup.py` |
+| 聚合层真embedding | | `text-embedding-3-small`256维替换TF-IDF |
+| 跨轮归并 | | 实测349事件中267条并入既有行 |
+| H因子接入社交互动 | | `H=0.6×log(互动)+0.4×min(信源/8,1)` |
+| 修日期异常 | | 7天窗口，单轮拦79条陈年内容 |
+| 代码结构优化 | | pipeline.py拆成dedup/scoring/storage/pipeline |
+| 存量416行重复清理 | | 确认后执行，944→508行 |
+| OpenAI用量监控 | | `crawler/usage_tracker.py`+`scripts/usage_monitor.py`（曾有Lock死锁bug已修） |
+| 补14个已验证RSS源 | | 实测12个新源部署，226条/轮增量 |
+| 数据源采购调研 | | BWEnews websocket免费实测通过；多个"个人使用"套餐陷阱 |
+| X搜索质量调优 | | 账号层面限流（单账号≤3条/轮）+ 付费推广号bio识别 |
+| 非技术版API文档 | | 支持`?token=`URL参数鉴权 |
+| 召回覆盖率交叉验证 | | 见 §4 F5 |
+| 真实性校验 | | `crawler/verification.py`，508条实测VERIFIED86/PROBABLE240/UNVERIFIED182，人工误判率3.3% |
+| 数据抓取Skill文档 | | `docs/skill-data-source-strategy.md` |
+| web_search扩query | | 协议治理+桥被盗类query |
+| Triple-A事件排查 | | 确认是RSS滚屏丢失非bug，催生了staging.py解耦方案 |
+| 内容理解+市值标签 | | 见上表#2 |
+| 频率解耦 | | 见上表#7 |
+| X原贴嵌入 | | 见上表#9 |
+| 评测工具Tab | | 后端`api/eval_tools.py`已注册，前端待交付 |
+| 策略实验室Tab | | `web/lab.html`+`api/lab_tools.py`，实测3组权重配置+2组A/B对比 |
+| sources/source_names同步bug | | 跨轮归并时补齐并集，`crawler/storage.py` |
+| x_raw_posts关联回填 | | 121/151历史数据已关联 |
+| server.py部署import修复 | | sys.path/blueprint注册问题，见memory `flask-blueprint-syspath-gotcha` |
 
 ---
 
-## 五、过程中踩的坑（避免重蹈）
+## 四、关键发现（F1-F5）
+
+### F1：欠召的根因不是信源不够，是信号类型缺失（早期粗测）
+对照6个平台粗测91.9%覆盖率（**后被F5推翻，见下**），但行情异动类事件只占3.9%、
+宏观美股类只占4.7%——因为没有媒体会把"BTC跌5%"写成新闻，这类信号必须从行情
+API直接生成事件。
+
+### F2：去重实现与文档严重不符，实测48.7%冗余
+944行里416行重复。三个叠加根因：ID用LLM改写标题做hash、聚合用TF-IDF冒充
+embedding、只在单轮内去重不管跨轮。已全部修复，清理到508行。
+
+### F3：文档写的语义阈值0.65是错的，实测应取0.82
+在855条真实事件、28万配对上分档标定：cosine 0.65会把不同事件误判成同一事件。
+13组人工标注配对确认0.82是干净分界点。已更新skill文档。
+
+### F4：X API有大量闲置额度
+search/recent端点450请求/15分钟，此前完全没用过。已用`x_search.py`接入，
+成本敏感点是下游LLM结构化不是X本身，已加200条/轮硬顶。
+
+### F5：严谨复测推翻F1的91.9%——真实覆盖率是29.9%（重要，方法论教训）
+用更大样本（386条真实事件）+ 公平时间窗口 + LLM逐条判定（而非纯关键词/纯
+cosine）重测：**事件级覆盖率29.9%**（85/284）。原91.9%高估两个原因：关键词
+重合会把同主题不同事件算成命中；测试时库里还有大量重复行让匹配更容易命中。
+
+**但分层看更有价值**：3家以上媒体报道的事件100%没漏，问题是"长尾密度不够"
+不是"漏大事"。归因：77.4%是信源没接（已用12个新RSS源部分缓解），0%是过滤器
+误杀（不用动新鲜度过滤和粗去重）。方法论详见`docs/skill-data-source-strategy.md`
+§5，报告全文见`docs/coverage-test-report-20260726.md`。
+
+---
+
+## 五、踩过的坑（避免重蹈，编号沿用之前）
 
 | 编号 | 问题 | 根因与处理 |
 |---|---|---|
-| P1 | SSH 连不上，22 端口 refused 25 分钟 | 并行跑 4 个 agent，每个独立开 SSH，把 sshd 的 `MaxStartups`（默认 10:30:100）打满。**不是**封 IP 也不是 OOM（内存 48.9%、load 0.00）。已在 `~/.ssh/config` 配 ControlMaster 连接复用，实测 10 次并发只占 1 条 TCP |
-| P2 | API 曾 500 约 30 分钟 | schema 加了 `embedding` BLOB 列，旧的 `SELECT *` 代码无法 JSON 序列化。已改为显式列清单。**教训：改 schema 必须同时重启服务** |
-| P3 | 币安 API 在 VM 上 451 | GCP 美国 IP 被地域封锁。CoinGecko / DefiLlama 可用，需实测 `data-api.binance.vision` 等替代 |
-| P4 | Google News RSS 返回陈年旧闻 | 默认按相关性排序，中位年龄约 50 天。必须加 `when:1h`/`when:1d` 时间算子 |
-| P5 | 降低运行频率会连带掉召回 | RSS 每源取数上限 30 条、X 回看窗口 6 小时，都是按 4 小时周期设计的。改 12 小时周期后已同步调整为 100 条 / 14 小时 |
+| P1 | 并行4个agent同时SSH，22端口refused 25分钟 | sshd的MaxStartups被打满，非封IP非OOM。已配ControlMaster连接复用 |
+| P2 | API曾500约30分钟 | schema加`embedding`BLOB列，旧`SELECT *`无法序列化。教训：改schema必须同时重启服务 |
+| P3 | 币安API在VM上451 | 美国IP地域封锁。现货用`data-api.binance.vision`，合约用OKX为主Hyperliquid兜底 |
+| P4 | Google News RSS返回陈年旧闻 | 默认按相关性排序，必须加`when:`时间算子 |
+| P5 | 降低运行频率会连带掉召回 | RSS取数上限/X回看窗口都要跟着频率调整 |
+| P6 | RSS高频源12小时间隔会滚屏丢失 | Triple-A被盗事件实锤：服务端窗口固定约30-50条。解法是频率解耦（staging.py），不是继续加大取数上限 |
+| P7 | UsageTracker.snapshot()自死锁 | 用了不可重入的Lock，持锁期间调用同样要加锁的方法。改RLock修复。**修复前所有pipeline_runs的token数据都是0，是假象** |
+| P8 | server.py多agent交付的blueprint模块ModuleNotFoundError | `python3 api/server.py`直接跑时sys.path不含项目根。加`sys.path.insert`修复，已存入跨项目memory |
+| P9 | sources与source_names长期不同步 | 跨轮归并时source_names走并集但sources直接覆盖，59/508行不一致。已修复 |
 
 ---
 
-## 六、未开发的能力（策略层）
+## 六、未开发/待办能力
 
-**Sector Insight v5.1 目前 0 行代码。** pipeline 里只实现了 Macro Insight v1 的打分。Sector 的 Rel 相关性硬门、`Rel^1.5` 外层乘子、体裁标签 `content_genre`、Top≤3 全部还停在文档阶段，`news_events` 表里也没有存 Rel 的字段。
-
-按你的指示「板块标签先不做，先把数据源搞干净」，这块暂缓。
+- **Sector Insight v5.1 相关性算法仍是0行代码**——策略实验室里的"相关性"因子
+  是简化版二元判断（板块命中=1.0），已在页面标注，见OPEN_QUESTIONS #4
+- **评测工具前端页面**（`web/eval.html`）待交付
+- **X API定向查询重构**——用户已确认"还好，后面看用量再调节"，不紧急
+- **API的HTTPS/分级权限**——生产化程度是否够，需用户判断实际暴露面，见OPEN_QUESTIONS #2
+- **前端三个页面共享CSS抽取**——等eval.html定稿后统一做
