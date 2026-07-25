@@ -37,9 +37,21 @@ def close_db(error):
 
 
 def require_api_key(f):
+    """鉴权。支持两种传 token 的方式：
+
+    1. `Authorization: Bearer <token>` 请求头 —— 程序化调用的标准做法
+    2. `?token=<token>` URL 查询参数 —— 让非技术同事**直接在浏览器点开链接**
+       就能看数据（浏览器地址栏发不出自定义请求头）
+
+    方式 2 的代价是 token 会出现在浏览器历史和服务器访问日志里。当前 API 本身
+    就是 HTTP 明文传输、单一静态 token，安全模型已经是"仅供内部可信网络使用"，
+    这一项没有实质性降低安全等级。生产化时应连同 HTTPS 与分级 token 一起改造。
+    """
     @wraps(f)
     def decorated(*args, **kwargs):
         key = request.headers.get("Authorization", "").replace("Bearer ", "")
+        if not key:
+            key = request.args.get("token", "")
         if key != API_SECRET_KEY:
             return jsonify({"error": "Unauthorized"}), 401
         return f(*args, **kwargs)

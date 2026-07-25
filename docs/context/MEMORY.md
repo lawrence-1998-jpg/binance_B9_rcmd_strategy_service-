@@ -1,0 +1,6 @@
+- [B9 运行环境在云主机](b9-vm-access.md) — 代码跑在 GCP VM 上，`ssh manus-vm` 免密进
+- [B9 项目在做什么、分几步](b9-project-shape.md) — 两个推荐场景 + 五步走，当前重心是先把数据源搞干净
+- [B9 去重重构与阈值标定](b9-dedup-gap.md) — 曾 48.7% 冗余；文档的 0.65 是错的，实测该取 0.82
+- [B9 的 X API 额度没用满](b9-x-api-capacity.md) — search/recent 端点 450 req/15min，一直闲置
+- [不要主动搞安全加固](no-security-hardening.md) — Lawrence 明确说过不碰服务器安全配置
+- [并行 agent 会打爆 SSH 连接槽位](parallel-agents-ssh-limit.md) — 已配 ControlMaster 复用，refused 别误判成宕机
