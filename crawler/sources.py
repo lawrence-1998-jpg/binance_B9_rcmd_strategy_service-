@@ -122,6 +122,139 @@ CRYPTO_KOLS = [
 # 每个 KOL 每轮拉取的推文数（控制 X API 配额）
 X_TWEETS_PER_KOL = 5
 
+# ── X 全网关键词搜索查询集（crawler/x_search.py 使用）─────────────────
+#
+# 为什么需要：KOL 时间线只能召回 32 个账号发的内容，全网搜索补的是"新闻发生了但
+# 名单里没人第一时间发"的缺口——小交易所被盗、二线项目上币、区域性监管动作等。
+#
+# 结构: (group_id, category, query)
+#   group_id  — 日志/统计用的唯一标识
+#   category  — 决定客户端互动量阈值，见 x_search.MIN_ENGAGEMENT_BY_CATEGORY
+#   query     — X recent search 查询串，须 < 512 字符
+#
+# 查询编写约定（踩过的坑）：
+#   1. 每条查询是 "(同义词 OR 组) AND (限定词 OR 组)" 的两段式。只写第一段会捞回
+#      大量非加密语境的噪音（hack 会命中生活妙招，approved 会命中药监审批）。
+#   2. 多词短语必须加引号。X 的解析器把 (crypto ETF OR bitcoin ETF) 拆成
+#      crypto AND (ETF OR bitcoin) AND ETF，不加引号语义会静默跑偏。
+#   3. 一律带 -is:retweet -is:reply。转推是纯重复，回复几乎全是口水。
+#   4. 不要用 min_faves/min_retweets——那是 Pro 层算子，Basic 层会整条查询报错。
+#      互动量过滤在客户端做（x_search._passes_quality）。
+#   5. 中英文分开查询而不是混在一条里：lang: 算子只能取单值，且中英文的同义词
+#      表和噪音特征完全不同，分开才能各自调阈值。
+X_SEARCH_QUERIES = [
+    # ── 突发安全（最高价值，KOL 名单最容易漏的一类）──────────────────
+    ("sec_en_hack", "security",
+     '(hack OR hacked OR exploit OR exploited OR "security breach" OR drained) '
+     '(crypto OR DeFi OR protocol OR bridge OR wallet OR exchange OR token) '
+     '-is:retweet -is:reply lang:en'),
+    ("sec_en_rug", "security",
+     '("rug pull" OR rugged OR "stolen funds" OR "funds stolen" OR "exit scam" '
+     'OR "private key" OR compromised) '
+     '(crypto OR DeFi OR protocol OR project OR wallet OR token) '
+     '-is:retweet -is:reply lang:en'),
+    ("sec_zh", "security",
+     '(被盗 OR 黑客 OR 攻击 OR 漏洞 OR 跑路 OR 卷款 OR 私钥泄露) '
+     '(加密 OR 链上 OR 协议 OR 项目 OR 交易所 OR 钱包) '
+     '-is:retweet -is:reply lang:zh'),
+
+    # ── 上币 / 下架 ──────────────────────────────────────────────────
+    ("list_en", "listing",
+     '(listing OR "will list" OR delisting OR "will delist" OR "spot trading" '
+     'OR "perpetual contract") '
+     '(Binance OR Coinbase OR Upbit OR OKX OR Bybit OR Kraken) '
+     '-is:retweet -is:reply lang:en'),
+    ("list_zh", "listing",
+     '(上线 OR 上币 OR 下架 OR 现货 OR 永续 OR 合约) '
+     '(币安 OR 欧易 OR 火币 OR Upbit OR Coinbase OR 交易所) '
+     '-is:retweet -is:reply lang:zh'),
+
+    # ── 行情异动 ─────────────────────────────────────────────────────
+    ("mkt_en_liq", "market",
+     '(liquidated OR liquidations OR "short squeeze" OR "long squeeze" OR deleveraging) '
+     '(BTC OR ETH OR bitcoin OR ethereum OR crypto) '
+     '-is:retweet -is:reply lang:en'),
+    ("mkt_en_move", "market",
+     '(BTC OR ETH OR bitcoin OR ethereum OR solana) '
+     '(plunged OR plunges OR surged OR surges OR crashed OR "all-time high" '
+     'OR "breaks above" OR "falls below") '
+     '-is:retweet -is:reply lang:en'),
+    ("mkt_zh", "market",
+     '(爆仓 OR 清算 OR 暴跌 OR 暴涨 OR 突破 OR 跌破 OR 插针) '
+     '(BTC OR ETH OR 比特币 OR 以太坊 OR 大盘) '
+     '-is:retweet -is:reply lang:zh'),
+
+    # ── 监管 / 法律 ──────────────────────────────────────────────────
+    ("reg_en_enforce", "regulation",
+     '(SEC OR CFTC OR DOJ OR lawsuit OR sues OR subpoena OR "enforcement action" OR settlement) '
+     '(crypto OR bitcoin OR ethereum OR stablecoin OR exchange) '
+     '-is:retweet -is:reply lang:en'),
+    ("reg_en_policy", "regulation",
+     '(approved OR approval OR "executive order" OR bill OR legislation OR regulation OR ban) '
+     '("crypto ETF" OR "bitcoin ETF" OR stablecoin OR "digital asset" OR CBDC OR crypto) '
+     '-is:retweet -is:reply lang:en'),
+    ("reg_zh", "regulation",
+     '(监管 OR 立法 OR 法案 OR 批准 OR 起诉 OR 诉讼 OR 合规 OR 牌照) '
+     '(加密 OR 比特币 OR 稳定币 OR 数字资产 OR 交易所) '
+     '-is:retweet -is:reply lang:zh'),
+
+    # ── 大额资金 / 巨鲸 ──────────────────────────────────────────────
+    ("whale_en", "whale",
+     '(whale OR whales OR "smart money" OR "whale alert") '
+     '(bought OR sold OR transferred OR withdrew OR deposited OR accumulated OR dumped) '
+     '-is:retweet -is:reply lang:en'),
+    ("whale_zh", "whale",
+     '(巨鲸 OR 鲸鱼 OR 聪明钱 OR 大户) '
+     '(转入 OR 转出 OR 增持 OR 减持 OR 抛售 OR 买入 OR 提币 OR 充值) '
+     '-is:retweet -is:reply lang:zh'),
+
+    # ── 宏观传导 ─────────────────────────────────────────────────────
+    ("macro_en", "macro",
+     '(Fed OR FOMC OR CPI OR "rate cut" OR "interest rate" OR Powell OR inflation) '
+     '(crypto OR bitcoin OR BTC OR "risk assets") '
+     '-is:retweet -is:reply lang:en'),
+    ("macro_zh", "macro",
+     '(美联储 OR 降息 OR 加息 OR CPI OR 非农 OR 通胀 OR 鲍威尔) '
+     '(比特币 OR 加密 OR 币圈 OR 风险资产) '
+     '-is:retweet -is:reply lang:zh'),
+
+    # ── 突发快讯（跨类别兜底，抓"BREAKING/快讯"这类新闻体裁标记）──────
+    ("brk_en", "breaking",
+     '("BREAKING" OR "JUST IN" OR "BREAKING NEWS") '
+     '(crypto OR bitcoin OR ethereum OR SEC OR exchange OR token OR blockchain) '
+     '-is:retweet -is:reply lang:en'),
+    ("brk_zh", "breaking",
+     '(快讯 OR 突发 OR 刚刚) '
+     '(加密 OR 比特币 OR 以太坊 OR 币安 OR 链上) '
+     '-is:retweet -is:reply lang:zh'),
+
+    # ── 融资 / 并购 ──────────────────────────────────────────────────
+    ("fund_en", "funding",
+     '(raises OR raised OR "funding round" OR "Series A" OR "Series B" '
+     'OR acquires OR acquisition OR IPO) '
+     '(crypto OR blockchain OR Web3 OR "digital asset") '
+     '-is:retweet -is:reply lang:en'),
+
+    # ── 脱锚 / 挤兑 / 破产（尾部风险，出现即高价值）──────────────────
+    ("risk_en", "risk",
+     '(depeg OR depegged OR insolvent OR insolvency OR bankruptcy '
+     'OR "halted withdrawals" OR "paused withdrawals") '
+     '(crypto OR stablecoin OR exchange OR protocol OR USDT OR USDC) '
+     '-is:retweet -is:reply lang:en'),
+
+    # ── ETF 资金流 ───────────────────────────────────────────────────
+    ("etf_en", "etf",
+     '("ETF inflows" OR "ETF outflows" OR "net inflow" OR "net outflow" OR "spot ETF") '
+     '(bitcoin OR ethereum OR BTC OR ETH OR solana) '
+     '-is:retweet -is:reply lang:en'),
+
+    # ── 代币经济事件（解锁/回购/销毁）────────────────────────────────
+    ("unlock_en", "unlock",
+     '("token unlock" OR "cliff unlock" OR vesting OR buyback OR "token burn") '
+     '(crypto OR token OR protocol OR supply) '
+     '-is:retweet -is:reply lang:en'),
+]
+
 # 板块标签枚举（币安 B9 真实标签）
 SECTOR_LABELS = [
     "New Listing", "bStocks", "Seed", "tCommodities", "BSC", "DeFi",

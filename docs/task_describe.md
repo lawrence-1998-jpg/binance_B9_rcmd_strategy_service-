@@ -10,9 +10,52 @@
 ```
 Step 1: 数据召回层修复（✅ 已完成）
 Step 2: LLM 结构化 Pipeline 优化（✅ 已完成）
+Step 2.5: 去重重构 + H 因子 + 数据清洗（✅ 已完成，2026-07-26）
 Step 3: 推荐策略设计与文档（✅ 已完成，持续迭代）
 Step 4: 推荐策略 API 服务（🔄 进行中）
 ```
+
+---
+
+## Step 2.5：去重重构（Pipeline v2.0，2026-07-26）
+
+**状态**：✅ 已完成
+
+**问题背景**：事件库实测冗余率 48.7%（855 行中 416 行是重复），单个事件最多占 8 行。
+skill 文档写的四层去重管线里，DC-1/DC-2/DC-4 三层从未实现，DC-3 用 TF-IDF **词频**
+相似度冒充语义向量——对同义改写完全失效。
+
+**三个叠加的根因与修复**：
+
+| 根因 | 修复 |
+|---|---|
+| `generate_event_id()` 拿 LLM 改写后的 `title_en` 做 hash，每轮措辞不同→id 不同→`ON DUPLICATE KEY UPDATE` 形同虚设 | LLM 新增输出规范化事件三元组（`event_subject`/`event_action`/`event_date`），id 改由指纹派生，跨轮稳定 |
+| `aggregate_events()` 用 TF-IDF 词频，抓不住同义改写 | 换成 OpenAI `text-embedding-3-small`（256 维），四层管线补齐 |
+| 只在**单轮内**去重，cron 每 4h 一轮、抓取窗口重叠，跨轮完全不设防（量最大的漏口） | 新增 DC-4：写库前拉近 72h 既有事件比对指纹+向量，命中则复用 id 走 UPDATE |
+
+**关键实测发现**：文档写的 cosine≥0.65 在真实数据上会严重过度合并（把"油价破100美元"
+和"特斯拉周跌18%"当成同一事件）。在 855 条真实事件、28 万配对上分档标定后改为
+**0.82**，详见 `docs/skill-macro-news-recommendation-v1.md` 第三章的阈值修订说明。
+
+**同批完成的另两项**：
+- **H 因子补全**：此前只有 `log1p(source_count)`，X 的赞/转/评/引数据落在 `x_raw_posts`
+  表里却没接进来。现按文档实现 `H = 0.6×log归一(社交互动) + 0.4×min(独立信源数/8,1)`
+- **陈年内容过滤**：YahooFinance 混进 2024 年个人理财常青文、Blockworks 混进 2025-12
+  存档，日期错误污染 T 因子。抓取层加 7 天时间窗，实测每轮拦掉约 79 条
+
+**新增/重构文件**：
+```
+crawler/dedup.py       # 四层去重管线（新）
+crawler/scoring.py     # Macro v1 五因子打分，含新 H（新）
+crawler/storage.py     # MySQL 读写 + 跨轮归并（新）
+crawler/pipeline.py    # 瘦身为 LLM 结构化 + 编排
+scripts/backfill_dedup.py          # 存量向量回填 + 历史去重（一次性运维）
+config/migrations/001_dedup_fields.sql
+```
+
+**运维注意**：`news_events` 新增 `embedding` BLOB 列，API 的 `SELECT *` 会因无法 JSON
+序列化而 500。已改为显式列清单（`api/server.py:EVENT_COLUMNS`）——**改 schema 后
+务必同时重启 `crypto-news-api`**。
 
 ---
 

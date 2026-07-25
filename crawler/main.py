@@ -14,12 +14,36 @@ from .sources import (
     RSS_SOURCES_P0, RSS_SOURCES_P1, RSS_SOURCES_RSSHUB,
     HTML_SOURCES, BINANCE_SQUARE_QUERIES, CRYPTO_KOLS, X_TWEETS_PER_KOL,
 )
+from .x_search import fetch_x_search
+from .web_search import fetch_web_search
+from .market_signals import run_market_signals
 
 logger = logging.getLogger(__name__)
 
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36"
 }
+
+# 内容最大年龄。超过这个天数的条目直接丢弃，不进 LLM 也不入库。
+#
+# 起因：部分 RSS 会在最新条目里混入常青/存档内容——YahooFinance 吐出过 2024 年的
+# 个人理财文章（"self-employed business banking"），Blockworks 吐出过 55 条 2025-12
+# 的存档。这些条目日期错误会污染时效因子 T（算成接近 0），内容本身也是纯噪音。
+#
+# 7 天是很宽松的界：Macro Insight 的 T 因子半衰期只有 24h，96h 后 T≈0.06 已经基本
+# 排不进榜了，卡 7 天不会误伤任何有价值的内容。
+MAX_CONTENT_AGE_DAYS = 7
+
+# 允许的未来时间容差。时区标注错误常导致时间戳略超前，几小时内视为正常。
+MAX_FUTURE_HOURS = 24
+
+# 单个 RSS 源每轮最多取多少条。
+#
+# 必须 >= 一轮周期内该源的发文量，否则直接丢召回。cron 从每 4 小时改成每 12 小时
+# 后（2026-07-26，为降本），高频源单轮发文量翻了三倍——吴说 4 小时就有 30 条，
+# 12 小时约 90 条，旧的 30 条上限会把三分之二的内容截掉。
+# 取 100 是因为绝大多数 RSS 源本身也就返回 20-100 条，取满即可；多要不会报错。
+MAX_RSS_ENTRIES_PER_SOURCE = 100
 
 
 # ── RSS 抓取（官方 + RSSHub 通用）────────────────────────────────────
@@ -29,7 +53,7 @@ def fetch_rss(url: str, source_name: str, lang: str, authority: int) -> list[dic
         resp = requests.get(url, headers=HEADERS, timeout=30)
         feed = feedparser.parse(resp.content)
         items = []
-        for entry in feed.entries[:30]:
+        for entry in feed.entries[:MAX_RSS_ENTRIES_PER_SOURCE]:
             published = ""
             if getattr(entry, "published_parsed", None):
                 published = datetime(*entry.published_parsed[:6], tzinfo=timezone.utc).isoformat()
@@ -255,6 +279,52 @@ def fetch_x_kols() -> tuple[list[dict], list[dict]]:
 
 # ── 主入口 ───────────────────────────────────────────────────────────
 
+def normalize_published_at(value: str, now: datetime | None = None) -> str | None:
+    """校验并规范化发布时间。返回 None 表示该条目应被丢弃。
+
+    三种情况：
+      - 缺失或无法解析 → 回落到当前时间（多数 HTML 抓取源本就没有可靠时间戳）
+      - 早于 now - MAX_CONTENT_AGE_DAYS → 返回 None，调用方丢弃
+      - 晚于 now + MAX_FUTURE_HOURS → 视为时区标注错误，回落到当前时间
+    """
+    now = now or datetime.now(timezone.utc)
+    if not value:
+        return now.isoformat()
+    try:
+        published = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except (ValueError, TypeError):
+        return now.isoformat()
+    if published.tzinfo is None:
+        published = published.replace(tzinfo=timezone.utc)
+
+    age_days = (now - published).total_seconds() / 86400
+    if age_days > MAX_CONTENT_AGE_DAYS:
+        return None
+    if age_days < -MAX_FUTURE_HOURS / 24:
+        return now.isoformat()
+    return published.isoformat()
+
+
+def filter_by_freshness(items: list[dict]) -> list[dict]:
+    """丢弃陈年内容，并把异常时间戳归一。按信源统计丢弃量便于排查。"""
+    now = datetime.now(timezone.utc)
+    kept, dropped = [], {}
+    for item in items:
+        normalized = normalize_published_at(item.get("published_at", ""), now)
+        if normalized is None:
+            source = item.get("source", "?")
+            dropped[source] = dropped.get(source, 0) + 1
+            continue
+        item["published_at"] = normalized
+        kept.append(item)
+
+    if dropped:
+        detail = ", ".join(f"{k}×{v}" for k, v in
+                           sorted(dropped.items(), key=lambda x: -x[1]))
+        logger.info(f"Freshness filter: dropped {sum(dropped.values())} stale items ({detail})")
+    return kept
+
+
 def run_rss_and_scraper_crawler() -> tuple[list[dict], list[dict]]:
     """运行全部爬虫。返回 (all_items, x_raw_posts)"""
     all_items = []
@@ -270,11 +340,46 @@ def run_rss_and_scraper_crawler() -> tuple[list[dict], list[dict]]:
     all_items.extend(fetch_binance_square(BINANCE_SQUARE_QUERIES))
     all_items.extend(fetch_coinmarketcal())
 
+    # 行情异动信号：从行情 API 直接生成事件（大幅涨跌/突破/放量/资金费率/爆仓），
+    # 补的是"没有媒体会写但确实是大事"的缺口——纯规则计算，不调 LLM，零边际成本。
+    try:
+        market_items = run_market_signals()
+        all_items.extend(market_items)
+        logger.info(f"Market signals: {len(market_items)} items")
+    except Exception as e:
+        logger.warning(f"Market signals failed, continuing without: {e}")
+
+    # 搜索引擎新闻召回：Google News（when: 时间算子强制）+ ddgs 英文补充，
+    # 补媒体对行情/宏观事件的报道側（区别于上面的行情信号本身）。
+    try:
+        web_items = fetch_web_search()
+        all_items.extend(web_items)
+        logger.info(f"Web search: {len(web_items)} items")
+    except Exception as e:
+        logger.warning(f"Web search failed, continuing without: {e}")
+
+    # X 召回分两条腿：KOL 时间线（固定 32 个账号，深度）+ 全网关键词搜索（广度）。
+    # 搜索这条腿补的是"新闻发生了但 KOL 名单里没人发"的缺口。两边会大量撞车
+    # （同一条推文），把 KOL 侧的 tweet_id 传下去让搜索侧提前跳过，比事后去重
+    # 省一遍质量过滤，也保证撞车时保留 KOL 侧的版本（权威分是人工标注的，更准）。
     x_items, x_raw_posts = fetch_x_kols()
+    kol_ids = {p["tweet_id"] for p in x_raw_posts}
+
+    search_items, search_raw_posts = fetch_x_search(known_tweet_ids=kol_ids)
+    new_search_items = [i for i in search_items if i.get("tweet_id") not in kol_ids]
+    new_search_posts = [p for p in search_raw_posts if p.get("tweet_id") not in kol_ids]
+    if len(new_search_items) != len(search_items):
+        logger.info(f"X search: {len(search_items) - len(new_search_items)} overlapped with KOL feed")
+
     all_items.extend(x_items)
+    all_items.extend(new_search_items)
+    x_raw_posts.extend(new_search_posts)
+    x_total = len(x_items) + len(new_search_items)
 
     all_items = [item for item in all_items if item.get("title", "").strip()]
-    logger.info(f"Total raw items: {len(all_items)} (incl. {len(x_items)} X)")
+    all_items = filter_by_freshness(all_items)
+    logger.info(f"Total raw items: {len(all_items)} (incl. up to {x_total} X: "
+                f"{len(x_items)} KOL + {len(new_search_items)} search)")
     return all_items, x_raw_posts
 
 
@@ -317,7 +422,10 @@ def fetch_coinmarketcal() -> list[dict]:
                 "title": f"{'/'.join(coins[:3])}: {title} ({disp})",
                 "url": f"https://coinmarketcal.com/en/event/{e.get('slug', '')}",
                 "summary": summary,
-                "published_at": e.get("createdAt", "") or "",
+                # 用抓取时间，不用 API 的 createdAt——后者是日历条目被录入 CoinMarketCal
+                # 数据库的时间，可能是几个月前，拿它当发布时间会让催化剂事件全部被
+                # 新鲜度过滤误杀。催化剂的语义是"此刻披露的未来事件"，抓取时间才对。
+                "published_at": now.isoformat(),
                 "lang": "en",
                 "authority": 4,
                 "type": "calendar",

@@ -46,6 +46,23 @@ def require_api_key(f):
     return decorated
 
 
+# news_events 对外暴露的列。刻意不含 embedding：那是 256 维 float32 向量的二进制
+# BLOB，既无法 JSON 序列化，对调用方也没有意义（它只服务于服务端去重）。
+EVENT_COLUMNS = """
+    id, title_en, title_zh, date, time_event, time_get_data,
+    description_short_en, description_short_zh,
+    description_long_en, description_long_zh,
+    sectors, coins, news_type, event_tier,
+    score_market_impact, score_timeliness, score_hotness,
+    score_authority, score_quality, importance_score,
+    credibility_score, is_rumor, rumor_reason,
+    sources, source_names, source_count, is_verified, language_origin,
+    cluster_id, merged_sources_count,
+    event_subject, event_action, event_fingerprint, social_interactions,
+    created_at, updated_at
+"""
+
+
 def row_to_dict(cursor, row):
     cols = [d[0] for d in cursor.description]
     d = dict(zip(cols, row))
@@ -56,10 +73,12 @@ def row_to_dict(cursor, row):
                 d[field] = json.loads(d[field])
             except Exception:
                 pass
-    # datetime 序列化
-    for k, v in d.items():
+    # datetime 序列化；bytes 兜底剔除，防止任何二进制列漏进 jsonify
+    for k, v in list(d.items()):
         if isinstance(v, datetime):
             d[k] = v.isoformat()
+        elif isinstance(v, (bytes, bytearray)):
+            d.pop(k)
     return d
 
 
@@ -109,7 +128,8 @@ def get_news():
         params.append(date_to)
 
     order = "importance_score DESC" if sort == "importance" else "time_get_data DESC"
-    sql = f"SELECT * FROM news_events WHERE {' AND '.join(where)} ORDER BY {order} LIMIT %s OFFSET %s"
+    sql = (f"SELECT {EVENT_COLUMNS} FROM news_events WHERE {' AND '.join(where)} "
+           f"ORDER BY {order} LIMIT %s OFFSET %s")
     params += [limit, offset]
 
     db = get_db()
@@ -151,12 +171,15 @@ def get_sources():
 def get_news_detail(event_id):
     db = get_db()
     cursor = db.cursor()
-    cursor.execute("SELECT * FROM news_events WHERE id = %s", (event_id,))
+    cursor.execute(f"SELECT {EVENT_COLUMNS} FROM news_events WHERE id = %s", (event_id,))
     row = cursor.fetchone()
-    cursor.close()
     if not row:
+        cursor.close()
         return jsonify({"error": "Not found"}), 404
-    return jsonify(row_to_dict(cursor, row))
+    # row_to_dict 依赖 cursor.description，必须在 close 之前调用
+    data = row_to_dict(cursor, row)
+    cursor.close()
+    return jsonify(data)
 
 
 # ─── 新闻事件的 X 来源推文 ────────────────────────────────────────────────────
@@ -170,8 +193,9 @@ def get_news_x_sources(event_id):
         (event_id,)
     )
     rows = cursor.fetchall()
+    data = [row_to_dict(cursor, r) for r in rows]
     cursor.close()
-    return jsonify({"data": [row_to_dict(cursor, r) for r in rows]})
+    return jsonify({"data": data})
 
 
 # ─── X 推文查询 ───────────────────────────────────────────────────────────────
@@ -198,8 +222,9 @@ def get_x_posts():
     cursor = db.cursor()
     cursor.execute(sql, params)
     rows = cursor.fetchall()
+    data = [row_to_dict(cursor, r) for r in rows]
     cursor.close()
-    return jsonify({"data": [row_to_dict(cursor, r) for r in rows]})
+    return jsonify({"data": data})
 
 
 # ─── Pipeline 运行记录 ────────────────────────────────────────────────────────
@@ -210,8 +235,9 @@ def get_runs():
     cursor = db.cursor()
     cursor.execute("SELECT * FROM pipeline_runs ORDER BY run_at DESC LIMIT 20")
     rows = cursor.fetchall()
+    data = [row_to_dict(cursor, r) for r in rows]
     cursor.close()
-    return jsonify({"data": [row_to_dict(cursor, r) for r in rows]})
+    return jsonify({"data": data})
 
 
 # ─── 健康检查（无需鉴权）────────────────────────────────────────────────────

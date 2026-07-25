@@ -1,0 +1,19 @@
+# macOS
+.DS_Store
+
+# Office 临时锁文件（打开 xlsx 时生成的 .~ 前缀文件）
+.~*
+~$*
+
+# Python
+__pycache__/
+*.py[cod]
+venv/
+.venv/
+
+# 运行时产物
+logs/
+backups/
+
+# 注意：config/.env 含真实 API key，但仓库为私有且历史已提交，
+# 保持跟踪以保障协同。若日后仓库转公开，必须先清理历史。
