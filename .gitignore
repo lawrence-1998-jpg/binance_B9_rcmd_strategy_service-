@@ -14,6 +14,8 @@ venv/
 # 运行时产物
 logs/
 backups/
+# CoinGecko 行情快照缓存（crawler/market_cap.py，6 小时 TTL，可随时重建）
+config/cache/
 
 # 注意：config/.env 含真实 API key，但仓库为私有且历史已提交，
 # 保持跟踪以保障协同。若日后仓库转公开，必须先清理历史。
