@@ -3,15 +3,16 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Lawrence Crypto News Crawler · B9 新闻数据服务</title>
-<meta name="description" content="Binance B9 内容推荐模块的新闻数据底座 —— 全网抓取、AI 结构化、语义去重、真实性校验与重要性打分，对外提供 REST API。">
+<title>B9 Recommendation Strategy Hub</title>
+<meta name="description" content="内容推荐模块的新闻数据底座 —— 全网抓取、AI 结构化、语义去重、真实性校验与重要性打分，对外提供 REST API。">
+<meta name="robots" content="noindex, nofollow">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Caprasimo&family=Figtree:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/assets/app.css">
 <style>
 /* ══════════════════════════════════════════════════════════════════════
-   Lawrence Crypto News Crawler — 浅色主题设计系统
+   B9 Recommendation Strategy Hub — 浅色主题设计系统
    注：共享样式表 web/assets/app.css 由 coordinator 统一抽取，此处先内联。
    ══════════════════════════════════════════════════════════════════════ */
 :root{
@@ -1109,8 +1110,7 @@ footer{border-top:1px solid var(--rule);padding:26px 0 40px;font-size:12px;color
   background:var(--n900);color:var(--paper);box-shadow:var(--shadow-sm);
   transition:box-shadow .18s ease,transform .18s ease;
 }
-#panel-7 .p7-repo-card:hover{box-shadow:var(--shadow-md);transform:translateY(-1px);text-decoration:none}
-#panel-7 .p7-repo-card:focus-visible{outline:2px solid var(--gold);outline-offset:3px}
+/* 卡片现在是纯展示（不是链接），所以去掉 hover 位移那类"可点"的暗示 */
 #panel-7 .p7-gh{width:34px;height:34px;flex:none;fill:var(--paper)}
 #panel-7 .p7-repo-txt{min-width:0}
 #panel-7 .p7-repo-k{
@@ -1216,18 +1216,21 @@ footer{border-top:1px solid var(--rule);padding:26px 0 40px;font-size:12px;color
    所以让它在自己的容器内横向滚动，而不是把页面撑破。 */
 #panel-7 .p7-flowbox{overflow-x:auto;margin-top:24px;padding-bottom:6px}
 #panel-7 .p7-flow{display:block;width:100%;min-width:760px;max-width:1040px;height:auto;margin:0 auto}
-#panel-7 .p7-flow-name{font-size:13.5px;font-weight:700}
+/* 字号整体上调一档：原尺寸是照着 1040px 满宽定的，实际容器常被压到 ~900px，
+   SVG 等比缩放后版本号/角色那两行小到看不清。行距（14 / 18px）不变，
+   所以字号上限受制于行距，取 12px 左右刚好不撞基线。 */
+#panel-7 .p7-flow-name{font-size:15px;font-weight:700}
 #panel-7 .p7-flow-ver{
-  font-size:9.5px;
+  font-size:11.5px;
   font-family:var(--mono,ui-monospace,SFMono-Regular,Menlo,Consolas,monospace);
 }
-#panel-7 .p7-flow-role{font-size:10px}
+#panel-7 .p7-flow-role{font-size:12px}
 #panel-7 .p7-flow-step{
-  font-size:9px;letter-spacing:.1em;
+  font-size:10px;letter-spacing:.1em;
   font-family:var(--mono,ui-monospace,SFMono-Regular,Menlo,Consolas,monospace);
 }
 #panel-7 .p7-flow-stage{
-  font-size:10px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;
+  font-size:11.5px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;
 }
 /* 流动感：虚线沿路径缓慢位移。只有 3 条短路径参与，且 panel 隐藏时 display:none 会停掉动画，
    开销可忽略；仍然对 reduce-motion 做降级。这里不涉及任何毛玻璃滤镜，与性能红线无冲突。 */
@@ -1274,7 +1277,7 @@ footer{border-top:1px solid var(--rule);padding:26px 0 40px;font-size:12px;color
     <span class="b9-status-dot b9-pulse" id="healthDot"></span><span id="healthTx">连接中…</span>
   </span>
   <span class="b9-clock" id="topbarTime">—</span>
-  <span class="b9-avatar" title="Lawrence">LW</span>
+  <span class="b9-avatar" title="当前会话">B9</span>
 </div>
 
 <nav class="b9-tabbar tabs" role="tablist" aria-label="主导航">
@@ -1741,8 +1744,8 @@ footer{border-top:1px solid var(--rule);padding:26px 0 40px;font-size:12px;color
 
   <div class="filters">
     <div class="frow">
-      <div class="field"><label for="f-from">观测时间 · 起</label><input type="date" id="f-from"></div>
-      <div class="field"><label for="f-to">观测时间 · 止</label><input type="date" id="f-to"></div>
+      <div class="field" style="flex:1 1 220px"><label for="f-run">观测时间 · 生产轮次</label>
+        <select id="f-run"><option value="">全部轮次</option></select></div>
       <div class="field"><label for="f-sector">板块 Sector</label><select id="f-sector"><option value="">全部板块</option></select></div>
       <div class="field"><label for="f-tier">事件级别 Tier</label>
         <select id="f-tier"><option value="">全部级别</option><option value="S">S · 极重大</option><option value="A">A · 重大</option><option value="B">B · 重要</option><option value="C">C · 一般</option><option value="D">D · 次要</option></select></div>
@@ -1799,7 +1802,6 @@ footer{border-top:1px solid var(--rule);padding:26px 0 40px;font-size:12px;color
           <div class="ph-sheet">
             <div class="ph-handle"></div>
             <div class="ph-tabs">
-              <button class="ph-tab" id="ph-sector" aria-pressed="false">Sector Insight</button>
               <button class="ph-tab" id="ph-macro" aria-pressed="true">Macro Insight</button>
             </div>
             <div class="ph-feed" id="phFeed"></div>
@@ -1826,7 +1828,7 @@ footer{border-top:1px solid var(--rule);padding:26px 0 40px;font-size:12px;color
           <div class="rule" style="margin:18px 0"></div>
           <div class="sim-legend">
             <div class="li"><div class="n">01</div><div><div class="t">Macro Insight</div><div class="d">全市场重要性排序，按 <code>importance_score</code> 降序，不依赖用户持仓。对应流程图的分支 2。</div></div></div>
-            <div class="li"><div class="n">02</div><div><div class="t">Sector Insight</div><div class="d">只保留带板块标签的事件；在上方选定「板块」筛选后，这里只出该板块的新闻。对应分支 1 + 下游相关性排序。</div></div></div>
+            <div class="li"><div class="n">02</div><div><div class="t">板块视角</div><div class="d">在上方选定「板块 Sector」后，这里只出该板块的新闻，对应 Sector Insight 分支；相关性打分与公式对比在「05 策略实验室」里做。</div></div></div>
             <div class="li"><div class="n">03</div><div><div class="t">条目版式</div><div class="d">标题最多 2 行 + 灰色「信源 · 日期」，与线上完全一致，便于直接对比改版前后的排序质量。</div></div></div>
           </div>
         </div>
@@ -1859,7 +1861,7 @@ footer{border-top:1px solid var(--rule);padding:26px 0 40px;font-size:12px;color
   <div class="contact section">
     <div class="ic">!</div>
     <div class="tx">
-      <b>if you are a developer, please reach out to lawrence zhu for API secret</b>
+      <b>if you are a developer, please reach out to the maintainer for an API secret</b>
       <span>本页所有示例中的 <code>YOUR_API_SECRET</code> 均为占位符。取得 secret 后填入下方输入框，即可直接点开链接或在页内发起真实请求。</span>
     </div>
   </div>
@@ -2435,26 +2437,27 @@ footer{border-top:1px solid var(--rule);padding:26px 0 40px;font-size:12px;color
     </div>
 
     <div class="p7-repo-grid">
-      <a class="p7-repo-card"
-         href="https://github.com/lawrence-1998-jpg/binance_B9_rcmd_strategy_service-"
-         target="_blank" rel="noopener"
-         aria-label="在 GitHub 打开 binance_B9_rcmd_strategy_service- 仓库（新窗口）">
+      <!-- 刻意不放外链：仓库地址里带着账号名与项目全名，是整页最强的身份指向，
+           而仓库本身是 private，外部访客点进去也只会拿到 404。所以这里只保留
+           「代码在 GitHub、需授权」这个信息本身。需要恢复直达链接时，把下面的
+           div 换回 <a href="...">（其余结构不用动，样式类是共用的）。 -->
+      <div class="p7-repo-card">
         <!-- GitHub 官方 mark（octicons mark-github-16），内联 SVG：CSP 友好且离线可用 -->
         <svg class="p7-gh" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
           <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.012 8.012 0 0 0 16 8c0-4.42-3.58-8-8-8z"></path>
         </svg>
         <span class="p7-repo-txt">
           <span class="p7-repo-k">Source Repository</span>
-          <span class="p7-repo-v p7-mono">lawrence-1998-jpg / binance_B9_rcmd_strategy_service-</span>
+          <span class="p7-repo-v p7-mono">私有仓库 · 需授权访问</span>
         </span>
-        <span class="p7-repo-go" aria-hidden="true">在 GitHub 打开 ↗</span>
-      </a>
+        <span class="p7-repo-go" aria-hidden="true">GitHub · Private</span>
+      </div>
 
       <div class="p7-notice">
         <span class="p7-bang" aria-hidden="true">!</span>
         <span>
-          <span class="p7-notice-en">if you are a developer, please reach out to lawrence zhu for code access</span>
-          <span class="p7-notice-zh">仓库为内部私有，需要读代码、跑本地流水线或申请 API secret 的同学请直接联系 lawrence zhu 开权限。</span>
+          <span class="p7-notice-en">if you are a developer, please reach out to the maintainer for code access</span>
+          <span class="p7-notice-zh">仓库为内部私有，需要读代码、跑本地流水线或申请 API secret 的同学，请联系仓库维护者开权限。</span>
         </span>
       </div>
     </div>
@@ -2463,40 +2466,33 @@ footer{border-top:1px solid var(--rule);padding:26px 0 40px;font-size:12px;color
   <!-- ② Dev Bill -->
   <section class="p7-sec" id="p7-devbill" aria-labelledby="p7-devbill-h">
     <span class="p7-eyebrow">Dev Bill</span>
-    <h2 class="p7-h2" id="p7-devbill-h">开发者账单 · 运行成本预估</h2>
+    <h2 class="p7-h2" id="p7-devbill-h">开发者账单 · 实际运行成本</h2>
     <p class="p7-lead">
-      跑通一轮完整流水线（抓取 → 结构化 → 去重 → 校验 → 打分 → 落库）的资源开销拆解。
-      按 <b>2 轮 / 天</b>、<b>30 天 / 月</b> 折算。
+      跑通一轮完整流水线（抓取 → 结构化 → 去重 → 校验 → 打分 → 落库）的资源开销拆解，
+      金额为<b>实测原始值</b>，按 <b>2 轮 / 天</b>、<b>30 天 / 月</b> 折算。
     </p>
 
     <div class="p7-kpis">
       <div class="p7-kpi">
         <span class="p7-kpi-k">Per Run · 单轮</span>
-        <span class="p7-kpi-v">$20.20</span>
-        <span class="p7-kpi-s">一次完整 run 的预估上限</span>
+        <span class="p7-kpi-v">$14.17</span>
+        <span class="p7-kpi-s">一次完整 run 的实测开销</span>
       </div>
       <div class="p7-kpi">
         <span class="p7-kpi-k">Per Day · 每天</span>
-        <span class="p7-kpi-v">$40.40</span>
+        <span class="p7-kpi-v">$28.33</span>
         <span class="p7-kpi-s">2 轮 + 云主机常驻</span>
       </div>
       <div class="p7-kpi">
         <span class="p7-kpi-k">Per Month · 每月</span>
-        <span class="p7-kpi-v">$1,212</span>
+        <span class="p7-kpi-v">$850</span>
         <span class="p7-kpi-s">按 30 天折算</span>
       </div>
     </div>
 
-    <p class="p7-disclaimer p7-note">
-      <span aria-hidden="true">⚠</span>
-      <span><b>这是预估上限，不是账单实付。</b>
-      表中所有金额均为实测值 <b>×2</b> 后的数字，留出量级波动（信源突增、重试、模型涨价）的安全边际；
-      真实开销通常显著低于此表。云主机一项按用户直给的 $3/天 计，未再乘 2。</span>
-    </p>
-
     <div class="p7-tablebox">
       <table class="p7-table">
-        <caption class="sr-only" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)">B9 流水线运行成本预估表（实测值 ×2）</caption>
+        <caption class="sr-only" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)">流水线运行成本表（实测原始值）</caption>
         <thead>
           <tr>
             <th scope="col">成本项</th>
@@ -2512,35 +2508,35 @@ footer{border-top:1px solid var(--rule);padding:26px 0 40px;font-size:12px;color
             <td class="p7-num">$1.50</td>
             <td class="p7-num">$3.00</td>
             <td class="p7-num">$90.00</td>
-            <td class="p7-why">按天计费的常驻实例，不随轮次伸缩；单轮金额是按 2 轮/天摊分出来的，仅供横向对比。此项按实付原值填写，未乘 2。</td>
-          </tr>
-          <tr>
-            <td class="p7-item">OpenAI <small>gpt-5.4 + 5.4-nano</small></td>
-            <td class="p7-num">$12.00</td>
-            <td class="p7-num">$24.00</td>
-            <td class="p7-num">$720.00</td>
-            <td class="p7-why">结构化抽取 + embedding。优化后实测单事件 $0.00925，单轮 500–800 事件 ≈ $5.9 实测；表内为 ×2 后的上限。成本随事件量线性变化，是最大的可变项。</td>
-          </tr>
-          <tr>
-            <td class="p7-item">X API <small>推文召回</small></td>
-            <td class="p7-num">$6.00</td>
-            <td class="p7-num">$12.00</td>
-            <td class="p7-num">$360.00</td>
-            <td class="p7-why">按拉回条数计费 $0.0021/条，平衡档约 1200 条/轮 ≈ $2.6 实测；表内为 ×2 后的上限。降档拉取可直接压缩这一项。</td>
+            <td class="p7-why">按天计费的常驻实例，不随轮次伸缩；单轮金额是按 2 轮/天摊分出来的，仅供横向对比。</td>
           </tr>
           <tr>
             <td class="p7-item">Claude <small>Claude Max 订阅</small></td>
-            <td class="p7-num">$0.70</td>
-            <td class="p7-num">$1.40</td>
-            <td class="p7-num">$42.00</td>
-            <td class="p7-why">预处理跑在本地 Claude Max 订阅上，<b>无增量 API 计费</b>；这里只是把 $20/月订阅费按天折算（≈ $0.67/天）后 ×2 摊进来，便于看总盘子。</td>
+            <td class="p7-num">$4.17</td>
+            <td class="p7-num">$8.33</td>
+            <td class="p7-num">$250.00</td>
+            <td class="p7-why">工程实现与本地预处理都跑在 Claude Max 顶配订阅上（$250/月），<b>按订阅计费、无增量 API 费用</b>；这里按 30 天摊到每轮，便于看总盘子。命中本地预处理缓存的事件不再走 OpenAI。</td>
+          </tr>
+          <tr>
+            <td class="p7-item">OpenAI <small>gpt-5.4 + 5.4-nano</small></td>
+            <td class="p7-num">$5.90</td>
+            <td class="p7-num">$11.80</td>
+            <td class="p7-num">$354.00</td>
+            <td class="p7-why">结构化抽取 + embedding。优化后实测单事件 $0.00925，单轮 500–800 事件 ≈ $5.9。成本随事件量线性变化，是最大的可变项。</td>
+          </tr>
+          <tr>
+            <td class="p7-item">X API <small>推文召回</small></td>
+            <td class="p7-num">$2.60</td>
+            <td class="p7-num">$5.20</td>
+            <td class="p7-num">$156.00</td>
+            <td class="p7-why">按拉回条数计费 $0.0021/条，平衡档约 1200 条/轮 ≈ $2.6。降档拉取可直接压缩这一项。</td>
           </tr>
           <tr class="p7-total">
             <td class="p7-item">合计</td>
-            <td class="p7-num">$20.20</td>
-            <td class="p7-num">$40.40</td>
-            <td class="p7-num">$1,212.00</td>
-            <td class="p7-why">预估上限（实测值 ×2）。按当前平衡档配置，实付通常落在此值的 50–60%。</td>
+            <td class="p7-num">$14.17</td>
+            <td class="p7-num">$28.33</td>
+            <td class="p7-num">$850.00</td>
+            <td class="p7-why">实测原始值。其中订阅制（云主机 + Claude）$340/月是固定盘，用量制（OpenAI + X）$510/月随事件量与拉取档位浮动。</td>
           </tr>
         </tbody>
       </table>
@@ -2680,9 +2676,6 @@ footer{border-top:1px solid var(--rule);padding:26px 0 40px;font-size:12px;color
       </svg>
     </div>
 
-    <p class="p7-note" style="margin-top:14px">
-      各家 logo 均为便于识别而重绘的简化标记，非官方素材；商标归各自权利人所有。
-    </p>
   </section>
 
 </div>
@@ -2691,7 +2684,7 @@ footer{border-top:1px solid var(--rule);padding:26px 0 40px;font-size:12px;color
 
 <footer>
   <div class="wrap fbar">
-    <span>Lawrence Crypto News Crawler · Binance B9 内容推荐数据底座</span>
+    <span>B9 Recommendation Strategy Hub · 内容推荐新闻数据底座 · Demo</span>
     <span class="mono" id="footMeta">—</span>
   </div>
 </footer>
@@ -3266,15 +3259,22 @@ function loadVerification(){
 /* ══════════════════════════════════════════════════════════════════════
    TAB 2
    ══════════════════════════════════════════════════════════════════════ */
-var state={offset:0,limit:50,total:0,rows:[],seq:0,view:"table",phTab:"macro"};
-var FL={date_from:"起始",date_to:"截止",sector:"板块",event_tier:"级别",news_type:"类型",is_rumor:"谣言",source:"信源"};
-var FID={date_from:"#f-from",date_to:"#f-to",sector:"#f-sector",event_tier:"#f-tier",
+var state={offset:0,limit:50,total:0,rows:[],seq:0,view:"table"};
+var FL={run_at:"轮次",sector:"板块",event_tier:"级别",news_type:"类型",is_rumor:"谣言",source:"信源"};
+var FID={run_at:"#f-run",sector:"#f-sector",event_tier:"#f-tier",
          news_type:"#f-type",is_rumor:"#f-rumor",source:"#f-source"};
 
 function readFilters(){
-  return {date_from:$("#f-from").value, date_to:$("#f-to").value, sector:$("#f-sector").value,
+  return {run_at:$("#f-run").value, sector:$("#f-sector").value,
           event_tier:$("#f-tier").value, news_type:$("#f-type").value,
           is_rumor:$("#f-rumor").value, source:$("#f-source").value};
+}
+/* 生产轮次节点的展示写法：08:00 是早间轮、20:00 是晚间轮（UTC+8，与线上 cron 一致）。
+   传给后端的仍是完整时间戳，这里只负责让下拉框读起来像人话。*/
+function fmtRunNode(ts){
+  var s=String(ts||"").replace("T"," ");
+  var d=s.slice(0,10), hh=s.slice(11,13);
+  return d+" "+hh+":00 · "+(hh==="08"?"早间轮":"晚间轮");
 }
 function renderActiveFilters(f){
   var box=$("#activeFilters");
@@ -3282,6 +3282,7 @@ function renderActiveFilters(f){
   if(!keys.length){ box.innerHTML=""; return; }
   box.innerHTML=keys.map(function(k){
     var v=f[k]; if(k==="is_rumor") v=(v==="1"?"仅谣言":"仅非谣言");
+    if(k==="run_at") v=fmtRunNode(v);
     return '<span class="fchip">'+esc(FL[k])+' · '+esc(v)+'<button type="button" data-clear="'+esc(k)+'" title="移除">×</button></span>';
   }).join("");
   $$("[data-clear]",box).forEach(function(b){
@@ -3493,20 +3494,12 @@ function toggleDetail(tr,r){
 
 /* ── phone simulator ──────────────────────────────────────────────── */
 function renderPhone(){
+  /* 板块视角不再单独做客户端过滤：上方的「板块 Sector」筛选已经在 API 层生效，
+     手机里跑的就是当前筛选结果本身，避免同一件事出现两套互相打架的过滤口径。*/
   var rows=visibleRows();
-  if(state.phTab==="sector"){
-    var sel=$("#f-sector").value;
-    rows=rows.filter(function(r){
-      var s=r.sectors||[];
-      return sel ? s.indexOf(sel)>=0 : s.length>0;
-    });
-  }
   var feed=$("#phFeed");
   if(!rows.length){
-    feed.innerHTML='<div class="ph-empty">'+
-      (state.phTab==="sector"
-        ? '当前结果里没有带板块标签的事件。<br>试试在上方选一个板块，或切到 Macro Insight。'
-        : '没有匹配的事件。<br>放宽上方的筛选条件试试。')+'</div>';
+    feed.innerHTML='<div class="ph-empty">没有匹配的事件。<br>放宽上方的筛选条件试试。</div>';
   }else{
     feed.innerHTML=rows.map(function(r){
       var srcs=r.source_names||[];
@@ -3517,16 +3510,11 @@ function renderPhone(){
     }).join("")+'<div style="height:26px"></div>';
   }
   feed.scrollTop=0;
+  var sec=$("#f-sector").value;
   $("#simMeta").innerHTML=
-    '<dt>视图</dt><dd>'+(state.phTab==="sector"?"Sector Insight":"Macro Insight")+'</dd>'+
+    '<dt>视图</dt><dd>Macro Insight'+(sec?'（'+esc(sec)+' 板块）':'')+'</dd>'+
     '<dt>条目数</dt><dd>'+rows.length+' / '+state.rows.length+'</dd>'+
     '<dt>排序依据</dt><dd>'+($("#f-sort").value==="importance"?"importance_score DESC":"time_get_data DESC")+'</dd>';
-}
-function setPhTab(t){
-  state.phTab=t;
-  $("#ph-macro").setAttribute("aria-pressed", t==="macro"?"true":"false");
-  $("#ph-sector").setAttribute("aria-pressed", t==="sector"?"true":"false");
-  renderPhone();
 }
 function setView(v){
   state.view=v;
@@ -3548,14 +3536,30 @@ function loadData(){
       });
     }).catch(function(){});
   }
-  ["#f-from","#f-to","#f-sector","#f-tier","#f-type","#f-rumor","#f-source","#f-sort","#f-limit"].forEach(function(id){
+  if($("#f-run").options.length<=1){
+    /* 查询串必须走 params 这个入参：liveUrl 自己会拼 "?"+qs，路径里再带一个
+       "?limit=30" 会拼成 "…?limit=30?token=…"，limit 解析失败整个请求 500。*/
+    apiGet("/api/run-nodes",{limit:30}).then(function(d){
+      ((d&&d.data)||[]).forEach(function(r){
+        var o=document.createElement("option");
+        o.value=r.run_at;                       // "YYYY-MM-DD HH:MM:SS"，后端按 12h 窗口取
+        o.textContent=fmtRunNode(r.run_at)+" ("+r.event_count+")";
+        $("#f-run").appendChild(o);
+      });
+    }).catch(function(e){
+      // 拿不到轮次列表时下拉框只剩「全部轮次」，等于退回不筛选——不影响主流程，
+      // 但要在 console 留痕，否则又是一次静默失败。
+      console.warn("加载生产轮次失败，观测时间筛选降级为全部轮次：", e && e.message);
+    });
+  }
+  ["#f-run","#f-sector","#f-tier","#f-type","#f-rumor","#f-source","#f-sort","#f-limit"].forEach(function(id){
     $(id).addEventListener("change",function(){ state.offset=0; fetchRows(); });
   });
   var kt;
   $("#f-kw").addEventListener("input",function(){ clearTimeout(kt); kt=setTimeout(function(){ renderRows(); renderPhone(); },180); });
   $("#f-refresh").addEventListener("click",fetchRows);
   $("#f-reset").addEventListener("click",function(){
-    ["#f-from","#f-to","#f-sector","#f-tier","#f-type","#f-rumor","#f-source","#f-kw"].forEach(function(id){ $(id).value=""; });
+    ["#f-run","#f-sector","#f-tier","#f-type","#f-rumor","#f-source","#f-kw"].forEach(function(id){ $(id).value=""; });
     $("#f-sort").value="importance"; $("#f-limit").value="50";
     state.offset=0; fetchRows();
   });
@@ -3563,8 +3567,6 @@ function loadData(){
   $("#p-next").addEventListener("click",function(){ state.offset+=state.limit; fetchRows(); });
   $("#v-table").addEventListener("click",function(){ setView("table"); });
   $("#v-sim").addEventListener("click",function(){ setView("sim"); });
-  $("#ph-macro").addEventListener("click",function(){ setPhTab("macro"); });
-  $("#ph-sector").addEventListener("click",function(){ setPhTab("sector"); });
   fetchRows();
 }
 
@@ -3583,9 +3585,12 @@ var ENDPOINTS=[
      ["news_type","string","macro / policy / market / project / security / other"],
      ["event_tier","string","事件级别 S / A / B / C / D"],
      ["is_rumor","0|1","谣言过滤。不筛选时请整个省略该参数"],
-     ["date_from","YYYY-MM-DD","观测时间下界（含）"],
-     ["date_to","YYYY-MM-DD","观测时间上界（含）"]
+     ["date_from","YYYY-MM-DD","事件日期下界（含）"],
+     ["date_to","YYYY-MM-DD","事件日期上界（含）"],
+     ["run_at","YYYY-MM-DD HH:MM:SS","只取某一轮生产采集的事件，取值见 /api/run-nodes"]
    ],sample:{limit:5,sort:"importance",event_tier:"A"}},
+  {m:"GET",path:"/api/run-nodes",desc:"生产轮次节点 —— 每天 08:00 / 20:00 两轮，含各轮事件数；供 run_at 取值",
+   params:[["limit","int","返回节点数，上限 60，默认 20"]],sample:{limit:5}},
   {m:"GET",path:"/api/news/{id}",desc:"事件详情 —— 按 id 返回单个完整对象",
    params:[["id","path","事件 id，取自列表接口的 data[].id"]],pathSample:true},
   {m:"GET",path:"/api/news/{id}/x-sources",desc:"该事件关联的 X 原始推文（含互动量）",

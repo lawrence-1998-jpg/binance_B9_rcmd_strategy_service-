@@ -105,7 +105,8 @@ def qa_auth():
     st, _ = http("/health", token=None)
     check(g, "/health 无需鉴权可访问", st == 200, f"status={st}")
 
-    protected = ["/api/news?limit=1", "/api/sources", "/api/runs", "/api/x-posts?limit=1",
+    protected = ["/api/news?limit=1", "/api/sources", "/api/runs", "/api/run-nodes",
+                 "/api/x-posts?limit=1",
                  "/api/recommend/sector/list", "/api/history/list", "/api/enrich/stats"]
     for p in protected:
         st, _ = http(p, token=None)
@@ -139,6 +140,27 @@ def qa_endpoints():
         check(g, "/api/news/<id>/x-sources", st == 200)
     st, _ = http("/api/news/definitely-not-a-real-id")
     check(g, "不存在的 id 应 404", st == 404, f"status={st}")
+
+    # 生产轮次节点 + run_at 筛选。这里断言的是「分桶必须不重不漏」这个不变量：
+    # 每轮 total 相加应当等于全量 total。任何一天重跑、补跑都不会破坏它，
+    # 但如果 12h 窗口写错（重叠或留缝），这条会立刻红。
+    st, nodes = http("/api/run-nodes?limit=60")
+    node_list = (nodes or {}).get("data") if isinstance(nodes, dict) else None
+    check(g, "/api/run-nodes 可用", st == 200 and isinstance(node_list, list) and node_list,
+          f"status={st}")
+    if node_list:
+        shapes_ok = all(n.get("run_at", "")[11:16] in ("08:00", "20:00") and n.get("event_count", 0) > 0
+                        for n in node_list)
+        check(g, "轮次节点都落在 08:00 / 20:00", shapes_ok,
+              f"异常={[n['run_at'] for n in node_list if n.get('run_at','')[11:16] not in ('08:00','20:00')][:3]}")
+        st, allm = http("/api/news?limit=1")
+        total_all = ((allm or {}).get("meta") or {}).get("total", -1)
+        summed = 0
+        for n in node_list:
+            st, one = http("/api/news?limit=1&run_at=" + urllib.parse.quote(n["run_at"]))
+            summed += ((one or {}).get("meta") or {}).get("total", 0)
+        check(g, "各轮 total 相加等于全量（分桶不重不漏）", summed == total_all,
+              f"分轮相加={summed} 全量={total_all}")
 
     for p, key in [("/api/sources", "data"), ("/api/runs", None),
                    ("/api/x-posts?limit=2", None),

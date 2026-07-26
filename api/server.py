@@ -39,6 +39,9 @@ API_TOKENS = {
     "team-b":    os.environ.get("API_TOKEN_TEAM_B",    "***REMOVED***"),
     "partner-1": os.environ.get("API_TOKEN_PARTNER1",  "***REMOVED***"),
     "partner-2": os.environ.get("API_TOKEN_PARTNER2",  "***REMOVED***"),
+    # 工作台页面自身取数用。单独一条是为了让前端源码里不出现任何人名
+    # （老的 legacy secret 里带名字），同时它被吊销也不影响任何下游接入方。
+    "web":       os.environ.get("API_TOKEN_WEB",       "***REMOVED***"),
 }
 VALID_API_KEYS = {API_SECRET_KEY, *API_TOKENS.values()}
 
@@ -194,6 +197,7 @@ def get_news():
     event_tier = request.args.get("event_tier")
     date_from = request.args.get("date_from")
     date_to = request.args.get("date_to")
+    run_at = request.args.get("run_at")   # 生产轮次节点，见 /api/run-nodes
     sort = request.args.get("sort", "importance")  # importance | date
 
     where = ["1=1"]
@@ -225,6 +229,11 @@ def get_news():
     if date_to:
         where.append("date <= %s")
         params.append(date_to)
+    if run_at:
+        # 生产调度是每天 08:00 / 20:00 两轮，所以一个「节点」覆盖它到下一轮之间的 12 小时。
+        # 用半开区间 [run_at, run_at+12h)，相邻两个节点既不重叠也不漏。
+        where.append("time_get_data >= %s AND time_get_data < %s + INTERVAL 12 HOUR")
+        params.extend([run_at, run_at])
 
     order = "importance_score DESC" if sort == "importance" else "time_get_data DESC"
     sql = (f"SELECT {EVENT_COLUMNS} FROM news_events WHERE {' AND '.join(where)} "
@@ -329,6 +338,36 @@ def get_x_posts():
 
 
 # ─── Pipeline 运行记录 ────────────────────────────────────────────────────────
+# ─── 生产轮次节点 ─────────────────────────────────────────────────────────────
+# 前端「观测时间」筛选器的选项来源。生产调度是每天 08:00 / 20:00 各跑一轮，
+# 所以把每条事件的采集时间归到它前面最近的那个节点上：
+#   ≥20:00 → 当天 20:00 ｜ ≥08:00 → 当天 08:00 ｜ <08:00 → 前一天 20:00
+# 不直接读 pipeline_runs.run_at，是因为那里还混着历史手动跑的零散时间点，
+# 列出来会得到一串对不上「一天两轮」认知的时间。
+RUN_NODE_EXPR = """
+    CASE WHEN HOUR(time_get_data) >= 20 THEN DATE_FORMAT(time_get_data, '%Y-%m-%d 20:00:00')
+         WHEN HOUR(time_get_data) >= 8  THEN DATE_FORMAT(time_get_data, '%Y-%m-%d 08:00:00')
+         ELSE DATE_FORMAT(DATE_SUB(time_get_data, INTERVAL 1 DAY), '%Y-%m-%d 20:00:00') END
+"""
+
+
+@app.route("/api/run-nodes", methods=["GET"])
+@require_api_key
+def get_run_nodes():
+    limit = min(int(request.args.get("limit", 20)), 60)
+    db = get_db()
+    cursor = db.cursor()
+    cursor.execute(
+        f"SELECT {RUN_NODE_EXPR} AS run_at, COUNT(*) AS event_count "
+        "FROM news_events WHERE time_get_data IS NOT NULL "
+        "GROUP BY run_at ORDER BY run_at DESC LIMIT %s",
+        (limit,),
+    )
+    data = [{"run_at": str(r[0]), "event_count": int(r[1])} for r in cursor.fetchall()]
+    cursor.close()
+    return jsonify({"data": data, "count": len(data)})
+
+
 @app.route("/api/runs", methods=["GET"])
 @require_api_key
 def get_runs():
