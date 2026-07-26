@@ -42,8 +42,9 @@
 对生成出来的 item 做结构化时才会用到 LLM，那部分成本与普通新闻等同，不属于本模块。
 
 ── 状态存储 ──────────────────────────────────────────────────────────
-跨轮抑制状态存 MySQL 表 market_signal_state（见 config/migrations/002_market_signal_
-state.sql），通过 crawler.storage.get_mysql_conn() 读写。MySQL 不可用时降级为纯内存
+跨轮抑制状态存 MySQL 表 market_signal_state（见 config/migrations/003_market_signal_
+state.sql；002 是 usage_tracking，别照着旧注释去跑错文件），通过
+crawler.storage.get_mysql_conn() 读写。MySQL 不可用时降级为纯内存
 状态（当次运行内不重复，但不做跨轮冷却）——宁可偶尔多播，也不让状态问题整个模块挂掉。
 
 ── 输出 ──────────────────────────────────────────────────────────────
@@ -251,8 +252,14 @@ LIQUIDATION_MIN_NOTIONAL_USD = {
 }
 
 # ── 抑制（去重）参数 ──────────────────────────────────────────────────
-# 同一个 (信号类型, 币, 方向) 在冷却期内只播一次。爬虫 4 小时一轮，如果不抑制，
-# 一个持续下跌的行情会让"BTC 24 小时下跌"这条重复生成 6 次/天。
+# 同一个 (信号类型, 币, 方向) 在冷却期内只播一次。如果不抑制，一个持续下跌的
+# 行情会让"BTC 24 小时下跌"这条每轮都重新生成一遍。
+#
+# 注意调用节奏：run_market_signals() 现在挂在 fetch_cheap_sources() 里，由
+# scripts/stage_fetch.py **每 2 小时**跑一次（不是早期注释写的 4 小时，也不是
+# 主 pipeline 的 12 小时——主 pipeline 只在回落到 run_rss_and_scraper_crawler()
+# 时才会再触发一次）。下面这些冷却小时数是按"多少轮"来理解的：2h 节奏下
+# liquidation 的 4h 冷却 = 隔一轮，price_move 的 12h = 隔五轮。
 COOLDOWN_HOURS = {
     "price_move": 12.0,      # 半天。同一个币同方向的大波动，半天播一次足够
     "level_break": 24.0,     # 关口突破按 (币,关口,方向) 计，一天内不重复
@@ -260,13 +267,24 @@ COOLDOWN_HOURS = {
     "volume_spike": 12.0,
     "funding_extreme": 12.0,
     "oi_jump": 8.0,
-    "liquidation": 4.0,      # 爆仓是急性事件，冷却期最短，一轮（4h）即可再播
+    "liquidation": 4.0,      # 爆仓是急性事件，冷却期最短，隔一轮（2h 节奏下 4h）即可再播
 }
 
 # 冷却期内的"升级"豁免：行情继续恶化时不应该被冷却期憋着不播。跌幅从 -6% 扩大
 # 到 -14% 是一条新新闻，所以只要比上次已播报的幅度又多走了 ESCALATION_STEP_PCT
 # 个百分点，就允许提前再播一次。
 ESCALATION_STEP_PCT = 8.0
+
+# 但"加 8"这套加法只在 magnitude 是**百分比量纲**时成立。liquidation 传给
+# state.allows() 的 magnitude 是 info["total_usd"]，即**美元金额**——拿它和
+# +8.0 比，字面意思是"爆仓额比上次再多 8 美元就算升级，可以提前解除冷却"，
+# 等于 liquidation 这条线的冷却闸门完全不生效：一波持续爆仓会每轮都播一条。
+# 金额量纲改用相对增幅：必须比上次已播金额再涨 50%（1000 万 → 1500 万）才算
+# 新新闻，这个口径与 salience 用的 total/threshold 倍数思路一致。
+# 以后再加金额量纲的信号（比如"净流入 X 美元"），记得把 kind 加进这个集合，
+# 否则它会重蹈 liquidation 的覆辙。
+ESCALATION_RATIO_KINDS = {"liquidation"}
+ESCALATION_STEP_RATIO = 1.5
 
 # 每轮总量上限。防止市场普跌时一次性灌进来上百条同质事件把 pipeline 和版面淹掉。
 MAX_SIGNALS_PER_RUN = 25
@@ -425,13 +443,15 @@ class SignalState:
     """跨轮状态，负责三件事：
 
     1. **冷却**：记录每个 signal_key 上次播报的时间与幅度，冷却期内不重复播报，
-       除非幅度又扩大了 ESCALATION_STEP_PCT（行情继续恶化算新新闻）。
+       除非幅度又明显扩大（行情继续恶化算新新闻）。"明显扩大"按 magnitude 的
+       量纲分两种算法：百分比量纲加 ESCALATION_STEP_PCT，金额量纲乘
+       ESCALATION_STEP_RATIO，见 allows()。
     2. **穿越判定的基线**：存上一轮每个币的收盘价，关口突破只在"这一轮真的从
        关口一侧走到另一侧"时触发。
     3. **持仓量差分的基线**：存上一轮持仓量快照，免费接口拿不到历史序列，只能
        靠自己攒。
 
-    状态存 MySQL 表 market_signal_state（见 config/migrations/002_market_signal_
+    状态存 MySQL 表 market_signal_state（见 config/migrations/003_market_signal_
     state.sql）。数据库不可用时降级为纯内存（当次运行内一致，但不做跨轮冷却）——
     宁可多播一轮，也不要因为状态问题整个模块挂掉。
     """
@@ -485,13 +505,27 @@ class SignalState:
         try:
             cur = self._conn.cursor()
             if rows:
+                # updated_at 必须由 Python 传 naive UTC，不能用 SQL 的 NOW()：
+                # NOW() 取的是 **MySQL 服务器时区**，而这一列读回来之后一律拿
+                # _now_naive()（UTC）去相减（allows / prev_price / prev_oi）。
+                # 服务器时区一旦不是 UTC，所有时间差就整体偏移 ±时区差：
+                #   · 东八区（写进去的时间比 UTC 快 8h）→ 差值被压小 8 小时，
+                #     冷却期实际变成"冷却期+8h"；更要命的是 prev_oi 返回的 hours
+                #     会变成 ~-6h（真实间隔 2h 减 8h），永远 < OI_MIN_HOURS，
+                #     整条持仓量信号线一条都发不出来。
+                #   · 西五区 → 差值被放大 5 小时，冷却期提前 5 小时失效；而且
+                #     hours 是直接印进标题的（"持仓量 X 小时内增加 Y%"），播出去
+                #     的时间跨度本身就是错的。
+                # 下面 TTL 清理用的 cutoff 本来就是 Python 侧算的 naive UTC，
+                # 改完这里，"写"和"读/删"两边才是同一个时钟。
+                now = _now_naive()
                 cur.executemany(
                     "INSERT INTO market_signal_state "
                     "(state_key, state_kind, numeric_value, updated_at) "
-                    "VALUES (%s, %s, %s, NOW()) "
+                    "VALUES (%s, %s, %s, %s) "
                     "ON DUPLICATE KEY UPDATE numeric_value=VALUES(numeric_value), "
-                    "updated_at=NOW()",
-                    [(key, kind, value) for key, kind, value in rows],
+                    "updated_at=VALUES(updated_at)",
+                    [(key, kind, value, now) for key, kind, value in rows],
                 )
             cutoff = _now_naive() - timedelta(days=STATE_TTL_DAYS)
             cur.execute("DELETE FROM market_signal_state WHERE updated_at < %s",
@@ -519,6 +553,12 @@ class SignalState:
         if hours >= COOLDOWN_HOURS.get(kind, 12.0):
             return True
         previous = abs(float(record.get("magnitude", 0.0)))
+        if kind in ESCALATION_RATIO_KINDS:
+            # 金额量纲：按倍数判升级。previous 为 0（正常不该出现，除非状态行被
+            # 写坏）时直接放行，否则任何金额都过不了乘法门槛，等于永久禁播。
+            if previous <= 0:
+                return True
+            return abs(magnitude) >= previous * ESCALATION_STEP_RATIO
         return abs(magnitude) >= previous + ESCALATION_STEP_PCT
 
     def mark_magnitude(self, key: str, magnitude: float) -> None:

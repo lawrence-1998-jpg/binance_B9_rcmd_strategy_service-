@@ -128,11 +128,10 @@ class UsageTracker:
         )
 
 
-# 一轮 pipeline 一个 tracker 实例，由 pipeline.run_pipeline() 创建并贯穿传递。
-# 模块级单例仅作兜底：直接调用 enrich_one()/embed_texts() 做单元测试时，
-# 不传 tracker 也不会报错，只是不计费。
-_default_tracker = UsageTracker()
-
-
-def get_default_tracker() -> UsageTracker:
-    return _default_tracker
+# 一轮 pipeline 一个 tracker 实例，由 pipeline.run_pipeline() 创建并贯穿传递给
+# enrich_one() / embed_texts()。
+#
+# 这里原本还有一个模块级单例 _default_tracker + get_default_tracker()，注释把
+# "不传 tracker 也安全"归功于它。实际上全仓库没有任何一处调用（grep 确认），
+# 兜底靠的是这些函数签名里 `tracker=None` 的默认值和内部的 None 判断，跟单例
+# 无关。留着只会让人以为"不传就会落到默认桶里计费"，2026-07-26 删除。

@@ -537,3 +537,31 @@ def mark_enrich_cache_consumed(conn, url_hashes: list[str]) -> None:
         cursor.close()
     except Exception as e:
         logger.warning(f"enrich cache consume-mark failed (harmless): {e}")
+
+
+def save_enrich_cache(conn, entries: list[tuple], prompt_hash: str) -> None:
+    """把 OpenAI 的原始结构化输出回写缓存，供下一轮同 URL 免费复用。
+
+    `entries` 是 [(url_hash, raw_llm_output_dict, model_str), ...]。
+    与 enrich bridge 的 submit 端点写同一张表、同一套 ON DUPLICATE 语义——
+    谁后算谁生效，prompt_hash 闸门保证口径一致。纯优化，调用方需自行 try/except。
+    """
+    if not entries:
+        return
+    cursor = conn.cursor()
+    for url_hash, raw, model in entries:
+        if not url_hash:
+            continue
+        cursor.execute(
+            """INSERT INTO llm_enrich_cache (url_hash, prompt_hash, enriched, model)
+               VALUES (%s, %s, %s, %s)
+               ON DUPLICATE KEY UPDATE
+                 prompt_hash = VALUES(prompt_hash),
+                 enriched    = VALUES(enriched),
+                 model       = VALUES(model),
+                 created_at  = CURRENT_TIMESTAMP,
+                 consumed_at = NULL""",
+            (url_hash, prompt_hash, json.dumps(raw, ensure_ascii=False), model[:64]),
+        )
+    conn.commit()
+    cursor.close()

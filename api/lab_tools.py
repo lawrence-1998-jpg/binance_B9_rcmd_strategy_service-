@@ -330,7 +330,14 @@ def compare():
         conn.close()
 
     if not events:
-        return jsonify({"error": "指定时间范围内没有事件数据"}), 200
+        # 这里以前配的是 HTTP 200：带 error 字段却是成功状态码，和全服务的错误语义
+        # 相反（其它地方任何 {"error": ...} 都配非 2xx），任何按状态码判断成败的
+        # 调用方都会把这次"没数据"当成一次正常返回。请求本身是合法的，只是这个
+        # 时间窗里没有任何事件可对比，语义上最接近"资源不存在"，用 404
+        # （与 history_tools.py 里"查不到记录"用 404 保持一致）。
+        # 前端 lab.html 的 api() 对非 2xx 会抛 Error(j.error)，runCompare 有 .catch
+        # 兜底渲染同一句提示，这个改动不会让页面卡在 loading。
+        return jsonify({"error": "指定时间范围内没有事件数据"}), 404
 
     top_n = min(int(body.get("top_n", 20)), len(events))
     case_limit = min(int(body.get("case_limit", 8)), 30)

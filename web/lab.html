@@ -711,7 +711,6 @@ var FACTORS = [
   {k:"Q",   name:"质量",   sub:"Quality",    color:"var(--purple)", wash:"var(--purple-wash)"},
   {k:"Rel", name:"相关性", sub:"Relevance",  color:"var(--teal)",   wash:"var(--teal-wash)"}
 ];
-var FACTOR_MAP = {}; FACTORS.forEach(function(f){ FACTOR_MAP[f.k] = f; });
 
 var PRESETS = {
   default:    {M:35, T:20, H:15, A:15, Q:15, Rel:0},
@@ -888,10 +887,10 @@ function init(){
     var enabled = !!currentSector();
     $("#relNote").style.display = enabled ? "block" : "none";
     [panelSingle, panelA, panelB].forEach(function(p){ p.setRelEnabled(enabled); });
-    onWeightsChanged("single"); onWeightsChanged("a"); onWeightsChanged("b");
+    onGlobalFilterChanged();
   });
   ["fDays","fPool","fTopN"].forEach(function(id){
-    $("#" + id).addEventListener("change", function(){ onWeightsChanged("single"); onWeightsChanged("a"); onWeightsChanged("b"); });
+    $("#" + id).addEventListener("change", onGlobalFilterChanged);
   });
 
   $("#btnCompare").addEventListener("click", function(){ track("tool_run", {tool:"lab_ab_compare"}); runCompare(); });
@@ -908,10 +907,22 @@ function init(){
   runCompare();
 }
 
+/* 全局筛选（板块 / 天数 / 池大小 / TopN）是单版本和 AB 对比共用的入参，改了两边都要重算。
+   原来这里写的是 onWeightsChanged("single") + ("a") + ("b")：debounce 计时器按
+   version 分别存，"a" 和 "b" 各排了一次 runCompare，同一份对比请求被 POST 两遍，
+   白烧一次后端计算。 */
+function onGlobalFilterChanged(){
+  onWeightsChanged("single");
+  onWeightsChanged("compare");
+}
+
 function onWeightsChanged(version){
-  clearTimeout(debounceTimers[version]);
-  debounceTimers[version] = setTimeout(function(){
-    if (version === "single") runReweight();
+  // A/B 两个权重面板改的是同一个对比请求，必须共用一个 debounce key，
+  // 否则「先拖 A 再拖 B」也会连发两次 runCompare
+  var key = (version === "single") ? "single" : "compare";
+  clearTimeout(debounceTimers[key]);
+  debounceTimers[key] = setTimeout(function(){
+    if (key === "single") runReweight();
     else runCompare();
   }, 450);
 }
@@ -1019,8 +1030,14 @@ function caseListHTML(items, dir){
   }).join("") + '</div>';
 }
 
+/* 对比请求的自增序号：debounce 只能压掉「连续触发」，压不掉「先发的请求后返回」。
+   拖动滑块或连改筛选时后端耗时不定，晚返回的旧响应会盖掉新响应，页面上留下一份
+   和当前控件不匹配的结果。所以每次发请求领一个号，回来时不是最新号就整个丢弃。 */
+var compareSeq = 0;
+
 function runCompare(){
   var el = $("#compareResults");
+  var seq = ++compareSeq;
   var p = baseParams();
   var body = {
     sector: p.sector, days: p.days, pool_limit: p.pool_limit,
@@ -1031,6 +1048,7 @@ function runCompare(){
   };
   el.innerHTML = '<div class="loading">正在计算对比…</div>';
   api("/api/tools/compare", body).then(function(d){
+    if (seq !== compareSeq) return;                       // 过期响应，丢弃
     if (d.error){ el.innerHTML = '<div class="err">' + esc(d.error) + '</div>'; return; }
     lastCompareResult = d;
     var t = d.turnover;
@@ -1051,6 +1069,7 @@ function runCompare(){
         '<div class="card"><div class="wpanel-head"><strong>' + esc(d.meta.label_b) + ' · Top' + t.top_n + '</strong></div>' + topListHTML(d.top_b) + '</div>' +
       '</div>';
   }).catch(function(err){
+    if (seq !== compareSeq) return;                       // 旧请求的失败别覆盖新请求的 loading 态
     el.innerHTML = '<div class="err">加载失败：' + esc(err.message) + '</div>';
   });
 }

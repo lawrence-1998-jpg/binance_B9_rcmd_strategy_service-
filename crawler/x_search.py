@@ -9,11 +9,18 @@ X（Twitter）全网关键词搜索召回 v1.0
 接口契约与 fetch_x_kols() 完全一致：返回 (news_items, raw_posts)，字段结构
 逐字段对齐，可以直接拼进 run_rss_and_scraper_crawler() 的 all_items。
 
-配额账本（Basic 层，450 请求 / 15 分钟；2026-07-26 更正为当前 12h/2轮每天节奏）：
-    现有 KOL 拉取   ~64 请求/天（32 账号 × 2 轮）
-    本模块          21 查询 × 2 页 = 42 请求/轮，2 轮/天 = 84 请求/天
-    单轮硬上限      MAX_REQUESTS_PER_RUN = 60
-  单轮峰值 42+32=74 « 450，留足重试和临时加查询的余量。
+成本模型（2026-07-26 用 Lawrence 的账单截图彻底更正，此前本文件写反了）：
+
+  **X 按「返回的推文条数」计费，不是按请求数。**
+  实测：单日 $14.88 / 约 7000 条 ≈ $0.0021 一条。
+
+  这个错误的代价很实在：此前一直以为"配额内是固定层级费用"，于是限流全调在
+  错误的维度上（收紧互动量阈值、压请求数），而真正的账单驱动是**拉回多少条**。
+  结果旧配置每轮拉回约 3400 条、过滤后只留 200 条（6% 产出率），**94% 的钱
+  花在当场丢弃的内容上**，两天烧穿额度，X 通道 402 停摆。
+
+  现在的控制方式：直接按「条」设硬预算（_Budget.posts），花完就停。
+  请求数预算保留作为次要护栏（防分页失控），但它不再是主要闸门。
 """
 import os
 import re
@@ -33,17 +40,29 @@ X_SEARCH_URL = "https://api.twitter.com/2/tweets/search/recent"
 # 下面这组常量是本模块唯一需要调的旋钮。调之前先跑 `python -m crawler.x_search`
 # （模块自带 dry-run，见文件末尾），它会打印各阶段的过滤水位。
 
-# 单条查询回取的推文数。上限 100（API 限制），压低会直接损失召回。
-MAX_RESULTS_PER_QUERY = 100
+# 单条查询单页回取的推文数。API 允许 10-100。
+#
+# 2026-07-26 从 100 降到 15：按条计费下，这个数字**直接等于花多少钱**。
+# 保留全部 21 组查询（覆盖面 = "一搜就能搜出来的新闻我们得有"，这是原始要求，
+# 不能砍），砍的是每组的深度。配合下面的轮转机制，避免固定顺序下靠后的查询
+# 永远吃不到预算。
+MAX_RESULTS_PER_QUERY = 15
 
 # 单轮请求硬上限。超过就停止发请求并告警——防止查询集被扩得太大或分页失控
 # 把配额吃穿，影响同一 token 上的 KOL 拉取。
 MAX_REQUESTS_PER_RUN = 60
 
-# 每条查询最多翻几页。窗口拉长到 14 小时后，热门查询（market/macro）一页 100 条
-# 很容易被截断，所以翻 2 页。请求数 = 查询数 × 页数 = 21 × 2 = 42，仍在
-# MAX_REQUESTS_PER_RUN(60) 和 API 限额(450/15min) 之内。
-MAX_PAGES_PER_QUERY = 2
+# 每条查询最多翻几页。2026-07-26 从 2 降到 1：第二页是窗口内更旧的内容，
+# 边际价值低于第一页，而按条计费下它是实打实的双倍花费。
+MAX_PAGES_PER_QUERY = 1
+
+# ── 成本硬闸门（按「条」，与真实计费维度一致）──────────────────────
+X_COST_PER_POST_USD = 0.0021          # 实测值，见文件头部说明
+
+# 单轮最多买多少条推文。这是本模块**唯一需要调的成本旋钮**：
+#   150 条/轮 ≈ $0.32/轮 ≈ $0.63/天（2 轮）≈ $10 能撑约 16 天
+# 调大 = 召回更全但更贵，调小反之。改这个数字就够了，不用动别的。
+X_SEARCH_POST_BUDGET = 150
 
 # 回看窗口，必须 >= cron 周期，否则两轮之间会有盲区。
 #
@@ -272,23 +291,36 @@ def _normalized_key(text: str) -> str:
 # ── HTTP 层 ──────────────────────────────────────────────────────────
 
 class _Budget:
-    """单轮请求预算。计数 + 硬上限，避免把 KOL 拉取的配额吃掉。"""
+    """单轮预算。**按条**是主闸门（与 X 的真实计费维度一致），请求数是次要护栏。"""
 
-    def __init__(self, limit: int):
-        self.limit = limit
+    def __init__(self, limit: int, post_limit: int = X_SEARCH_POST_BUDGET):
+        self.limit = limit                # 请求数上限（防分页失控）
         self.used = 0
+        self.post_limit = post_limit      # 推文条数上限（真正的钱）
+        self.posts = 0
         self.rate_limited = 0
 
     def can_spend(self) -> bool:
-        return self.used < self.limit
+        return self.used < self.limit and self.posts < self.post_limit
+
+    def remaining_posts(self) -> int:
+        return max(0, self.post_limit - self.posts)
+
+    def spent_usd(self) -> float:
+        return round(self.posts * X_COST_PER_POST_USD, 4)
 
 
 def _search_once(query: str, bearer: str, budget: _Budget,
                  start_time: str, next_token: str | None = None) -> dict | None:
     """发一次 recent search。429 走指数退避重试，其余错误直接放弃这条查询。"""
+    # 按剩余预算动态收缩：预算快见底时不要再要满页，避免最后一次调用超支。
+    # X API v2 的 max_results 下限是 10，低于它就不值得再发请求了。
+    want = min(MAX_RESULTS_PER_QUERY, budget.remaining_posts())
+    if want < 10:
+        return None
     params = {
         "query": query,
-        "max_results": MAX_RESULTS_PER_QUERY,
+        "max_results": want,
         "start_time": start_time,
         "tweet.fields": "created_at,public_metrics,lang,author_id",
         "expansions": "author_id",
@@ -374,6 +406,15 @@ def fetch_x_search(known_tweet_ids: set[str] | None = None,
     news_items, raw_posts = [], []
     author_counts: dict[str, int] = {}
 
+    # 轮转起点：预算收紧后单轮往往跑不完全部 21 组，固定顺序会让列表尾部的
+    # 查询（unlock/funding/etf 等）永远轮不到。按当天小时数轮转起点，两轮
+    # cron（UTC 0/12）各从不同位置开始，跨天覆盖全部类别。security 类
+    # 排在原列表最前，轮转后依然大概率先执行（21 组里它占 6 组）。
+    if queries:
+        offset = (datetime.now(timezone.utc).hour // 12
+                  + datetime.now(timezone.utc).timetuple().tm_yday * 2) % len(queries)
+        queries = list(queries[offset:]) + list(queries[:offset])
+
     for group_id, category, query in queries:
         if not budget.can_spend():
             logger.warning(f"X search: budget exhausted, {group_id} and later skipped")
@@ -388,6 +429,7 @@ def fetch_x_search(known_tweet_ids: set[str] | None = None,
                 break
             tweets = data.get("data") or []
             users = {u["id"]: u for u in (data.get("includes", {}).get("users") or [])}
+            budget.posts += len(tweets)   # 按条计费：拉回即扣费，无论后面留不留
             group_raw += len(tweets)
             stats["raw"] += len(tweets)
 
@@ -483,8 +525,11 @@ def fetch_x_search(known_tweet_ids: set[str] | None = None,
     stats["requests"] = budget.used
     dropped = stats["raw"] - stats["kept"]
     pct = (dropped / stats["raw"] * 100) if stats["raw"] else 0.0
+    stats["posts_billed"] = budget.posts
+    stats["est_cost_usd"] = budget.spent_usd()
     logger.info(
-        f"X search: {budget.used} requests / {len(queries)} queries, "
+        f"X search: {budget.posts} posts billed (~${budget.spent_usd()}), "
+        f"{budget.used} requests / {len(queries)} queries, "
         f"{stats['raw']} raw -> {stats['kept']} kept (filtered {dropped}, {pct:.0f}%) | "
         f"short={stats['drop_short']} tagspam={stats['drop_tagspam']} "
         f"spam={stats['drop_spam']} eng={stats['drop_engagement']} "

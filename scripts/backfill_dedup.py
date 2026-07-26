@@ -11,6 +11,16 @@
   阶段一  为缺 embedding 的行补算向量（非破坏性，可反复执行）
   阶段二  按向量聚类找出历史重复，合并信源后删除冗余行（破坏性，需 --apply）
 
+⚠️ 阶段二的比较窗必须做真实时间窗校验，改这段代码前先看懂这个坑：
+    早期版本按日期分桶后，把"排序后的下一个桶"无条件并进比较窗，写法是
+    `window += by_date[dates[i + 1]]`。dates 只包含**库里有数据的日期**，
+    所以 dates[i+1] 未必和 dates[i] 日历相邻——库里 5 月 3 日之后直接跳到
+    8 月 17 日时，这两天会被放进同一个窗互相比向量。加上当时又没有用
+    dedup.TIME_WINDOW_HOURS 做任何时间校验，语义相近的"同主体不同事件"
+    （比如"某所 5 月上币 X""某所 8 月下架 X"）就会被判成重复，--apply
+    直接把其中一条 DELETE 掉。稀疏数据下跨任意天数误删，且删了不可恢复。
+    现在的做法：日历相邻性 + 逐对 TIME_WINDOW_HOURS 校验，两道都过才归簇。
+
 用法：
     python3 scripts/backfill_dedup.py              # 回填向量 + 干跑去重报告
     python3 scripts/backfill_dedup.py --apply      # 真正执行合并与删除
@@ -18,9 +28,11 @@
 """
 import argparse
 import json
+import math
 import os
 import sys
 from collections import defaultdict
+from datetime import date as date_cls, datetime
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -128,11 +140,57 @@ def load_all(conn) -> list[dict]:
     return events
 
 
+# 比较窗最多往后跨几个日历日。48h 的时间窗最多能横跨 3 个日历日（D 日 23:00 与
+# D+2 日 22:00 相差 47h，仍在窗内），所以按 ceil(小时/24) 算。日期只用来把 O(n²)
+# 切小，真正的门是下面逐对的 _within_time_window()。
+WINDOW_DAYS = math.ceil(TIME_WINDOW_HOURS / 24)
+
+
+def _as_date(value) -> date_cls | None:
+    """把库里取回来的 date 列统一成 date 对象。解析不出来返回 None。"""
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date_cls):
+        return value
+    try:
+        return datetime.strptime(str(value)[:10], "%Y-%m-%d").date()
+    except (ValueError, TypeError):
+        return None
+
+
+def _event_dt(event: dict) -> datetime | None:
+    """事件的可比较时间：优先 time_event（真实发生时间），缺失时退回 date 的零点。
+
+    库里 time_event 是 naive DATETIME、按 UTC 存（全项目统一约定，见
+    storage.to_mysql_datetime），date 是 DATE。这里一律转成 naive datetime，
+    绝不掺 tzinfo，否则 aware 减 naive 会直接抛 TypeError。
+    """
+    raw = event.get("time_event")
+    if isinstance(raw, datetime):
+        return raw.replace(tzinfo=None)
+    day = _as_date(event.get("date"))
+    return datetime(day.year, day.month, day.day) if day else None
+
+
+def _within_time_window(a: dict, b: dict) -> bool:
+    """两条是否落在 TIME_WINDOW_HOURS 之内。
+
+    与 crawler/dedup.py 的同名判断有一处**故意的差异**：那边时间缺失时放行
+    （交给语义层兜底，最差是多合并一条本轮候选），这里时间算不出来一律返回
+    False。因为本脚本 --apply 会真的 DELETE 行，宁可漏合并（下次还能再跑）
+    也不能靠"缺时间就放行"去删数据（删了没得恢复）。
+    """
+    ta, tb = _event_dt(a), _event_dt(b)
+    if ta is None or tb is None:
+        return False
+    return abs((ta - tb).total_seconds()) <= TIME_WINDOW_HOURS * 3600
+
+
 def find_duplicate_clusters(events: list[dict]) -> list[list[dict]]:
     """按日期分桶后做向量聚类，返回大小 >1 的簇。
 
     先按日期分桶是为了避开 O(n²)：同一事件的报道必然集中在相邻一两天，
-    跨月的两条不可能是同一事件。桶内再两两比向量。
+    跨月的两条不可能是同一事件。桶内再两两比向量 + 比时间。
     """
     by_date = defaultdict(list)
     for event in events:
@@ -140,13 +198,21 @@ def find_duplicate_clusters(events: list[dict]) -> list[list[dict]]:
             continue
         by_date[str(event["date"])].append(event)
 
-    # 相邻日期合并进同一个比较窗（事件可能跨零点报道）
-    dates = sorted(by_date)
+    dates = sorted(by_date)   # 键是 ISO 日期串，字典序即时间序
     clusters = []
     for i, date in enumerate(dates):
+        base_day = _as_date(by_date[date][0]["date"])
         window = list(by_date[date])
-        if i + 1 < len(dates):
-            window += by_date[dates[i + 1]]
+        # 把后续日期并进同一个比较窗（事件可能跨零点报道），但**必须校验日历
+        # 距离**：dates 里只有"有数据的日期"，稀疏时下一个键可能是几个月之后，
+        # 无条件并进来就等于让两个毫不相干的月份互相比向量。
+        for later in dates[i + 1:]:
+            later_day = _as_date(by_date[later][0]["date"])
+            if base_day is None or later_day is None:
+                break
+            if (later_day - base_day).days > WINDOW_DAYS:
+                break
+            window += by_date[later]
         if len(window) < 2:
             continue
 
@@ -158,7 +224,7 @@ def find_duplicate_clusters(events: list[dict]) -> list[list[dict]]:
         # 只处理"代表条属于当前日期"的簇，避免相邻日期窗口重复产出同一簇
         seen_in_window = set()
         for a in range(len(window)):
-            if window[a]["date"] != by_date[date][0]["date"]:
+            if str(window[a]["date"]) != date:
                 continue
             if window[a]["id"] in seen_in_window:
                 continue
@@ -167,7 +233,10 @@ def find_duplicate_clusters(events: list[dict]) -> list[list[dict]]:
             for b in range(len(window)):
                 if a == b or window[b]["id"] in seen_in_window:
                     continue
-                if sim[a][b] >= COSINE_THRESHOLD:
+                # 语义 + 时间双门：向量像还不够，事件时间也得在窗内，否则
+                # "同主体不同事件"会被当成重复删掉（见文件顶部的坑）
+                if (sim[a][b] >= COSINE_THRESHOLD
+                        and _within_time_window(window[a], window[b])):
                     group.append(window[b])
                     seen_in_window.add(window[b]["id"])
             if len(group) > 1:

@@ -188,7 +188,11 @@ AUTHORITY_DEFAULT = 2  # 没见过的长尾域名，保守给分
 # 内容农场/纯 SEO 站点：标题党、洗稿转载为主，人工核实过质量差，直接拦截。
 _BLOCKED_DOMAINS = {
     "coinpedia.org", "insidebitcoins.com", "99bitcoins.com",
-    "zycrypto.com", "cryptopolitan.com", "newsbtc.com",
+    # newsbtc.com 已移出黑名单（2026-07-26 裁决）：库内实测 11 条事件 7 条
+    # VERIFIED、质量分 0.761、零谣言，表现是正经二线媒体的水平，与"内容农场"
+    # 判定不符；对应地它在 sources.py 保留 RSS 席位但权威降为 2（编辑质量
+    # 尚可、独立采编深度有限）。bitcoinist.com 维持拦截，证据见 sources.py。
+    "zycrypto.com", "cryptopolitan.com",
     "coingape.com", "cryptonewsz.com", "livebitcoinnews.com",
     "bitcoinist.com", "cryptodaily.co.uk",
 }

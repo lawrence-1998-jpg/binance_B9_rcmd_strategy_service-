@@ -6,7 +6,7 @@ xx 倍市值】标签」。
 设计原则（和 verification.py 一脉相承）：**这是查表，不是判断**。市值是客观数字，
 绝不让 LLM 猜——LLM 对市值的记忆停留在训练截止日，且会把 UNI 的市值和某个同名
 山寨币搞混。本模块单轮 LLM 调用 0 次，只有 CoinGecko 的几个 HTTP 请求，且带磁盘
-缓存，正常一天只真正拉 4 次。
+缓存（TTL 24h，见 CACHE_TTL_SECONDS 处的说明），正常一天只真正拉 1 次。
 
 数据源
     CoinGecko  /coins/markets            市值 / 价格 / 排名（免费无 key）
@@ -66,10 +66,19 @@ REQUEST_INTERVAL_SECONDS = 6.0
 REQUEST_TIMEOUT = 30
 MAX_RETRIES = 3
 
-# 市值几小时内的变化对「档位」和「相对 BTC 倍数」这两个标签没有实质影响
-# （BTC 一天波动 2%，档位边界是 10 倍量级），6 小时缓存足够。pipeline 每 4 小时
-# 一轮，实际上多数轮次直接命中缓存，0 请求。
-CACHE_TTL_SECONDS = 6 * 3600
+# 市值一天内的变化对「档位」和「相对 BTC 倍数」这两个标签没有实质影响：档位边界
+# 是 1e11/1e10/1e9/1e8 的 10 倍量级台阶，BTC 一天波动 2%，隔夜数据不会让任何一个
+# 币跨档；btc_ratio 是两个市值的比值，同涨同跌还会互相抵消一部分。
+#
+# 2026-07-26 把 TTL 从 6h 调到 24h。原值 6h 是按「cron 每 4 小时一轮」定的，那时
+# 确实多数轮次直接命中缓存；但主 pipeline 早已改成 **12 小时一轮**（UTC 0/12），
+# 6h TTL 意味着每一轮开跑时缓存必然已经过期，等于每轮都要重拉 6 页 CoinGecko
+# ——按 REQUEST_INTERVAL_SECONDS=6s 的节流算白白多花 30~40 秒，还平白多冒一次
+# 429 的风险（免费层实测第 10 个请求就会被限）。
+# 调到 24h 之后：UTC 0 点那轮真拉一次，UTC 12 点那轮缓存 age=12h 命中，一天只
+# 拉 1 次，请求量减半。代价是标签最多滞后 24 小时，对上面两个标签可以忽略；
+# 需要即时刷新时调用方可以传 load_snapshot(force_refresh=True) 绕过。
+CACHE_TTL_SECONDS = 24 * 3600
 CACHE_PATH = Path(__file__).parent.parent / "config" / "cache" / "market_cap.json"
 
 _HEADERS = {"User-Agent": "binance-b9-news/1.0", "Accept": "application/json"}
@@ -301,7 +310,7 @@ def load_snapshot(force_refresh: bool = False) -> dict:
     """取行情快照 {coins, binance, fetched_at}。进程内 memo + 磁盘缓存双层。
 
     降级顺序：内存 → 未过期磁盘缓存 → 拉网 → **过期的磁盘缓存**。
-    最后一步是有意的：市值 6 小时前的数字也远好过没有标签，行情源挂了不该拖垮
+    最后一步是有意的：过期一两天的市值数字也远好过没有标签，行情源挂了不该拖垮
     整条 pipeline。
     """
     global _snapshot_memo

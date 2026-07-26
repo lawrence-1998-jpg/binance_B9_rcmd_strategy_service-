@@ -535,6 +535,12 @@ def enrich_one(item: dict, tracker=None, cached: dict | None = None) -> dict | N
             if tracker is not None:
                 tracker.record_chat(getattr(resp, "usage", None), model=model)
             enriched = json.loads(resp.choices[0].message.content)
+            # 暂存 normalize 之前的原始输出，run_pipeline 会批量回写进
+            # llm_enrich_cache——同一条 URL 下一轮直接命中缓存，不再付费。
+            # 主要受益者是 X 条目（不走 staging，低频 KOL 的同几条推文此前
+            # 最长连付 7 天结构化费用）；顺带 pending 端点会跳过已缓存条目，
+            # Mac worker 也不会重复算 OpenAI 已经算过的。
+            raw_llm_output = dict(enriched)
             # sector_tags → sectors + sector_relevance，并剔除信源自身实体
             normalize_tags(enriched, source=item.get("source", ""))
             # 保留原始抓取元数据，后续聚合/打分要用
@@ -546,6 +552,8 @@ def enrich_one(item: dict, tracker=None, cached: dict | None = None) -> dict | N
                 "authority":    item.get("authority", 3),
                 "type":         item.get("type", "rss"),
                 "tweet_id":     item.get("tweet_id"),
+                "_cache_writeback": raw_llm_output,
+                "_cache_model":     model,
             })
             return enriched
         except Exception as e:
@@ -741,6 +749,24 @@ def run_pipeline() -> dict:
             logger.info(f"Step 4 bridge: {len(used_hashes)}/{len(deduped)} items "
                         f"pre-enriched by local Claude (zero OpenAI cost)")
             storage.mark_enrich_cache_consumed(conn, used_hashes)
+
+        # 4.5 OpenAI 结果回写缓存（2026-07-26，Lawrence 拍板"现在就做"）：
+        #     同 URL 下一轮零成本，主要止住 X 条目跨轮重复付费的血。
+        #     纯优化路径，失败只打日志，绝不影响主流程。
+        writeback = []
+        for e in enriched:
+            raw = e.pop("_cache_writeback", None)
+            model_used = e.pop("_cache_model", None)
+            if raw is not None:
+                writeback.append((_url_hash_fn(e.get("url", "")), raw,
+                                  f"openai/{model_used or LLM_MODEL}"))
+        if writeback:
+            try:
+                storage.save_enrich_cache(conn, writeback, PROMPT_VERSION_HASH)
+                logger.info(f"Step 4.5 cache writeback: {len(writeback)} OpenAI "
+                            f"results cached for future rounds")
+            except Exception as e:
+                logger.warning(f"cache writeback skipped (harmless): {e}")
         stats["rumors"] = sum(1 for e in enriched if e.get("is_rumor"))
         logger.info(f"Step 4 LLM: {stats['enriched']} enriched, "
                     f"{stats['rumors']} flagged as rumor (kept, down-weighted)")

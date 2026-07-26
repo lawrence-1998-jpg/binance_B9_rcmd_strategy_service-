@@ -142,7 +142,12 @@ def get_sector_recommendation():
         limit = int(request.args.get("limit", MAX_RECOMMEND))
     except (TypeError, ValueError):
         limit = MAX_RECOMMEND
-    limit = max(0, min(limit, MAX_RECOMMEND))   # Top3 是上限，见 skill 文档"宁缺毋滥"
+    # 下界必须是 1，不是 0。之前写的 max(0, ...) 会把 ?limit=0 原样放行：请求照样
+    # 跑完整套两层预筛 + gpt-5.4 精判（真花钱、也真占 Flask worker），最后返回一个
+    # 空列表——用户以为"这个板块没有可推的新闻"，实际上是自己把 limit 传成了 0；
+    # 而且和文件头注释、skill 文档写的 limit=1-3 对不上。负数同理钳到 1。
+    # 上界 Top3 见 skill 文档"宁缺毋滥"。
+    limit = max(1, min(limit, MAX_RECOMMEND))
 
     try:
         hours = int(request.args.get("hours", DEFAULT_CANDIDATE_HOURS))

@@ -145,6 +145,50 @@ def _chat_cost_usd(tracker: UsageTracker) -> float:
     return tracker.snapshot()["estimated_cost_usd"]
 
 
+# ── embedding 失败必须显式报错，不能沿用生产流水线的静默降级 ─────────────
+#
+# crawler/dedup.py 的 embed_texts 在整批调用失败时会吞掉异常、返回零矩阵。
+# 那个降级对生产去重流水线是对的（零向量之间余弦为 0，不会误归簇，等于退回
+# 只靠 DC-1/DC-2 去重，批处理不该因为一次 embedding 抖动就整轮挂掉）；但对
+# 本文件这两个评测工具，同一个降级是有毒的：
+#   - dedup-test：相似度全 0 → 一个都不聚簇 → 照常返回"重复组数 0"。用户读到
+#     的结论是"这批新闻确实不重复"，真相却是"这一步根本没算出来"。评测工具
+#     给出一个假的"没问题"，比直接报错危险得多。
+#   - ab-compare：全零相似度矩阵 → 重合度恒为 0、最近邻 argmax 退化成恒取 B 组
+#     第 0 条，然后照常把这些无意义的配对送去烧 GSB 的 LLM 调用，最后产出一份
+#     基于全零相似度的垃圾结论，钱花了、结论还不能用。
+# 所以这里把"算不出来"和"结果是 0"分开：调用方要么拿到有效向量，要么拿到一个
+# 明确的失败，由路由翻译成 502。
+class EmbeddingUnavailable(RuntimeError):
+    """embedding 没有真正算出来（上游调用失败，被 embed_texts 静默降级成零向量）。"""
+
+
+def _embed_or_fail(texts: list[str], tracker: UsageTracker) -> np.ndarray:
+    """embed_texts + 结果校验，拿不到有效向量就抛 EmbeddingUnavailable。
+
+    只能靠结果特征判断失败，不能靠捕获异常——embed_texts 内部已经把异常
+    catch 掉了，外面 try/except 永远等不到。判据是模长：embed_texts 返回的是
+    L2 归一化后的矩阵，正常向量模长恒为 1，被降级填充的零向量归一化后仍是 0，
+    两者之间没有中间地带，取 0.5 做门限即可。
+    逐行检查而不是只看整批，是因为 embed_texts 按 EMBED_BATCH=128 分批，
+    部分批次失败时只有那一段是零向量——这种"部分失败"同样会让重复被漏报，
+    一样得报错，不能只挑整批失败的情况处理。
+    """
+    vectors = embed_texts(texts, get_client(), tracker)
+    if vectors.shape[0] != len(texts):
+        raise EmbeddingUnavailable(
+            f"embedding 返回条数不匹配（期望 {len(texts)} 条，实际 {vectors.shape[0]} 条）"
+        )
+    if texts:
+        n_failed = int((np.linalg.norm(vectors, axis=1) < 0.5).sum())
+        if n_failed:
+            raise EmbeddingUnavailable(
+                f"{len(texts)} 条文本里有 {n_failed} 条没能取到 embedding 向量"
+                "（上游 embeddings 调用失败）"
+            )
+    return vectors
+
+
 # ══════════════════════════════════════════════════════════════════════
 # 子 Tab 1: Duplicate Tester
 # ══════════════════════════════════════════════════════════════════════
@@ -284,7 +328,23 @@ def dedup_test():
 
     # embedding + 并查集聚类 —— 完全复用 crawler/dedup.py 里已标定过的逻辑，不发明新阈值
     titles = [it["title"] for it in all_items]
-    vectors = embed_texts(titles, get_client(), tracker)
+    try:
+        vectors = _embed_or_fail(titles, tracker)
+    except EmbeddingUnavailable as e:
+        # 这一步失败绝不能继续往下走：往下走的结果是"重复组数 0"，而这个 0 会被
+        # 用户读成"这批新闻没有重复"（见 _embed_or_fail 上面的说明）。视觉提取的
+        # 钱已经花掉了，如实把成本和已提取的标题数一起返回，但整个请求判定为失败。
+        logger.error(f"dedup-test embedding unavailable: {e}")
+        return jsonify({
+            "error": f"向量计算失败，无法判断是否重复：{e}",
+            "hint": "这不等于「没有检测到重复」——是去重这一步根本没算出来。请稍后重试；"
+                    "持续失败请检查 OPENAI_API_KEY 与 embeddings 上游是否可用。",
+            "total_headlines_extracted": len(titles),
+            "cost_usd": _chat_cost_usd(tracker),
+            "cost_breakdown": tracker.snapshot(),
+            "images_processed": len(images),
+            "image_errors": image_errors,
+        }), 502
     n = len(titles)
     uf = _UnionFind(n)
     sim = vectors @ vectors.T
@@ -654,14 +714,35 @@ def _compute_novelty(meta: dict) -> dict:
                     "（通常是较早入库、当时还没有这两个字段的历史数据）。",
         }
 
-    since = (datetime.now(timezone.utc) - timedelta(days=NOVELTY_LOOKBACK_DAYS)).strftime("%Y-%m-%d %H:%M:%S")
+    # 时间窗两端都锚在「这条事件自己入库的时刻」上，而不是锚在 now 上。
+    #
+    # 原来的写法是 time_get_data >= now-30d，只有下界、没有上界，等于把比该事件
+    # 更晚才入库的报道也算成了它的"历史"——同一条叙事只要后续被反复报道，就会
+    # 反过来把这条老事件的新鲜感压下去，越老的事件被压得越狠，是系统性低估；
+    # 而且窗口锚在 now 上还有第二个问题：一条 40 天前的事件，[now-30d, ...] 这个
+    # 区间里根本不包含它自己的时间点，取到的"历史"全是它之后的东西。
+    # 新鲜感问的是"这条叙事在它出现之前是不是已经被反复报道过了"，只有它之前的
+    # 报道才算数，所以窗口是 [事件时刻-30d, 事件时刻)。
+    #
+    # 锚点和过滤都用 time_get_data（入库时刻）这同一列，比较的口径才一致；
+    # 老数据可能没有 time_get_data，退回 time_event，两者都缺才退回 now
+    # （退回 now 就等于恢复成旧行为，但这类数据本来也大多没有 embedding，
+    # 上面的 self_vec is None 分支已经先拦掉了）。
+    anchor = meta.get("time_get_data") or meta.get("time_event")
+    if anchor is not None and hasattr(anchor, "isoformat"):
+        anchor_dt = anchor if anchor.tzinfo else anchor.replace(tzinfo=timezone.utc)
+    else:
+        anchor_dt = datetime.now(timezone.utc)
+    since = (anchor_dt - timedelta(days=NOVELTY_LOOKBACK_DAYS)).strftime("%Y-%m-%d %H:%M:%S")
+    until = anchor_dt.strftime("%Y-%m-%d %H:%M:%S")
     conn = storage.get_mysql_conn()
     try:
         cursor = conn.cursor(dictionary=True)
         cursor.execute(
             "SELECT id, embedding FROM news_events "
-            "WHERE event_subject = %s AND id != %s AND time_get_data >= %s",
-            (subject, self_id, since),
+            "WHERE event_subject = %s AND id != %s "
+            "AND time_get_data >= %s AND time_get_data < %s",
+            (subject, self_id, since, until),
         )
         rows = cursor.fetchall()
         cursor.close()
@@ -681,8 +762,11 @@ def _compute_novelty(meta: dict) -> dict:
         "max_similarity_to_history": round(max_sim, 4),
         "similar_history_count": len(sims),
         "lookback_days": NOVELTY_LOOKBACK_DAYS,
-        "note": f"同一 event_subject（{subject}）在近 {NOVELTY_LOOKBACK_DAYS} 天内找到 "
-                f"{len(sims)} 条历史事件参与比对；阈值未做统计标定，只抽样验证过方向正确"
+        "window_start": since,      # 比对窗口两端都返回，方便核对"到底跟哪一段历史比的"
+        "window_end": until,
+        "note": f"同一 event_subject（{subject}）在该事件之前 {NOVELTY_LOOKBACK_DAYS} 天内"
+                f"（{since} ~ {until}）找到 {len(sims)} 条历史事件参与比对；只回看该事件"
+                "之前的报道，之后的报道不算历史。阈值未做统计标定，只抽样验证过方向正确"
                 "（同一叙事反复报道时新鲜感应明显走低）。",
     }
 
@@ -715,9 +799,20 @@ def persona_eval():
     event_meta = None   # 只有 event_id 输入路径会填充，供 Momentum/Novelty 参考指标使用
     tracker = UsageTracker()
 
+    # 请求体解析：原来这里是 request.json.get(...)，Content-Type 标了 application/json
+    # 但 body 是畸形 JSON 时，request.json 会让 Flask 直接抛 BadRequest，返回的是
+    # Flask 默认那张 HTML 400 错误页。全站其它入口（lab_tools.py 的 reweight/compare、
+    # history_tools.py）都是 silent 解析 + JSON 错误体，前端也统一按 JSON 解析响应，
+    # 拿到 HTML 只会解析失败、把真正的原因吞掉。这里统一成 silent 解析。
+    body = request.get_json(silent=True)
+    if request.is_json and not isinstance(body, dict):
+        return jsonify({"error": "请求体不是合法的 JSON 对象，请检查 JSON 格式"}), 400
+    if not isinstance(body, dict):
+        body = {}   # 非 JSON 请求（multipart/form-data 等）走 form/files 分支
+
     # 三种输入方式，按优先级取：直接文本 > 图片 > event_id（便于用库里真实新闻测试）
-    text_input = request.form.get("text") or (request.json.get("text") if request.is_json else None)
-    event_id = request.form.get("event_id") or (request.json.get("event_id") if request.is_json else None)
+    text_input = request.form.get("text") or body.get("text")
+    event_id = request.form.get("event_id") or body.get("event_id")
     image_file = request.files.get("image")
 
     try:
@@ -1170,11 +1265,17 @@ def _greedy_match(sim: np.ndarray, n_a: int, n_b: int, threshold: float) -> list
 def _build_ab_tsv(pairs_out: list[dict]) -> str:
     buf = io.StringIO()
     writer = csv.writer(buf, delimiter="\t", lineterminator="\n")
-    writer.writerow(["A序号", "A标题", "B序号(最相似)", "B标题", "相似度", "是否重合事件", "GSB判定", "判定理由"])
+    # "是否重合"是 A 条目自身的判定（与上面 overlap.matched_count 同一份结果），
+    # 和"B序号(最相似)"不是同一个口径，所以额外导出一列重合判定实际配上的 B 序号，
+    # 避免读表的人看到"重合=是、但 B 序号是另一条"时以为哪里算错了。
+    writer.writerow(["A序号", "A标题", "B序号(最相似)", "B标题", "相似度",
+                     "A是否与B组重合", "重合配对B序号", "GSB判定", "判定理由"])
     for p in pairs_out:
+        ob = p.get("overlap_b_index")
         writer.writerow([
             p["a_index"], p["a_title"], p["b_index"], p["b_title"],
             f"{p['similarity']:.3f}", "是" if p["is_overlap"] else "否",
+            "" if ob is None else ob,
             p["verdict"], p["reason"],
         ])
     return buf.getvalue()
@@ -1208,9 +1309,23 @@ def ab_compare():
         return jsonify({"error": f"质量评估失败：{e}"}), 502
 
     # ── Embedding：A+B 合并成一批一次调用 ──
+    # 这一步是整个 ab-compare 的地基：重合度、GSB 的配对全都建立在这个相似度矩阵上。
+    # 算不出来就必须当场中止——继续往下走会拿一个全零矩阵去配对，然后照常烧掉后面
+    # GSB 那次 LLM 调用（本请求里最贵的一次），产出的结论完全无意义（见 _embed_or_fail
+    # 上面的说明）。宁可让用户重试，也不要花钱买一份垃圾结论。
     try:
         texts = [_ab_embedding_text(it) for it in items_a] + [_ab_embedding_text(it) for it in items_b]
-        vectors = embed_texts(texts, get_client(), tracker)
+        vectors = _embed_or_fail(texts, tracker)
+    except EmbeddingUnavailable as e:
+        logger.error(f"ab_compare embedding unavailable, aborting before GSB: {e}")
+        return jsonify({
+            "error": f"向量计算失败，已中止本次对比：{e}",
+            "hint": "重合度与 GSB 配对都依赖这一步的相似度矩阵，算不出来就不会继续调用 "
+                    "GSB（避免白花钱得到一份无意义的结论）。请稍后重试；持续失败请检查 "
+                    "OPENAI_API_KEY 与 embeddings 上游是否可用。",
+            "cost_usd": _chat_cost_usd(tracker),      # 此前的视觉/质量评估已经花掉的钱，如实报出
+            "cost_breakdown": tracker.snapshot(),
+        }), 502
     except Exception as e:
         logger.exception("ab_compare embedding failed")
         return jsonify({"error": f"向量计算失败：{e}"}), 502
@@ -1257,11 +1372,22 @@ def ab_compare():
         verdict = v["verdict"] if v and v.get("verdict") in counts else "same"
         reason = v["reason"] if v else "（LLM 未返回该条判定，按 same 兜底）"
         counts[verdict] += 1
+        # is_overlap 必须直接取重合度那一步的判定结果，不能拿贪心匹配的结果去和
+        # 最近邻比对。两者本来就不是一回事：重合度用的是贪心一对一匹配（同一个 B
+        # 只能被一个 A 认领），GSB 用的是不受阈值限制的最近邻。当 A_i 被贪心匹配
+        # 给了 B_j、但它的最近邻是另一条 B_k 时，旧写法（matched_map.get(i) == b_index）
+        # 会在这一行显示"否"，而上面的 overlap.matched_count 已经把 A_i 算成重合了
+        # ——同一个事实在同一份响应里自相矛盾。现在统一成"这条 A 是否被判为与 B 组
+        # 重合"这一个判定，配对是哪一条另外用 overlap_b_index 说明。
+        overlap_b = matched_map.get(p["a_index"])
         pairs_out.append({
             "a_index": p["a_index"], "a_title": items_a[p["a_index"]]["title"],
             "b_index": p["b_index"], "b_title": items_b[p["b_index"]]["title"],
             "similarity": round(p["similarity"], 4),
-            "is_overlap": matched_map.get(p["a_index"]) == p["b_index"],
+            "is_overlap": overlap_b is not None,
+            # 重合判定实际配上的 B 序号；正常就等于 b_index（最近邻），
+            # 只有"最近邻已被别的 A 认领"这种情况才会不同，None 表示未判为重合。
+            "overlap_b_index": overlap_b,
             "verdict": verdict, "reason": reason,
         })
     total_judged = sum(counts.values()) or 1

@@ -61,8 +61,12 @@ BEGIN
             -- -1(极度利空) ~ +1(极度利多)，符号与 sentiment 一致，绝对值是强度
             ADD COLUMN sentiment_score FLOAT DEFAULT NULL,
             -- [{"sector":"MEME","relevance":0.9,"anchor":"PNUT"}, ...]
-            -- 「真相关才打」的量化：relevance < 0.6 的不会进 sectors 列，
-            -- 但仍保留在这里供调阈值和 badcase 复盘
+            -- 「真相关才打」的量化：relevance < 0.55 的不会进 sectors 列，
+            -- 但仍保留在这里供调阈值和 badcase 复盘。
+            -- 0.55 是唯一正确的数字，以 pipeline.SECTOR_PUBLISH_THRESHOLD 为准
+            -- （这里原来写的 0.6 是笔误）。阈值漂移在本项目吃过大亏——去重那次
+            -- 文档写 0.65、实测该取 0.82，照文档配就废掉了整层去重，所以只要
+            -- 看到两处阈值对不上，一律以代码常量为准并回来订正注释。
             ADD COLUMN sector_relevance JSON,
             -- immediate(<24h) / short_term(1-7d) / medium_term(1-4w) / long_term(>1m)
             -- 市场影响兑现的时间尺度，推荐流做「时效性 vs 重要性」权衡时用

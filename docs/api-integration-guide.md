@@ -8,14 +8,58 @@
 
 | 项 | 值 |
 |---|---|
-| Base URL | `http://34.138.247.158:8080` |
-| 协议 | **HTTP**（非 HTTPS，见下方「已知限制」） |
-| 鉴权 | HTTP Header：`Authorization: Bearer ***REMOVED***` |
+| Base URL（HTTPS，推荐分享用） | `https://currencies-granted-delight-lou.trycloudflare.com` |
+| Base URL（HTTP 直连，稳定不变） | `http://34.138.247.158:8080` |
+| 协议 | HTTPS 走 Cloudflare Tunnel（证书有效，任何人可直接打开）；HTTP 为 VM 直连 |
+| 鉴权 | HTTP Header：`Authorization: Bearer <你的 token>`；也支持 `?token=<你的 token>` 查询参数，见下方「鉴权」 |
 | 响应格式 | JSON，UTF-8 |
 | 实测延迟 | 约 0.55s（含跨境网络往返） |
 | 数据更新频率 | **每 12 小时**（cron 于 UTC 0/12 点整触发，单轮约 19 分钟；免费信源另有 2 小时级高频存档，处理仍按 12h 批量） |
 
 无鉴权或 token 错误返回 `401 {"error": "Unauthorized"}`。
+
+> **HTTPS 地址说明（2026-07-26）**：GCP 防火墙只放行了 8080 端口（VM 的服务账号
+> 无权改防火墙规则），Let's Encrypt 无法验证 80/443，所以 HTTPS 走 Cloudflare
+> quick tunnel（VM 上的 `b9-https-tunnel` systemd 服务，纯出站连接，开机自启）。
+> 代价：**隧道进程重启后子域名会变**。取当前有效地址：
+> `ssh manus-vm "sudo journalctl -u b9-https-tunnel | grep -oE 'https://[a-z0-9-]+\.trycloudflare\.com' | tail -1"`
+> 要固定的自定义域名（如 lawrence-b9-strategy-hub.xxx），两条升级路径见
+> OPEN_QUESTIONS —— 需要 Lawrence 二选一。
+
+### 鉴权
+
+**当前有 6 个等效的有效 token**（`api/server.py` 的 `VALID_API_KEYS`）：1 个早期的
+`API_SECRET_KEY`（就是本文档示例里用的那个，为向下兼容保留），加 2026-07-26 新发的
+5 个分发用 token（`lawrence` / `team-a` / `team-b` / `partner-1` / `partner-2`），
+每个对接方各持一个，出问题时可以**单独吊销一个而不影响其他人**。请使用发给你的那个
+token，不要转用文档示例里的那个。全部 token 都可以用环境变量覆盖（改
+`config/.env` 后重启服务即可轮换）。
+
+> ⚠️ 这 6 个 token **权限完全相同**，只是身份标签不同，没有做分级授权与速率限制。
+
+传 token 有两种方式，服务端等价（先看 Header，为空才看查询参数）：
+
+**方式 1：请求头（程序化调用一律用这个）**
+
+```bash
+curl -s "http://34.138.247.158:8080/api/news?limit=5" \
+  -H "Authorization: Bearer <你的 token>"
+```
+
+**方式 2：`?token=` 查询参数（只为"浏览器里直接点开就能看数据"这一个场景存在）**
+
+```
+http://34.138.247.158:8080/api/news?limit=5&token=<你的 token>
+```
+
+浏览器地址栏发不出自定义请求头，非技术同事要看数据只能走这条路。**代价是 token
+会被完整记录进浏览器历史、服务器访问日志、以及任何中间代理的日志里**，还容易随手
+复制粘贴到聊天工具里扩散出去。因此：
+
+- 仅限**内部可信网络**内的人工临时查看；
+- 不要把带 token 的 URL 写进代码、脚本、书签同步或工单系统；
+- 程序化接入一律用方式 1；
+- 如果某个 `?token=` 链接已经外泄，直接轮换对应的那一个 token 即可，其他对接方不受影响。
 
 ### 最小验证
 
@@ -244,7 +288,7 @@ for event in fetch_macro_feed(10):
 ## 五、已知限制
 
 1. **HTTP 明文，无 TLS**。token 与响应内容在传输中可被窃听。生产接入前建议加 HTTPS（Caddy/Nginx 反代 + Let's Encrypt）。
-2. **单一静态 token，无分级权限、无速率限制**。任何拿到 token 的人可读取全部数据。
+2. **静态 token，无分级权限、无速率限制**。当前 6 个 token（1 个 legacy + 5 个分发用，见「一、基本信息 § 鉴权」）权限完全相同，任何拿到其中任意一个的人都可读取全部数据；区别只在于可以单独吊销。另外支持 `?token=` 查询参数传值，方便浏览器直接打开，但 token 会落进浏览器历史与访问日志，仅供内部可信网络使用。
 3. **单实例无高可用**，systemd 管理（`crypto-news-api.service`）。VM 重启后 RSSHub 容器偶尔不自启，需 `docker start rsshub`。
 4. **`event_tier` 与 `sector` 只支持单值**，多值筛选需多次请求后自行合并。
 5. **无 WebSocket / 推送**，只能轮询。数据每 12 小时更新一次，轮询频率高于此没有意义。

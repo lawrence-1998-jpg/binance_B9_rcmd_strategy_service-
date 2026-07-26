@@ -289,3 +289,24 @@ C/D ≤80字）。gpt-5.4 对这个分档指令服从得很好——D 档新闻�
   compare 空池 200 带 error、liquidation 升级豁免量纲、状态表 NOW() 时区、
   backfill 稀疏日期窗、008 迁移不幂等、003/005 注释张冠李戴、RUMOR_LOG 与
   default_tracker 无人使用）——已留档，按"顺手清理"节奏处理，不单独排期。
+
+---
+
+## 8. HTTPS 网址的两条升级路径（需要你二选一，当前方案已可用）
+
+现状：`https://currencies-granted-delight-lou.trycloudflare.com` 已上线（任何人
+可打开、证书有效），但**子域名是随机的，且隧道重启后会变**。你想要的
+`lawrence-b9-strategy-hub` 这种固定好名字，需要下面二选一：
+
+**路径 A（免费，10分钟）**：你在 GCP 控制台给这台 VM 加一条防火墙规则放行
+80/443（VM 的服务账号权限不够，我改不了）。开通后我用 sslip.io + Caddy 把
+地址做成 `https://lawrence-b9-strategy-hub.34-138-247-158.sslip.io`——固定、
+带你要的名字、Let's Encrypt 真证书。缺点：域名尾巴带 IP，不算漂亮。
+
+**路径 B（约 $10/年，最正规）**：买一个域名（比如 b9hub.com 之类），DNS 托管到
+Cloudflare 免费版，我把现有隧道升级成命名隧道绑上去——地址就是
+`https://你的域名`，固定、干净、且**依然不需要动 GCP 防火墙**。
+
+我的推荐：**路径 B**。域名钱很少，效果最正规，而且命名隧道比 quick tunnel
+稳定（官方支持生产使用）。你买好域名把注册商登录方式给我（或自己把 DNS 指到
+Cloudflare 后给我 API token），剩下我来。

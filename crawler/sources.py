@@ -56,8 +56,14 @@ RSS_SOURCES_P2 = [
     ("https://cryptoslate.com/feed/",      "CryptoSlate",    "en", 3),
     ("https://news.bitcoin.com/feed/",     "Bitcoin.com",    "en", 3),
     ("https://coinjournal.net/feed/",      "CoinJournal",    "en", 3),
-    ("https://bitcoinist.com/feed/",       "Bitcoinist",     "en", 3),
-    ("https://www.newsbtc.com/feed/",      "NewsBTC",        "en", 3),
+    # Bitcoinist 已除名（2026-07-26 裁决）：它同时出现在 web_search 的内容农场
+    # 黑名单里，两个口径打架。用两份证据统一成"不收"：①库内实测 8 条事件
+    # 0 条 VERIFIED、7 条 UNVERIFIED、6 条孤证，质量分 0.609 全场垫底——它的
+    # 独有贡献基本都是无从佐证的孤证软文；②外部核查（Ground News 评级
+    # "factuality unknown"，赞助内容与编辑内容区分不清）。当初收它是因为
+    # 覆盖率测试里它贡献 6 条协议治理漏召，但那类内容 Blockworks/TheDefiant
+    # 等也覆盖，不值得为此吞下软文风险。
+    ("https://www.newsbtc.com/feed/",      "NewsBTC",        "en", 2),
     ("https://cryptobriefing.com/feed/",   "CryptoBriefing", "en", 3),
     ("https://ambcrypto.com/feed/",        "AMBCrypto",      "en", 3),
     ("https://u.today/rss",                "U.Today",        "en", 3),

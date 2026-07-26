@@ -699,10 +699,10 @@ footer{border-top:1px solid var(--rule);padding:26px 0 40px;font-size:12px;color
 #panel-4 .btn.primary:hover:not(:disabled){background:#FFC91C;border-color:#FFC91C}
 #panel-4 .btn.small{padding:6px 12px;font-size:12px}
 
-#panel-4 .progress-wrap{margin-top:16px;display:none}
-#panel-4 .progress-wrap.active{display:block}
-#panel-4 .progress-bar{height:6px;border-radius:4px;background:var(--ev-bg-3);overflow:hidden}
-#panel-4 .progress-bar .fill{height:100%;background:linear-gradient(90deg,var(--ev-gold-bright),var(--ev-gold));width:0%;transition:width .3s ease;border-radius:4px}
+/* 注意 .progress-tx 还在用（三个子工具 spinner 旁边的状态文案）；
+   配套的 .progress-wrap / .progress-bar / .fill 是从 eval.html 搬过来时带的
+   进度条残留，Duplicate Tester 实际用的是 spinner 而不是百分比进度条，
+   那几个 id 从来没有 JS 引用过，已连同 DOM 一起删掉 */
 #panel-4 .progress-tx{font-size:12px;color:var(--ev-tx-3);margin-top:8px;font-family:var(--mono)}
 
 #panel-4 .kpi-row{display:flex;gap:12px;flex-wrap:wrap;margin:20px 0}
@@ -1582,10 +1582,6 @@ footer{border-top:1px solid var(--rule);padding:26px 0 40px;font-size:12px;color
           <button class="btn primary" id="runDedupBtn" disabled>开始检测</button>
           <span id="dedupSpinnerWrap" style="display:none" class="pc-score-row"><span class="spinner"></span><span class="progress-tx" id="dedupSpinnerTx">处理中…</span></span>
         </div>
-        <div class="progress-wrap" id="dedupProgressWrap">
-          <div class="progress-bar"><div class="fill" id="dedupProgressFill"></div></div>
-          <div class="progress-tx" id="dedupProgressTx"></div>
-        </div>
         <div id="dedupError"></div>
       </div>
 
@@ -1956,15 +1952,28 @@ function apiGet(path, params, timeoutMs){
     throw e;
   });
 }
+/* 并发池：跑完所有 task 后整体 resolve；只要有一个失败就整体 reject。
+   这里原来是把失败的 task 吞成 out[idx]=null，pool 永远不会 reject——后果是
+   Tab1 的级别/类型/校验三个分布，在 API 不可达或 401 时会走进成功分支，调用方
+   的 v[i]||0 把「没取到」直接当成 0 画出来，页面显示一片全 0 的假数据，用户会
+   以为库里真的没数据；而下面挂的 .catch(errState) 因为 pool 不 reject 根本不可达。
+   宁可整块报错，也不能把取数失败伪装成统计结果。 */
 function pool(tasks,size){
-  var out=new Array(tasks.length), i=0;
+  var out=new Array(tasks.length), i=0, firstErr=null;
   function next(){
     if(i>=tasks.length) return Promise.resolve();
     var idx=i++;
-    return tasks[idx]().then(function(v){out[idx]=v;},function(){out[idx]=null;}).then(next);
+    return tasks[idx]().then(function(v){out[idx]=v;},function(e){
+      /* 只留第一个错误：并发批次里后面的失败基本是同一个根因（服务不可达 / 401），
+         报第一个足够定位，也免得 errState 里堆一串重复文案 */
+      if(!firstErr) firstErr=(e&&e.message)?e:new Error(String(e));
+    }).then(next);
   }
   var rs=[]; for(var k=0;k<Math.min(size,tasks.length);k++) rs.push(next());
-  return Promise.all(rs).then(function(){return out;});
+  return Promise.all(rs).then(function(){
+    if(firstErr) throw firstErr;
+    return out;
+  });
 }
 function errState(msg, retry){
   var d=document.createElement("div");
@@ -2240,16 +2249,12 @@ function loadHealth(){
    ══════════════════════════════════════════════════════════════════════ */
 function countOf(p){
   return apiGet("/api/news",Object.assign({limit:1},p)).then(function(d){
-    return (d&&d.meta&&typeof d.meta.total==="number")?d.meta.total:null;
+    /* /api/news 正常返回一定带 meta.total（server.py 里是写死的），拿不到就说明
+       响应体不是预期结构。原来这里 return null，上层 v[i]||0 会把它渲染成 0 ——
+       同样是把「没取到」伪装成「真的是 0」，所以改成抛错，交给 errState */
+    if(!(d&&d.meta&&typeof d.meta.total==="number")) throw new Error("响应缺少 meta.total，接口返回结构异常");
+    return d.meta.total;
   });
-}
-function distHtml(rows,total,colorFn){
-  return rows.map(function(r){
-    var w=Math.max(1,Math.round(r.v/total*100));
-    return '<div class="distrow"><div class="dn">'+r.label+'</div>'+
-      '<div class="bar"><i style="width:'+w+'%;background:'+(colorFn?colorFn(r):"var(--gold)")+'"></i></div>'+
-      '<div class="dv">'+nf(r.v)+' · '+(r.v/total*100).toFixed(1)+'%</div></div>';
-  }).join("");
 }
 function loadFlow(){
   $("#sectorChips").innerHTML=SECTORS.map(function(s){return '<span class="chip">'+esc(s)+'</span>';}).join("");
@@ -2315,7 +2320,7 @@ function loadFlow(){
         '<div class="bar"><i style="width:'+w+'%;background:'+r.c+'"></i></div>'+
         '<div class="dv">'+nf(r.v)+' · '+(r.v/total*100).toFixed(1)+'%</div></div>';
     }).join("");
-  }).catch(function(e){ $("#tierList").innerHTML=""; $("#tierList").appendChild(errState(e.message)); });
+  }).catch(function(e){ $("#tierList").innerHTML=""; $("#tierList").appendChild(errState("级别分布数据加载失败，请检查 API 连接 · "+e.message)); });
 
   pool(TYPES.map(function(t){return function(){return countOf({news_type:t.k});};}),3).then(function(v){
     var rows=TYPES.map(function(t,i){return {label:'<span class="mono" style="color:var(--gold-deep);font-size:11.5px">'+t.k+'</span> <span style="color:var(--ink-4);font-size:11.5px">'+t.n+'</span>',v:v[i]||0};})
@@ -2327,7 +2332,7 @@ function loadFlow(){
         '<div class="bar ind"><i style="width:'+w+'%"></i></div>'+
         '<div class="dv">'+nf(r.v)+' · '+(r.v/total*100).toFixed(1)+'%</div></div>';
     }).join("");
-  }).catch(function(e){ $("#typeList").innerHTML=""; $("#typeList").appendChild(errState(e.message)); });
+  }).catch(function(e){ $("#typeList").innerHTML=""; $("#typeList").appendChild(errState("类型分布数据加载失败，请检查 API 连接 · "+e.message)); });
 
   loadVerification();
 }
@@ -2339,9 +2344,10 @@ function loadVerification(){
     var sample=(d&&d.data&&d.data[0])||{};
     var live = ("verification_status" in sample);
     if(!live) return null;
+    /* 这里原来是自己手写一遍 apiGet + (r.meta.total)||0，同样会把取数失败变成 0；
+       直接复用 countOf（语义完全一致），失败就抛错走下面的 errState */
     return pool(VERIFY.map(function(x){
-      return function(){ return apiGet("/api/news",{limit:1,verification_status:x.k}).then(function(r){
-        return (r&&r.meta&&r.meta.total)||0; }); };
+      return function(){ return countOf({verification_status:x.k}); };
     }),3);
   }).then(function(vals){
     var rows, total, live=!!vals, note;
@@ -2367,7 +2373,7 @@ function loadVerification(){
     var pass=rows.filter(function(r){return r.k==="VERIFIED"||r.k==="PROBABLE";})
                  .reduce(function(a,b){return a+b.v;},0);
     $("#k-verify").innerHTML=(pass/total*100).toFixed(1)+'<span class="u">%</span>';
-  }).catch(function(e){ box.innerHTML=""; box.appendChild(errState(e.message)); });
+  }).catch(function(e){ box.innerHTML=""; box.appendChild(errState("校验分布数据加载失败，请检查 API 连接 · "+e.message)); });
 }
 
 /* ══════════════════════════════════════════════════════════════════════
@@ -3317,7 +3323,10 @@ function renderEvalResults(body){
 // ══════════════════════════════════════════════════════════════════
 // AB 对比（新增）
 // ══════════════════════════════════════════════════════════════════
+// 这两个上限必须和后端 api/eval_tools.py 的 MAX_AB_ITEMS_PER_GROUP /
+// MAX_AB_IMAGES_PER_GROUP 保持一致，改一边记得改另一边。
 const AB_MAX_ITEMS = 30;
+const AB_MAX_IMAGES = 10;
 const abState = {
   a: { mode: 'db', files: [] },
   b: { mode: 'db', files: [] },
@@ -3388,13 +3397,21 @@ function updateAbCountPill(group, text){
   document.getElementById('ab' + group.toUpperCase() + 'CountPill').textContent = text;
 }
 
+/* 条数 clamp 抽成函数，让「预览」和「正式提交」共用同一份。
+   以前只有预览这条路 clamp 到 30，正式提交是把输入框原文直接塞进 FormData
+   （见 buildAbFormDataForGroup），于是出现「预览按 20 条筛，实际按输入的 500 跑」
+   这种前后不一致 —— 而条数直接决定 GSB 那次调用的 token 量和本次成本。 */
+function abLimitOf(group){
+  const raw = document.getElementById('ab' + group.toUpperCase() + 'Limit').value;
+  return Math.max(1, Math.min(Number(raw) || 20, AB_MAX_ITEMS));
+}
+
 function fillAbFromDb(group){
   const GROUP = group.toUpperCase();
   const statusEl = document.getElementById('ab' + GROUP + 'FillStatus');
   const sector = document.getElementById('ab' + GROUP + 'Sector').value;
   const sort = document.getElementById('ab' + GROUP + 'Sort').value;
-  const limitRaw = document.getElementById('ab' + GROUP + 'Limit').value;
-  const limit = Math.max(1, Math.min(Number(limitRaw) || 20, AB_MAX_ITEMS));
+  const limit = abLimitOf(group);
   const dateFrom = document.getElementById('ab' + GROUP + 'DateFrom').value;
   const dateTo = document.getElementById('ab' + GROUP + 'DateTo').value;
   const params = { sector, sort, limit };
@@ -3426,7 +3443,7 @@ function buildAbFormDataForGroup(fd, group){
   if (mode === 'db'){
     fd.append('group_' + group + '_sector', document.getElementById('ab' + GROUP + 'Sector').value);
     fd.append('group_' + group + '_sort', document.getElementById('ab' + GROUP + 'Sort').value);
-    fd.append('group_' + group + '_limit', document.getElementById('ab' + GROUP + 'Limit').value || '20');
+    fd.append('group_' + group + '_limit', String(abLimitOf(group)));
     const df = document.getElementById('ab' + GROUP + 'DateFrom').value;
     const dt = document.getElementById('ab' + GROUP + 'DateTo').value;
     if (df) fd.append('group_' + group + '_date_from', df);
@@ -3436,6 +3453,37 @@ function buildAbFormDataForGroup(fd, group){
   } else if (mode === 'image'){
     abState[group].files.forEach(f => fd.append('group_' + group + '_images', f, f.name));
   }
+}
+
+/* 提交前的输入校验。以前点「运行 AB 对比」是直接 buildFormData → POST，
+   前端一行校验都没有：
+     · 粘贴文本框空着 / 选了上传截图但一张没传，都要等后端 400 才知道；
+     · UI 上写着「最多 10 张」，实际拖 30 张进去照样发（每张一次视觉调用，
+       后端会 400 拒掉，但用户已经等了一次上传）；
+   而且 track('tool_run') 打在发请求之前，这些注定失败的点击也被记成一次工具
+   使用，污染 Tab 06 的使用统计。所以校验前置，不过就不发请求也不打埋点。
+   db 模式的「查出来是空的」前端无法预判（后端才查库），仍由后端返回 400。 */
+function validateAbInput(){
+  const errs = [];
+  ['a', 'b'].forEach(g => {
+    const GROUP = g.toUpperCase();
+    const tag = GROUP + ' 组';
+    const mode = abState[g].mode;
+    if (mode === 'text'){
+      if (!(document.getElementById('ab' + GROUP + 'Text').value || '').trim()){
+        errs.push(tag + '选择了「粘贴文本」但内容为空');
+      }
+    } else if (mode === 'image'){
+      const n = abState[g].files.length;
+      if (!n){
+        errs.push(tag + '选择了「上传截图」但没有添加图片');
+      } else if (n > AB_MAX_IMAGES){
+        // 不做静默截断：截断会让用户以为对比了全部截图，其实只看了前 10 张
+        errs.push(tag + '已添加 ' + n + ' 张截图，超过上限 ' + AB_MAX_IMAGES + ' 张，请删掉多余的再运行');
+      }
+    }
+  });
+  return errs;
 }
 
 function verdictPill(v){
@@ -3525,6 +3573,14 @@ function renderAbResults(body){
 }
 
 document.getElementById('abRunBtn').addEventListener('click', async () => {
+  const errs = validateAbInput();
+  if (errs.length){
+    document.getElementById('abError').innerHTML =
+      `<div class="err-box">${escapeHtml(errs.join('；'))}</div>`;
+    document.getElementById('abResults').innerHTML = '';
+    return;   // 校验没过：不发请求、不打埋点
+  }
+
   const fd = new FormData();
   buildAbFormDataForGroup(fd, 'a');
   buildAbFormDataForGroup(fd, 'b');

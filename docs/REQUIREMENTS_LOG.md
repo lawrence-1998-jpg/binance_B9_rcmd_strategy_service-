@@ -1,5 +1,29 @@
 # 原始需求留痕（按时间倒序）
 
+## 2026-07-26（傍晚，成本事故响应 + 决策批复 + HTTPS）
+
+> 我又买了10USD 你省着用……
+
+> （X 账单截图：单日 Post cost $14.88，Credit remaining $-0.11，按 Post 条数计费）
+> 是按用量收费的   不影响效果的时候少用一点
+
+> 搜索不要全砍。还是要保障一搜能出来的新闻。我们要cover
+
+> x有给一个mcp （https://docs.x.com/tools/mcp / https://api.x.com/mcp）
+
+> 现在好几个事情，麻烦你努力并行做。改https网站。能不能把这个网站弄成一个 常规的 网址，比如 lawrence_b9_strategy_hub
+
+同批决策批复（对 OPEN_QUESTIONS 的逐条回复）：
+> bitcoinist/newsbtc 口径冲突 —— 你去帮忙做点research。然后你定
+> Momentum/Novelty 进生产排序公式 —— 不要
+> DC-4 72h 归并窗问题 —— 可以（单独排一次带验证的改动）
+> X 条目跨轮重复进 LLM（OpenAI 结果回写缓存）—— 要的 现在就做
+> 前端三处小问题 —— 改
+> eval_tools embedding 故障静默 —— 改
+> 其余 LOW 级 —— 改
+
+---
+
 ## 2026-07-26（下午，Fable max 四项批量需求）
 
 > 我切换到fabel最好模型。请完成：
