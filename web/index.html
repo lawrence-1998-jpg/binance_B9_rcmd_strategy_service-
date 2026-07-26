@@ -127,8 +127,36 @@ main{padding:38px 0 90px}
   content:"";position:absolute;left:0;right:0;bottom:.1em;height:.30em;
   background:var(--gold);opacity:.32;border-radius:2px;z-index:-1;
 }
+/* 单行标题：默认那条 max-width:19ch 是为两行标题定的，会把这句强行折行。
+   字号用 clamp 收窄，桌面宽度下能一行放下 ~25 个汉字宽；窄屏自然折行。 */
+.hero h1.h1-oneline{
+  font-size:clamp(22px,2.75vw,44px);
+  max-width:none;
+  letter-spacing:-.03em;
+}
 .hero .lede{font-size:15.5px;color:var(--ink-2);max-width:70ch;line-height:1.78}
 .hero .lede b{color:var(--ink);font-weight:600}
+
+/* ── 业务价值：三条圆角小栏，轻量突出，不跟 hero 标题抢视线 ── */
+.bizval{margin-top:26px}
+.bizval-k{
+  display:block;font-family:var(--mono);font-size:10.5px;font-weight:600;
+  letter-spacing:.16em;text-transform:uppercase;color:var(--a700);margin-bottom:10px;
+}
+.bizval-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px;max-width:78ch}
+.bizval-list li{
+  display:flex;align-items:center;gap:12px;
+  background:var(--n100);border:1px solid var(--n300);border-radius:999px;
+  padding:10px 20px;font-size:14px;color:var(--ink-2);line-height:1.5;
+}
+.bizval-list li b{color:var(--ink);font-weight:650}
+.bizval-n{
+  font-family:var(--mono);font-size:11px;font-weight:700;color:var(--a600);
+  flex:none;letter-spacing:.04em;
+}
+@media(max-width:600px){
+  .bizval-list li{border-radius:16px;align-items:flex-start;padding:10px 16px}
+}
 
 /* ── Stat ───────────────────────────────────────────────────────────── */
 .stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:0;border-top:1px solid var(--rule)}
@@ -1381,12 +1409,21 @@ footer{border-top:1px solid var(--rule);padding:26px 0 40px;font-size:12px;color
 
   <div class="hero">
     <span class="kicker"><span class="dot ok"></span>Production · 每日 2 次自动运行</span>
-    <h1>从全网噪音里，<em>提炼出可排序的事件</em></h1>
+    <h1 class="h1-oneline">策略 API 服务：全网 crypto 新闻事件<em>挖掘、理解、排序</em></h1>
     <p class="lede">
       七类渠道并行抓取加密货币、美股与高相关科技新闻，用 <b>gpt-5.4</b> 结构化成标准事件，
       用 <b>text-embedding-3-small</b> 做语义去重，再经真实性校验与<b>五因子重要性打分</b>，
       最终以两条分支输出给下游推荐场景。
     </p>
+
+    <div class="bizval">
+      <span class="bizval-k">业务价值</span>
+      <ol class="bizval-list">
+        <li><span class="bizval-n">01</span><span>作为对比 <b>baseline</b>，定量评估新闻类内容策略的<b>召回率</b>与<b>首发率</b></span></li>
+        <li><span class="bizval-n">02</span><span>特殊测试阶段作为<b>新闻事件补召 API</b></span></li>
+        <li><span class="bizval-n">03</span><span><b>运营监控</b></span></li>
+      </ol>
+    </div>
   </div>
 
   <div class="stats section" id="statRow">
@@ -2054,7 +2091,7 @@ footer{border-top:1px solid var(--rule);padding:26px 0 40px;font-size:12px;color
   <div class="contact section">
     <div class="ic">!</div>
     <div class="tx">
-      <b>if you are a developer, please reach out to the maintainer for an API secret</b>
+      <b>if you are a developer, please reach out to lawrence zhu for an API secret</b>
       <span>本页所有示例中的 <code>YOUR_API_SECRET</code> 均为占位符。取得 secret 后填入下方输入框，即可直接点开链接或在页内发起真实请求。</span>
     </div>
   </div>
@@ -2659,8 +2696,8 @@ footer{border-top:1px solid var(--rule);padding:26px 0 40px;font-size:12px;color
       <div class="p7-notice">
         <span class="p7-bang" aria-hidden="true">!</span>
         <span>
-          <span class="p7-notice-en">if you are a developer, please reach out to the maintainer for code access</span>
-          <span class="p7-notice-zh">仓库为内部私有，需要读代码、跑本地流水线或申请 API secret 的同学，请联系仓库维护者开权限。</span>
+          <span class="p7-notice-en">if you are a developer, please reach out to lawrence zhu for code access</span>
+          <span class="p7-notice-zh">仓库为内部私有，需要读代码、跑本地流水线或申请 API secret 的同学，请联系 lawrence zhu 开权限。</span>
         </span>
       </div>
     </div>
