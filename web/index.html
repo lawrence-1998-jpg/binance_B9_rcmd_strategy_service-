@@ -5,52 +5,26 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Lawrence Crypto News Crawler · B9 新闻数据服务</title>
 <meta name="description" content="Binance B9 内容推荐模块的新闻数据底座 —— 全网抓取、AI 结构化、语义去重、真实性校验与重要性打分，对外提供 REST API。">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Caprasimo&family=Figtree:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/assets/app.css">
 <style>
 /* ══════════════════════════════════════════════════════════════════════
    Lawrence Crypto News Crawler — 浅色主题设计系统
    注：共享样式表 web/assets/app.css 由 coordinator 统一抽取，此处先内联。
    ══════════════════════════════════════════════════════════════════════ */
 :root{
-  /* 纸感暖白，避免纯白在投影上刺眼 */
-  --paper:#FBFAF7;
-  --surface:#FFFFFF;
-  --surface-2:#F6F5F1;
-  --surface-3:#EFEEE9;
+  /* ── 2026-07-26 设计改版 ────────────────────────────────────────────
+     配色 token 已全部迁到共享的 web/assets/app.css（Organic 设计系统：
+     暖米底 + 赤陶强调 + 鼠尾草次强调）。这里**不再定义任何色值**，只保留
+     本页独有的圆角/阴影/字体等非配色 token。
 
-  --ink:#12141A;
-  --ink-2:#3B414D;
-  --ink-3:#6B7280;
-  --ink-4:#9AA1AE;
-
-  --rule:#E4E3DD;
-  --rule-2:#EFEEE9;
-
-  /* 品牌金：填充用 #F0B90B，文字用加深版保证对比度 */
-  --gold:#F0B90B;
-  --gold-deep:#8A6200;
-  --gold-wash:#FDF6E1;
-  --gold-line:#EBD9A0;
-
-  --indigo:#3A4A8F;
-  --indigo-wash:#EEF0F9;
-  --indigo-line:#C9CFE8;
-
-  --green:#0B7A4B;
-  --green-wash:#E8F5EE;
-  --red:#B4243C;
-  --red-wash:#FCEDEF;
-  --slate:#5A6472;
-  --slate-wash:#EEF0F2;
-
-  --sidenav-w:238px;
-
+     为什么不直接删掉这个块：本文件里还有上千处引用 --ink-3 / --rule /
+     --gold-wash 这类旧变量名。app.css 已经把它们做成了新 token 的语义别名，
+     所以旧代码自动继承新配色，不用逐处改——这是把改动面压到最小的做法。
+     ── */
   --r:10px; --r-lg:16px;
-  --shadow-sm:0 1px 2px rgba(18,20,26,.05);
-  --shadow:0 1px 3px rgba(18,20,26,.06), 0 12px 28px -18px rgba(18,20,26,.22);
-  --shadow-lg:0 2px 6px rgba(18,20,26,.06), 0 24px 60px -28px rgba(18,20,26,.30);
-
-  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
-  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
 }
 *,*::before,*::after{box-sizing:border-box}
 html{-webkit-text-size-adjust:100%}
@@ -58,7 +32,6 @@ body{
   margin:0;background:var(--paper);color:var(--ink);font-family:var(--sans);
   font-size:14.5px;line-height:1.62;-webkit-font-smoothing:antialiased;
   text-rendering:optimizeLegibility;overflow-x:hidden;
-  padding-left:var(--sidenav-w);   /* 给固定侧边导航栏让位，窄屏在媒体查询里归零 */
 }
 h1,h2,h3,h4{margin:0;font-weight:600;line-height:1.22;letter-spacing:-.018em}
 p{margin:0}
@@ -112,97 +85,12 @@ header{
 .dot.bad{background:var(--red);box-shadow:0 0 0 3px rgba(180,36,60,.14)}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
 
-/* ── 侧边导航 ───────────────────────────────────────────────────────────
-   `nav.tabs` 及其 .tab 按钮的 id / role / aria-controls / aria-selected 全部
-   保持不变，只是从顶部横排改成左侧竖排 —— showTab()、键盘 1-5 快捷键、
-   hash 路由那套 JS 因此一行都不用改，仍然靠 `.tab[role=tab]` 选中。 */
-.sidenav{
-  position:fixed;left:0;top:0;bottom:0;width:var(--sidenav-w);z-index:80;
-  background:var(--surface);border-right:1px solid var(--rule);
-  display:flex;flex-direction:column;overflow-y:auto;overscroll-behavior:contain;
-  /* 图层提升：整屏高的 position:fixed 元素如果不单独成层，页面每滚动一帧
-     都要连带重绘它，在部分机器上表现为画面闪烁/撕裂。translateZ(0) 把它
-     交给合成器独立处理，滚动时不再触发重绘。contain 进一步告诉浏览器
-     侧栏内部的布局/绘制不会影响外部，缩小失效范围。 */
-  transform:translateZ(0);
-  contain:layout paint;
-}
-.sn-brand{
-  display:flex;align-items:center;gap:11px;padding:17px 16px 15px;
-  border-bottom:1px solid var(--rule-2);flex:none;
-}
-.sn-brand .mark{width:28px;height:28px;flex:none}
-.sn-brand .n{font-size:13px;font-weight:650;letter-spacing:-.025em;line-height:1.32}
-.sn-brand .n b{color:var(--gold-deep);font-weight:650}
-.sn-brand .s{font-size:9px;color:var(--ink-4);letter-spacing:.08em;font-family:var(--mono);margin-top:3px}
-
-nav.tabs{display:flex;flex-direction:column;gap:1px;padding:8px 10px 16px;flex:1 1 auto}
-/* 分组标题：把导航分成「对外交付的数据服务」和「内部用的策略工作台」两层语义 */
-.sn-group{
-  padding:14px 14px 6px;font-family:var(--mono);font-size:9px;font-weight:700;
-  letter-spacing:.11em;color:var(--ink-4);
-}
-.tab{
-  position:relative;background:none;border:0;width:100%;text-align:left;
-  padding:9px 12px 9px 14px;border-radius:8px;
-  color:var(--ink-3);font-size:13.5px;font-weight:520;
-  display:flex;align-items:center;gap:9px;text-decoration:none;
-  transition:background .15s,color .15s;
-}
-.tab .idx{font-family:var(--mono);font-size:10px;color:var(--ink-4);letter-spacing:.06em;flex:none}
-.tab:hover{color:var(--ink);background:var(--surface-2);text-decoration:none}
-.tab[aria-selected="true"]{color:var(--ink);font-weight:600;background:var(--gold-wash)}
-.tab[aria-selected="true"] .idx{color:var(--gold-deep)}
-.tab::after{
-  content:"";position:absolute;left:0;top:7px;bottom:7px;width:3px;border-radius:0 3px 3px 0;
-  background:var(--gold);transform:scaleY(0);
-  transition:transform .2s cubic-bezier(.4,0,.2,1);
-}
-.tab[aria-selected="true"]::after{transform:scaleY(1)}
-.tab.ext{color:var(--ink-4)}
-.tab.ext .arw{font-size:10px;opacity:.7;margin-left:auto}
-.tab.ext:hover{color:var(--ink-2)}
-.navsep{height:1px;width:auto;background:var(--rule-2);margin:9px 12px;flex:none}
-
-/* 二级导航：评测工具的三个子工具。点了直接转发给已有的 #stab-N 按钮，
-   不复制一份子 tab 切换逻辑，避免两处状态各走各的。 */
-.sn-sub{display:none;flex-direction:column;gap:1px;margin:1px 0 3px}
-.sn-sub.show{display:flex}
-.sn-subitem{
-  position:relative;background:none;border:0;width:100%;text-align:left;
-  padding:6px 12px 6px 36px;border-radius:7px;
-  color:var(--ink-4);font-size:12.5px;transition:background .15s,color .15s;
-}
-.sn-subitem::before{
-  content:"";position:absolute;left:24px;top:50%;width:4px;height:4px;margin-top:-2px;
-  border-radius:50%;background:var(--rule);transition:background .15s;
-}
-.sn-subitem:hover{color:var(--ink-2);background:var(--surface-2)}
-.sn-subitem[aria-current="true"]{color:var(--ink-2);font-weight:560}
-.sn-subitem[aria-current="true"]::before{background:var(--gold)}
-
-/* 汉堡按钮 + 遮罩：只在窄屏出现 */
-.navtoggle{
-  display:none;background:var(--surface);border:1px solid var(--rule);border-radius:9px;
-  width:34px;height:34px;align-items:center;justify-content:center;
-  color:var(--ink-2);box-shadow:var(--shadow-sm);flex:none;
-}
-.navtoggle:hover{color:var(--ink);background:var(--surface-2)}
-.sn-backdrop{position:fixed;inset:0;z-index:79;background:rgba(18,20,26,.34);display:none}
-.sn-backdrop.show{display:block}
-.hbrand{display:none}
-
 main{padding:38px 0 90px}
 
 @media (max-width:1080px){
-  body{padding-left:0}
-  .sidenav{
-    transform:translateX(-100%);box-shadow:var(--shadow-lg);
-    transition:transform .24s cubic-bezier(.4,0,.2,1);
-  }
-  .sidenav.open{transform:none}
-  .navtoggle{display:inline-flex}
-  .hbrand{display:block}
+  /* 窄屏：顶部 tab 条允许横向滚动（设计稿明确不要汉堡抽屉） */
+  .b9-tabbar{overflow-x:auto;scrollbar-width:none}
+  .b9-tabbar::-webkit-scrollbar{display:none}
 }
 [role=tabpanel][hidden]{display:none}
 [role=tabpanel]{animation:fade .32s cubic-bezier(.2,.8,.2,1)}
@@ -830,64 +718,582 @@ footer{border-top:1px solid var(--rule);padding:26px 0 40px;font-size:12px;color
 .feedback-panel textarea:focus{outline:none;border-color:var(--indigo);box-shadow:0 0 0 3px rgba(58,74,143,.10)}
 @media(max-width:480px){.fab{right:16px;bottom:16px}.feedback-panel{right:16px;bottom:74px}}
 </style>
+
+<style>
+/* ─── panel-5 专属样式（作用域已由 #panel-5 前缀限定）─── */
+/* ══════════════════════════════════════════════════════════════════════════
+   Tab 05 · 策略实验室（原 web/lab.html 整页并入主站）
+   ──────────────────────────────────────────────────────────────────────────
+   隔离策略（照抄 #panel-4 的做法，再加一层）：
+   1) 本文件所有选择器一律以 #panel-5 开头 —— 主站 index.html 里有大量无前缀的
+      全局规则（.card / .btn / .tag / .section / .field / select …），不加前缀
+      会双向污染：我的规则会漏出去改坏 01/02/03，主站的规则会漏进来改坏这里。
+      id 选择器 (1,0,0) 天然压过主站的类选择器 (0,1,0)，冲突时我方胜出。
+   2) 类名再统一换成 lb-* 私有前缀。光靠 (1) 只能压住「我显式声明过」的属性，
+      主站 `.card{border:…}` 这类我没声明的属性照样会渗进来；换了类名之后主站
+      规则根本匹配不上，才是真正的零渗透。
+   3) 变量不写 :root。全局 Organic token 由共享 app.css 提供，这里只把要用到的
+      挂成 #panel-5 作用域内的 --lab-* 别名（等价于 panel-4 的 --ev-* 惯例）。
+      var() 里的十六进制兜底 = README 第三节的 token 原值：app.css 落地后永远
+      走全局变量、兜底命中不了；写它只是为了「片段先于 app.css 集成」的中间态
+      不至于整块掉色。改配色请改 app.css，不要改这里的兜底。
+   性能红线：全文件无 backdrop-filter；吸顶条一律不透明纯色（脉动点动画 +
+   毛玻璃 = 每帧重算高斯模糊，2026-07-26 实测会整页闪烁）。
+   ══════════════════════════════════════════════════════════════════════════ */
+#panel-5{
+  /* — 基础语义色 — */
+  --lab-paper:var(--paper,#f5ead8);
+  --lab-surface:var(--surface,#ebddc5);
+  --lab-ink:var(--ink,#201e1d);
+  --lab-gold:var(--gold,#c67139);
+
+  /* — 中性阶梯 — */
+  --lab-n100:var(--n100,#f9f4ed); --lab-n200:var(--n200,#eee7db);
+  --lab-n300:var(--n300,#dcd3c4); --lab-n400:var(--n400,#c0b6a5);
+  --lab-n500:var(--n500,#a19786); --lab-n600:var(--n600,#82796a);
+  --lab-n700:var(--n700,#645c50); --lab-n800:var(--n800,#474238);
+  --lab-n900:var(--n900,#2e2b25);
+
+  /* — 赤陶阶梯 — */
+  --lab-a100:var(--a100,#fff2eb); --lab-a200:var(--a200,#ffe1d0);
+  --lab-a300:var(--a300,#ffc6a5); --lab-a400:var(--a400,#f6a06b);
+  --lab-a500:var(--a500,#d67f48); --lab-a600:var(--a600,#b2622d);
+  --lab-a700:var(--a700,#8c491a); --lab-a800:var(--a800,#643312);
+  --lab-a900:var(--a900,#402310);
+
+  /* — 鼠尾草阶梯 — */
+  --lab-g100:var(--g100,#f0fae1); --lab-g200:var(--g200,#e1eecc);
+  --lab-g300:var(--g300,#ccdbb2); --lab-g400:var(--g400,#aebf92);
+  --lab-g500:var(--g500,#8fa073); --lab-g600:var(--g600,#728157);
+  --lab-g700:var(--g700,#56633f); --lab-g800:var(--g800,#3d472b);
+
+  /* — 六个因子的专属色。原 lab.html 用的是页面独有的 --amber/--purple/--teal
+       三个自定义色（那是旧的靛蓝配色体系），Organic 里不再存在，改成从赤陶/
+       鼠尾草两条阶梯上取值，并按 README 的堆叠条色序 a500→a400→a300→g600→g400
+       排列；Rel 只在选了板块时出现，给它一个明显区别于前五段的深赤陶 a700。 — */
+  --lab-f-m:var(--lab-a500);
+  --lab-f-t:var(--lab-a400);
+  --lab-f-h:var(--lab-a300);
+  --lab-f-a:var(--lab-g600);
+  --lab-f-q:var(--lab-g400);
+  --lab-f-rel:var(--lab-a700);
+
+  --lab-r-sm:var(--radius-sm,8px);
+  --lab-r-md:var(--radius-md,16px);
+  --lab-r-lg:var(--radius-lg,28px);
+  --lab-sh-sm:var(--shadow-sm,0 1px 2px rgba(46,43,37,.14));
+  --lab-sh-md:var(--shadow-md,0 3px 10px rgba(46,43,37,.16));
+
+  /* 字体栈自带兜底即可，不引中文 webfont：Caprasimo/Figtree 只覆盖拉丁字形，
+     中文自然回落到系统黑体栈（PingFang SC / 微软雅黑），这是刻意的。
+     Google Fonts 的 <link>（带 display=swap）由宿主 index.html 统一引入。 */
+  --lab-head:"Caprasimo",Georgia,"Songti SC","STSong",serif;
+  --lab-body:"Figtree",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+  --lab-mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+
+  /* 吸顶子 tab 条的落点。宿主顶栏若是 sticky 且有高度，主线程把这个值改成顶栏
+     高度即可，不用动下面任何一条规则。 */
+  --lab-sticky-top:0px;
+
+  font-family:var(--lab-body);
+  font-size:15px;
+  line-height:1.55;
+  color:var(--lab-ink);
+}
+
+/* ── 排版基座 ─────────────────────────────────────────────────────────── */
+#panel-5 h1,#panel-5 h2,#panel-5 h3{
+  margin:0;font-family:var(--lab-head);font-weight:400;line-height:1.18;letter-spacing:-.01em;color:var(--lab-ink);
+}
+#panel-5 p{margin:0}
+#panel-5 code{font-family:var(--lab-mono);font-size:.92em}
+#panel-5 :focus-visible{outline:2px solid var(--lab-gold);outline-offset:2px}
+#panel-5 .lb-mono{font-family:var(--lab-mono);font-variant-numeric:tabular-nums}
+
+#panel-5 .lb-eyebrow{
+  display:block;font-size:10px;font-weight:600;letter-spacing:.18em;text-transform:uppercase;
+  color:var(--lab-a700);margin-bottom:8px;
+}
+#panel-5 .lb-sec{margin:0 0 30px}
+#panel-5 .lb-sec-head{margin-bottom:16px}
+#panel-5 .lb-sec-head h2{font-size:24px;margin-bottom:6px}
+#panel-5 .lb-sec-head .lb-sub{font-size:13.5px;color:var(--lab-n700);max-width:80ch;line-height:1.7}
+
+/* ── Hero ─────────────────────────────────────────────────────────────── */
+#panel-5 .lb-hero{padding:4px 0 26px;margin-bottom:8px}
+#panel-5 .lb-kicker{
+  display:inline-flex;align-items:center;gap:8px;height:26px;padding:0 12px;border-radius:999px;
+  background:var(--lab-g200);color:var(--lab-g800);
+  font-size:11px;font-weight:600;letter-spacing:.06em;margin-bottom:16px;
+}
+#panel-5 .lb-dot{width:7px;height:7px;border-radius:999px;flex:none;background:var(--lab-n500)}
+#panel-5 .lb-dot.ok{background:var(--lab-g600);animation:lbPulse 1.8s ease-in-out infinite}
+@keyframes lbPulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.45;transform:scale(.82)}}
+#panel-5 .lb-hero h1{font-size:clamp(26px,3.4vw,34px);line-height:1.2;margin-bottom:14px;max-width:26ch}
+#panel-5 .lb-hero h1 em{font-style:normal;color:var(--lab-a700)}
+#panel-5 .lb-lede{font-size:14.5px;line-height:1.75;color:var(--lab-n700);max-width:78ch}
+#panel-5 .lb-lede b{color:var(--lab-ink);font-weight:600;font-family:var(--lab-mono);font-size:13px}
+
+#panel-5 .lb-formula{
+  margin-top:16px;font-family:var(--lab-mono);font-size:13px;padding:11px 16px;
+  border-radius:var(--lab-r-md);background:var(--lab-n100);border:1px solid var(--lab-n300);
+  color:var(--lab-n800);overflow-x:auto;white-space:nowrap;
+}
+#panel-5 .lb-formula b{color:var(--lab-a700);font-weight:700}
+#panel-5 .lb-formula .lb-dim{color:var(--lab-n500)}
+
+/* ── 卡片 ─────────────────────────────────────────────────────────────── */
+#panel-5 .lb-card{
+  background:var(--lab-surface);border:0;border-radius:32px;   /* --radius-lg × 1.15，README 第三节 */
+  padding:20px 22px;box-shadow:var(--lab-sh-sm);
+}
+#panel-5 .lb-grid{display:grid;gap:16px}
+#panel-5 .lb-g2{grid-template-columns:repeat(2,minmax(0,1fr))}
+#panel-5 .lb-gsingle{grid-template-columns:380px minmax(0,1fr);align-items:start}
+@media (max-width:1000px){#panel-5 .lb-g2,#panel-5 .lb-gsingle{grid-template-columns:minmax(0,1fr)}}
+
+/* ── 全局设置条（药丸输入）───────────────────────────────────────────── */
+#panel-5 .lb-filters{display:flex;flex-wrap:wrap;gap:14px;align-items:flex-end;margin-bottom:6px}
+#panel-5 .lb-field{display:flex;flex-direction:column;gap:5px;min-width:0}
+#panel-5 .lb-field > label{
+  font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--lab-n700);
+}
+#panel-5 select,
+#panel-5 input[type=number],
+#panel-5 input[type=text]{
+  appearance:none;-webkit-appearance:none;
+  height:34px;border-radius:999px;border:1px solid var(--lab-n400);background:var(--lab-paper);
+  color:var(--lab-ink);font-family:inherit;font-size:13px;padding:0 14px;min-width:0;
+  transition:border-color .15s,box-shadow .15s;
+}
+#panel-5 select{padding-right:34px;min-width:150px;width:100%}
+/* 下拉箭头用 .lb-sel::after 的两条边框画，不用 SVG data-URI —— data-URI 里的颜色
+   没法写成 var()，会变成本文件唯一一处硬编码色值。边框方案纯 CSS，颜色照样走变量。 */
+#panel-5 .lb-sel{position:relative;display:block;min-width:0}
+#panel-5 .lb-sel::after{
+  content:"";position:absolute;right:14px;top:50%;width:6px;height:6px;pointer-events:none;
+  border-right:1.5px solid var(--lab-n700);border-bottom:1.5px solid var(--lab-n700);
+  transform:translateY(-70%) rotate(45deg);
+}
+#panel-5 input[type=number]{min-width:88px;font-family:var(--lab-mono);font-variant-numeric:tabular-nums}
+#panel-5 select:hover,#panel-5 input:hover{border-color:var(--lab-n500)}
+#panel-5 select:focus,#panel-5 input:focus{outline:none;border-color:var(--lab-gold);box-shadow:0 0 0 3px var(--lab-a200)}
+#panel-5 .lb-spacer{flex:1 1 0;min-width:0}
+
+#panel-5 .lb-tag{
+  display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;
+  padding:3px 10px;border-radius:999px;white-space:nowrap;
+  background:var(--lab-n200);color:var(--lab-n700);
+}
+#panel-5 .lb-tag.lb-mono{font-size:10.5px}
+#panel-5 .lb-tag.up{background:var(--lab-g200);color:var(--lab-g800)}
+#panel-5 .lb-tag.down{background:var(--lab-a200);color:var(--lab-a800)}
+#panel-5 .lb-tag.flat{background:var(--lab-n200);color:var(--lab-n600)}
+#panel-5 .lb-tag.rumor{background:var(--lab-a800);color:var(--lab-paper)}
+#panel-5 .lb-tag.ver{background:var(--lab-g100);color:var(--lab-g800)}
+
+/* Tier 徽章：色值照 README 第三节（bg / 文字 / inset 描边）*/
+#panel-5 .lb-tier{
+  display:inline-flex;align-items:center;justify-content:center;width:21px;height:21px;
+  border-radius:6px;font-family:var(--lab-mono);font-size:11px;font-weight:700;flex:none;
+}
+#panel-5 .lb-tier-S{background:var(--lab-a200);color:var(--lab-a900);box-shadow:inset 0 0 0 1px var(--lab-a400)}
+#panel-5 .lb-tier-A{background:var(--lab-a100);color:var(--lab-a800);box-shadow:inset 0 0 0 1px var(--lab-a300)}
+#panel-5 .lb-tier-B{background:var(--lab-g100);color:var(--lab-g800);box-shadow:inset 0 0 0 1px var(--lab-g300)}
+#panel-5 .lb-tier-C{background:var(--lab-n200);color:var(--lab-n700);box-shadow:inset 0 0 0 1px var(--lab-n400)}
+#panel-5 .lb-tier-D{background:var(--lab-n100);color:var(--lab-n500);box-shadow:inset 0 0 0 1px var(--lab-n300)}
+
+/* ── 提示框 ───────────────────────────────────────────────────────────── */
+#panel-5 .lb-note{
+  font-size:12.5px;line-height:1.72;padding:13px 16px;border-radius:var(--lab-r-md);
+  background:var(--lab-a100);border:1px solid var(--lab-a300);color:var(--lab-n800);
+}
+#panel-5 .lb-note.sage{background:var(--lab-g100);border-color:var(--lab-g300)}
+#panel-5 .lb-note b{color:var(--lab-ink);font-weight:600}
+#panel-5 .lb-note .lb-lbl{
+  display:block;font-size:10px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--lab-a700);margin-bottom:7px;
+}
+#panel-5 .lb-note[hidden]{display:none}
+
+/* ── 按钮：全部药丸 ───────────────────────────────────────────────────── */
+#panel-5 .lb-btn{
+  display:inline-flex;align-items:center;justify-content:center;gap:6px;cursor:pointer;
+  font-family:inherit;font-size:13px;font-weight:600;line-height:1;white-space:nowrap;
+  height:34px;padding:0 16px;border-radius:999px;
+  border:1px solid var(--lab-n400);background:var(--lab-paper);color:var(--lab-n800);
+  transition:background .15s,color .15s,border-color .15s;
+}
+#panel-5 .lb-btn:hover{background:var(--lab-n200);color:var(--lab-ink)}
+#panel-5 .lb-btn.sm{height:27px;padding:0 13px;font-size:11.5px}
+#panel-5 .lb-btn.primary{background:var(--lab-gold);border-color:var(--lab-gold);color:var(--lab-paper)}
+#panel-5 .lb-btn.primary:hover{background:var(--lab-a600);border-color:var(--lab-a600);color:var(--lab-paper)}
+#panel-5 .lb-btn.saved{background:var(--lab-g600);border-color:var(--lab-g600);color:var(--lab-paper)}
+#panel-5 .lb-btn:disabled{opacity:.45;cursor:not-allowed}
+
+/* ── 吸顶子 tab（不透明纯色，禁毛玻璃）──────────────────────────────── */
+#panel-5 .lb-subbar{
+  position:sticky;top:var(--lab-sticky-top);z-index:6;
+  background:var(--lab-paper);          /* 纯色垫底，防内容从条下透出 */
+  padding:12px 0 10px;margin-bottom:6px;
+  /* 与仓库既有 fixed 元素同一套合成层提升：单独成层后滚动时不再连带重绘，
+     contain 把失效范围锁死在条内部。 */
+  transform:translateZ(0);
+  contain:layout paint;
+}
+#panel-5 .lb-subtabs{
+  display:flex;gap:4px;padding:4px;border-radius:999px;width:max-content;max-width:100%;
+  background:var(--lab-n200);overflow-x:auto;scrollbar-width:none;
+}
+#panel-5 .lb-subtabs::-webkit-scrollbar{display:none}
+#panel-5 .lb-stab{
+  border:0;cursor:pointer;font-family:inherit;font-size:13px;font-weight:600;white-space:nowrap;
+  padding:8px 20px;border-radius:999px;background:transparent;color:var(--lab-n800);
+  transition:background .15s,color .15s;
+}
+#panel-5 .lb-stab .idx{font-family:var(--lab-mono);font-size:10px;opacity:.6;margin-right:6px}
+#panel-5 .lb-stab:hover{background:var(--lab-n100)}
+#panel-5 .lb-stab[aria-selected="true"]{background:var(--lab-gold);color:var(--lab-paper)}
+#panel-5 .lb-stab[aria-selected="true"]:hover{background:var(--lab-a600)}
+#panel-5 .lb-pane[hidden]{display:none}
+
+/* ── 权重面板 ─────────────────────────────────────────────────────────── */
+#panel-5 .lb-phead{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:14px;flex-wrap:wrap}
+#panel-5 .lb-ptitle{display:flex;align-items:center;gap:9px;min-width:0}
+#panel-5 .lb-ptitle strong{font-size:15px;font-weight:700}
+#panel-5 .lb-bigdot{width:12px;height:12px;border-radius:999px;flex:none;background:var(--lab-n900)}
+#panel-5 .lb-bigdot.a{background:var(--lab-g600)}   /* A 组 = 鼠尾草 */
+#panel-5 .lb-bigdot.b{background:var(--lab-a600)}   /* B 组 = 赤陶 */
+#panel-5 input.lb-vname{
+  height:30px;font-size:14px;font-weight:600;color:var(--lab-ink);max-width:190px;
+  border-color:transparent;background:transparent;padding:0 10px;
+}
+#panel-5 input.lb-vname:hover{border-color:var(--lab-n400);background:var(--lab-paper)}
+
+#panel-5 .lb-presets{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:14px}
+#panel-5 .lb-wrow{display:flex;flex-direction:column;gap:6px;margin-bottom:11px}
+#panel-5 .lb-wrow.disabled{opacity:.4}
+#panel-5 .lb-wtop{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:12.5px}
+#panel-5 .lb-wl{display:flex;align-items:center;gap:7px;min-width:0}
+#panel-5 .lb-wl .sw{width:9px;height:9px;border-radius:3px;flex:none}
+#panel-5 .lb-wl .sub{color:var(--lab-n600);font-size:10.5px}
+#panel-5 .lb-wv{font-family:var(--lab-mono);font-variant-numeric:tabular-nums;font-size:12.5px;font-weight:700}
+#panel-5 .lb-wv .u{color:var(--lab-n600);font-weight:500}
+/* 滑块统一 accent-color：README 明确要求，槽/滑块跟着赤陶走；因子各自的颜色
+   由左侧色块和下方堆叠条承担，不再逐条给 track 画渐变（省掉一堆内联样式）。 */
+#panel-5 input[type=range]{width:100%;accent-color:var(--lab-gold);cursor:pointer;margin:0}
+#panel-5 input[type=range]:disabled{cursor:not-allowed}
+
+/* 归一化堆叠条 */
+#panel-5 .lb-stack{display:flex;height:10px;border-radius:999px;overflow:hidden;background:var(--lab-n300);margin-top:4px}
+#panel-5 .lb-stack > i{display:block;height:100%;min-width:0;transition:flex-basis .25s cubic-bezier(.2,.8,.2,1)}
+#panel-5 .lb-legend{display:flex;flex-wrap:wrap;gap:8px 16px;margin-top:10px;font-size:11px;color:var(--lab-n700)}
+#panel-5 .lb-legend i.sw{width:8px;height:8px;border-radius:2px;display:inline-block;margin-right:5px}
+#panel-5 .lb-legend b{color:var(--lab-ink);font-family:var(--lab-mono);font-weight:700}
+#panel-5 .lb-hint{font-size:11.5px;color:var(--lab-n600);margin-top:10px;line-height:1.6}
+
+/* ── Top N 结果列表 ───────────────────────────────────────────────────── */
+#panel-5 .lb-rlist{display:flex;flex-direction:column}
+#panel-5 .lb-ritem{
+  display:grid;grid-template-columns:40px 24px minmax(0,1fr) 86px 84px;gap:10px;align-items:center;
+  padding:10px 0;border-top:1px solid var(--lab-n300);
+}
+#panel-5 .lb-ritem .rk{font-family:var(--lab-mono);font-variant-numeric:tabular-nums;font-size:13px;font-weight:700;color:var(--lab-n700)}
+#panel-5 .lb-ritem .ti{min-width:0}
+#panel-5 .lb-ritem .ti .tzh{font-size:13px;font-weight:600;line-height:1.42;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+#panel-5 .lb-ritem .ti .meta{margin-top:3px;font-size:10.5px;color:var(--lab-n600);font-family:var(--lab-mono);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#panel-5 .lb-ritem .sc{font-family:var(--lab-mono);font-variant-numeric:tabular-nums;font-size:12.5px;text-align:right}
+#panel-5 .lb-ritem .dl{text-align:right}
+#panel-5 .lb-movednote{font-size:12px;color:var(--lab-n700);margin-top:12px}
+#panel-5 .lb-movednote b{font-family:var(--lab-mono);color:var(--lab-a700);font-weight:700}
+
+/* A/B 各自的 Top 榜（紧凑版）*/
+#panel-5 .lb-tlist{display:flex;flex-direction:column}
+#panel-5 .lb-titem{display:grid;grid-template-columns:26px minmax(0,1fr) 62px;gap:10px;align-items:center;padding:8px 0;border-top:1px solid var(--lab-n300)}
+#panel-5 .lb-titem .rk{font-family:var(--lab-mono);font-variant-numeric:tabular-nums;font-size:11px;color:var(--lab-n600);text-align:right}
+#panel-5 .lb-titem .tt{font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:flex;align-items:center;gap:7px}
+#panel-5 .lb-titem .sc{font-family:var(--lab-mono);font-variant-numeric:tabular-nums;font-size:11.5px;color:var(--lab-n700);text-align:right}
+
+/* 升 / 降 case */
+#panel-5 .lb-clist{display:flex;flex-direction:column;gap:10px}
+#panel-5 .lb-citem{display:flex;gap:12px;align-items:flex-start;padding:12px 14px;border-radius:var(--lab-r-md);background:var(--lab-n100)}
+#panel-5 .lb-citem .arrow{font-size:17px;font-weight:700;flex:none;width:24px;text-align:center;line-height:1.3}
+#panel-5 .lb-citem.up .arrow{color:var(--lab-g700)}
+#panel-5 .lb-citem.down .arrow{color:var(--lab-a700)}
+#panel-5 .lb-citem .body{min-width:0;flex:1}
+#panel-5 .lb-citem .ttl{font-size:13px;line-height:1.42;margin-bottom:5px;display:flex;align-items:flex-start;gap:7px}
+#panel-5 .lb-citem .rk{font-family:var(--lab-mono);font-size:11.5px;color:var(--lab-n700)}
+#panel-5 .lb-citem .rk b{color:var(--lab-ink);font-weight:700}
+#panel-5 .lb-citem .rk .arw{color:var(--lab-n500);margin:0 5px}
+#panel-5 .lb-citem .delta{font-family:var(--lab-mono);font-size:12px;font-weight:700;flex:none;padding:3px 10px;border-radius:999px;white-space:nowrap}
+#panel-5 .lb-citem.up .delta{background:var(--lab-g200);color:var(--lab-g800)}
+#panel-5 .lb-citem.down .delta{background:var(--lab-a200);color:var(--lab-a800)}
+
+/* ── 换手率三卡 ───────────────────────────────────────────────────────── */
+#panel-5 .lb-stats3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-bottom:20px}
+@media (max-width:820px){#panel-5 .lb-stats3{grid-template-columns:minmax(0,1fr)}}
+#panel-5 .lb-stat{display:flex;flex-direction:column;gap:3px;padding:16px 18px}
+#panel-5 .lb-stat .l{font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--lab-n700)}
+#panel-5 .lb-stat .v{font-family:var(--lab-head);font-size:28px;line-height:1.1;color:var(--lab-a700)}
+#panel-5 .lb-stat .v .u{font-size:14px;color:var(--lab-n600);margin-left:3px;font-family:var(--lab-body)}
+#panel-5 .lb-stat .n{font-size:11.5px;color:var(--lab-n600);line-height:1.5}
+
+/* ── 保存结果条 ───────────────────────────────────────────────────────── */
+#panel-5 .lb-save{display:flex;align-items:center;gap:8px;margin-top:14px;flex-wrap:wrap}
+#panel-5 .lb-save input[type=text]{flex:1 1 200px;min-width:0}
+#panel-5 .lb-savemsg{font-size:11.5px;color:var(--lab-n600)}
+
+/* ── 状态态 ───────────────────────────────────────────────────────────── */
+#panel-5 .lb-loading{font-size:12.5px;color:var(--lab-n600);padding:20px 0;text-align:center;font-family:var(--lab-mono)}
+#panel-5 .lb-empty{font-size:12px;color:var(--lab-n600);padding:14px 0;text-align:center}
+#panel-5 .lb-err{font-size:12.5px;color:var(--lab-a800);background:var(--lab-a100);border:1px solid var(--lab-a300);border-radius:var(--lab-r-md);padding:12px 14px}
+#panel-5 .lb-center{display:flex;justify-content:center;margin-bottom:22px}
+
+/* ─── panel-7 专属样式（作用域已由 #panel-7 前缀限定）─── */
+/* 07 开发者资讯 —— 全新模块。
+   定位是「产品官网的关于页」而不是控制台：所以这里刻意不用密集表格布局和吸顶锚点条，
+   而是三个大留白板块顺序铺陈，宽度收在 1100px 内居中，靠间距而不是分隔线做分组。
+
+   所有选择器都以 #panel-7 前缀限定，避免与并行改造的其它 panel 抢样式；
+   颜色一律取全局 Organic token（--paper/--surface/--ink/--gold/--nXXX/--aXXX/--gXXX），
+   本片段不自带 token 定义，集成时依赖外层 :root 已声明这套变量。
+   字体同理不在片段里做 CSS 导入：导入语句只在样式表顶部有效，页中 <style> 里会被丢弃，
+   Caprasimo/Figtree 由外层页面统一加载，这里只做 font-family 回退。 */
+
+#panel-7 .p7{
+  max-width:1100px;margin:0 auto;padding:8px 0 72px;
+  font-size:15px;line-height:1.55;color:var(--ink);
+}
+
+/* 板块之间用 72px 大间距分隔——「简约」在这里主要靠留白实现，不靠描边和底色 */
+#panel-7 .p7-sec{margin-top:72px}
+#panel-7 .p7-sec:first-of-type{margin-top:40px}
+
+#panel-7 .p7-eyebrow{
+  display:block;font-size:10px;font-weight:600;line-height:1;
+  letter-spacing:.18em;text-transform:uppercase;color:var(--a700);margin-bottom:10px;
+}
+#panel-7 .p7-h1{
+  font-family:"Caprasimo",var(--sans,system-ui,sans-serif);
+  font-size:32px;line-height:1.14;letter-spacing:-.015em;margin:0 0 10px;
+}
+#panel-7 .p7-h2{
+  font-family:"Caprasimo",var(--sans,system-ui,sans-serif);
+  font-size:24px;line-height:1.16;letter-spacing:-.015em;margin:0 0 10px;
+}
+#panel-7 .p7-lead{margin:0;font-size:14.5px;line-height:1.7;color:var(--n700);max-width:76ch}
+#panel-7 .p7-note{margin:0;font-size:12.5px;line-height:1.7;color:var(--n600)}
+#panel-7 .p7-mono{
+  font-family:var(--mono,ui-monospace,SFMono-Regular,Menlo,Consolas,monospace);
+  font-variant-numeric:tabular-nums;
+}
+
+/* ── ① 项目与代码访问 ───────────────────────────────────────────── */
+
+#panel-7 .p7-repo-grid{
+  display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px;
+  align-items:stretch;margin-top:22px;
+}
+
+/* GitHub 入口做成深色卡：整张卡是 <a>，点哪都能跳，比只让 logo 可点的命中区大得多 */
+#panel-7 .p7-repo-card{
+  display:flex;align-items:center;gap:16px;text-decoration:none;
+  padding:20px 22px;border-radius:calc(var(--radius-lg) * 1.15);
+  background:var(--n900);color:var(--paper);box-shadow:var(--shadow-sm);
+  transition:box-shadow .18s ease,transform .18s ease;
+}
+#panel-7 .p7-repo-card:hover{box-shadow:var(--shadow-md);transform:translateY(-1px);text-decoration:none}
+#panel-7 .p7-repo-card:focus-visible{outline:2px solid var(--gold);outline-offset:3px}
+#panel-7 .p7-gh{width:34px;height:34px;flex:none;fill:var(--paper)}
+#panel-7 .p7-repo-txt{min-width:0}
+#panel-7 .p7-repo-k{
+  display:block;font-size:10px;font-weight:600;letter-spacing:.16em;
+  text-transform:uppercase;color:var(--a300);margin-bottom:4px;
+}
+#panel-7 .p7-repo-v{
+  display:block;font-size:12.5px;line-height:1.45;color:var(--paper);
+  word-break:break-all;
+}
+#panel-7 .p7-repo-go{
+  margin-left:auto;flex:none;display:inline-flex;align-items:center;gap:6px;
+  height:32px;padding:0 16px;border-radius:999px;
+  background:var(--gold);color:var(--paper);font-size:12.5px;font-weight:600;
+}
+
+/* 提示卡照 03 tab 的开发者联系横幅：a100 底 + a300 边 + 圆形 ! 徽章 */
+#panel-7 .p7-notice{
+  display:flex;align-items:flex-start;gap:14px;
+  padding:20px 22px;border-radius:calc(var(--radius-lg) * 1.15);
+  background:var(--a100);border:1px solid var(--a300);
+}
+#panel-7 .p7-bang{
+  width:30px;height:30px;flex:none;border-radius:999px;
+  background:var(--gold);color:var(--paper);
+  font-size:15px;font-weight:700;line-height:30px;text-align:center;
+}
+#panel-7 .p7-notice-en{
+  display:block;font-size:13.5px;font-weight:700;line-height:1.55;color:var(--a900);
+}
+#panel-7 .p7-notice-zh{
+  display:block;font-size:12.5px;line-height:1.7;color:var(--n700);margin-top:4px;
+}
+
+/* 一句话技术栈：用药丸标签排一行，比写成句子更像产品官网 */
+#panel-7 .p7-stack{display:flex;flex-wrap:wrap;gap:8px;margin-top:18px}
+#panel-7 .p7-chip{
+  display:inline-flex;align-items:center;font-size:11px;line-height:1;
+  padding:7px 12px;border-radius:999px;background:var(--n200);color:var(--n700);
+}
+#panel-7 .p7-chip.is-accent{background:var(--a100);color:var(--a800)}
+#panel-7 .p7-chip.is-green{background:var(--g100);color:var(--g800)}
+
+/* ── ② Dev Bill ────────────────────────────────────────────────── */
+
+#panel-7 .p7-kpis{
+  display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin:22px 0 18px;
+}
+#panel-7 .p7-kpi{
+  padding:18px 20px;border-radius:calc(var(--radius-lg) * 1.15);
+  background:var(--surface);box-shadow:var(--shadow-sm);
+}
+#panel-7 .p7-kpi-k{
+  display:block;font-size:10px;font-weight:600;letter-spacing:.14em;
+  text-transform:uppercase;color:var(--n600);margin-bottom:8px;
+}
+#panel-7 .p7-kpi-v{
+  display:block;font-size:26px;line-height:1;color:var(--a700);
+  font-family:var(--mono,ui-monospace,SFMono-Regular,Menlo,Consolas,monospace);
+  font-variant-numeric:tabular-nums;
+}
+#panel-7 .p7-kpi-s{display:block;font-size:11.5px;color:var(--n600);margin-top:7px}
+
+/* 表格容器单独横向滚动，保证窄屏时页面本体不出现横向滚动条 */
+#panel-7 .p7-tablebox{
+  border-radius:calc(var(--radius-lg) * 1.15);background:var(--surface);
+  box-shadow:var(--shadow-sm);padding:6px 10px 10px;overflow-x:auto;
+}
+#panel-7 .p7-table{width:100%;min-width:720px;border-collapse:collapse;font-size:13.5px}
+#panel-7 .p7-table th{
+  text-align:left;font-size:10px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;
+  color:var(--n600);padding:14px 12px;border-bottom:1px solid var(--n300);white-space:nowrap;
+}
+#panel-7 .p7-table td{
+  padding:14px 12px;border-bottom:1px solid var(--n300);vertical-align:top;color:var(--ink);
+}
+#panel-7 .p7-table tbody tr:last-child td{border-bottom:0}
+#panel-7 .p7-table .p7-num{
+  text-align:right;white-space:nowrap;
+  font-family:var(--mono,ui-monospace,SFMono-Regular,Menlo,Consolas,monospace);
+  font-variant-numeric:tabular-nums;
+}
+#panel-7 .p7-table .p7-why{font-size:12px;line-height:1.6;color:var(--n700);min-width:230px}
+#panel-7 .p7-item{font-weight:600}
+#panel-7 .p7-item small{display:block;font-weight:400;font-size:11.5px;color:var(--n600);margin-top:2px}
+/* 合计行用 --gold 高亮：底色是同色系最浅阶，数字用 gold 本身 */
+#panel-7 .p7-total td{background:var(--a100);border-top:2px solid var(--gold);border-bottom:0}
+#panel-7 .p7-total .p7-num{color:var(--gold);font-weight:700;font-size:14.5px}
+#panel-7 .p7-total .p7-item{color:var(--a900)}
+
+/* 诚实标注：这是预估上限，不是账单实付。放在表格上方而不是脚注，避免被略过 */
+#panel-7 .p7-disclaimer{
+  display:flex;align-items:flex-start;gap:10px;margin:0 0 18px;
+  padding:12px 16px;border-radius:var(--radius-md);
+  background:var(--n200);border-left:3px solid var(--n500);
+}
+#panel-7 .p7-disclaimer b{color:var(--n800)}
+
+/* ── ③ Built by ────────────────────────────────────────────────── */
+
+/* SVG 用 viewBox 自适应；同时给 min-width 兜底：
+   手机上整图等比缩到 375px 会让 10px 的角色说明彻底不可读，
+   所以让它在自己的容器内横向滚动，而不是把页面撑破。 */
+#panel-7 .p7-flowbox{overflow-x:auto;margin-top:24px;padding-bottom:6px}
+#panel-7 .p7-flow{display:block;width:100%;min-width:760px;max-width:1040px;height:auto;margin:0 auto}
+#panel-7 .p7-flow-name{font-size:13.5px;font-weight:700}
+#panel-7 .p7-flow-ver{
+  font-size:9.5px;
+  font-family:var(--mono,ui-monospace,SFMono-Regular,Menlo,Consolas,monospace);
+}
+#panel-7 .p7-flow-role{font-size:10px}
+#panel-7 .p7-flow-step{
+  font-size:9px;letter-spacing:.1em;
+  font-family:var(--mono,ui-monospace,SFMono-Regular,Menlo,Consolas,monospace);
+}
+#panel-7 .p7-flow-stage{
+  font-size:10px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;
+}
+/* 流动感：虚线沿路径缓慢位移。只有 3 条短路径参与，且 panel 隐藏时 display:none 会停掉动画，
+   开销可忽略；仍然对 reduce-motion 做降级。这里不涉及任何毛玻璃滤镜，与性能红线无冲突。 */
+#panel-7 .p7-flow-link{animation:p7-dash 2.4s linear infinite}
+@keyframes p7-dash{to{stroke-dashoffset:-22}}
+@media (prefers-reduced-motion:reduce){
+  #panel-7 .p7-flow-link{animation:none}
+}
+
+/* ── 窄屏 ───────────────────────────────────────────────────────── */
+@media (max-width:900px){
+  #panel-7 .p7-repo-grid{grid-template-columns:minmax(0,1fr)}
+  #panel-7 .p7-kpis{grid-template-columns:minmax(0,1fr)}
+  #panel-7 .p7-h1{font-size:27px}
+  #panel-7 .p7-sec{margin-top:52px}
+}
+</style>
 </head>
 <body>
 
-<aside class="sidenav" id="sidenav">
-  <div class="sn-brand">
-    <svg class="mark" viewBox="0 0 64 64" aria-hidden="true">
-      <g fill="#F0B90B">
-        <rect x="26.4" y="4"    width="11.2" height="11.2" rx="1.6" transform="rotate(45 32 9.6)"/>
-        <rect x="4"    y="26.4" width="11.2" height="11.2" rx="1.6" transform="rotate(45 9.6 32)"/>
-        <rect x="48.8" y="26.4" width="11.2" height="11.2" rx="1.6" transform="rotate(45 54.4 32)"/>
-        <rect x="26.4" y="48.8" width="11.2" height="11.2" rx="1.6" transform="rotate(45 32 54.4)"/>
-        <rect x="25.6" y="25.6" width="12.8" height="12.8" rx="1.8" transform="rotate(45 32 32)"/>
-      </g>
+<!-- ══════════════════ 顶部导航（两层：深色品牌条 + 分组 tab 条）══════════════════
+     2026-07-26 改版：原左侧 238px 固定侧边栏整体移除，内容全宽。
+     tab 按钮同时保留 `tab` 与 `b9-tab` 两个类名——showTab() 用 `.tab[role=tab]`
+     选中它们，改类名会打断那套一直在跑的路由逻辑，所以只叠加不替换。
+     ══════════════════════════════════════════════════════════════════════════ -->
+<div class="b9-topbar">
+  <a href="/" aria-label="B9 Recommendation Strategy Hub"
+     style="display:flex;align-items:center;gap:10px;text-decoration:none">
+    <svg class="b9-topbar-logo" viewBox="0 0 26 26" fill="none" aria-hidden="true">
+      <rect width="26" height="26" rx="9" fill="var(--gold)"/>
+      <path d="M6.5 17.5V13.2" stroke="var(--n900)" stroke-width="2.4" stroke-linecap="round"/>
+      <path d="M11.5 17.5V9.8" stroke="var(--n900)" stroke-width="2.4" stroke-linecap="round"/>
+      <path d="M16.5 17.5v-2.6" stroke="var(--n900)" stroke-width="2.4" stroke-linecap="round" opacity=".45"/>
+      <circle cx="19.4" cy="7.4" r="2.6" fill="var(--n900)"/>
+      <path d="M6.6 11.4 11.5 7.9l4.3 3.1" stroke="var(--n900)" stroke-width="1.6"
+            stroke-linecap="round" stroke-linejoin="round" opacity=".5"/>
     </svg>
-    <div>
-      <div class="n">Lawrence <b>Crypto News</b></div>
-      <div class="s">B9 · NEWS DATA SERVICE</div>
+    <span class="b9-topbar-title">B9 Recommendation Strategy Hub</span>
+  </a>
+  <span class="b9-topbar-sep" aria-hidden="true"></span>
+  <span class="b9-topbar-kicker">Internal · Read &amp; Tune</span>
+  <span class="b9-spacer"></span>
+  <span class="b9-status" id="healthPill">
+    <span class="b9-status-dot b9-pulse" id="healthDot"></span><span id="healthTx">连接中…</span>
+  </span>
+  <span class="b9-clock" id="topbarTime">—</span>
+  <span class="b9-avatar" title="Lawrence">LW</span>
+</div>
+
+<nav class="b9-tabbar tabs" role="tablist" aria-label="主导航">
+  <div class="b9-tabgroup">
+    <span class="b9-tabgroup-hd"><span class="b9-tabgroup-dot"></span><span class="b9-tabgroup-name">新闻策略数据服务</span><span class="b9-tabgroup-range">01–03</span></span>
+    <div class="b9-tabpills">
+      <button class="tab b9-tab" role="tab" id="tab-1" aria-controls="panel-1" aria-selected="true"><span class="idx">01</span>生成流程</button>
+      <button class="tab b9-tab" role="tab" id="tab-2" aria-controls="panel-2" aria-selected="false"><span class="idx">02</span>数据展示</button>
+      <button class="tab b9-tab" role="tab" id="tab-3" aria-controls="panel-3" aria-selected="false"><span class="idx">03</span>API 接入</button>
     </div>
   </div>
-
-  <nav class="tabs" role="tablist" aria-label="主导航">
-    <div class="sn-group">新闻策略数据服务</div>
-    <button class="tab" role="tab" id="tab-1" aria-controls="panel-1" aria-selected="true"><span class="idx">01</span>生成流程</button>
-    <button class="tab" role="tab" id="tab-2" aria-controls="panel-2" aria-selected="false"><span class="idx">02</span>数据展示</button>
-    <button class="tab" role="tab" id="tab-3" aria-controls="panel-3" aria-selected="false"><span class="idx">03</span>API 接入</button>
-
-    <div class="sn-group">策略产品工作态</div>
-    <button class="tab" role="tab" id="tab-4" aria-controls="panel-4" aria-selected="false"><span class="idx">04</span>评测工具</button>
-    <div class="sn-sub" id="snSub4">
-      <button class="sn-subitem" data-sub="1" aria-current="true">Duplicate Tester</button>
-      <button class="sn-subitem" data-sub="2" aria-current="false">LLM 评测室</button>
-      <button class="sn-subitem" data-sub="3" aria-current="false">AB 对比</button>
-    </div>
-    <a class="tab ext" href="/lab"><span class="idx">05</span>策略实验室 <span class="arw">↗</span></a>
-
-    <span class="navsep" aria-hidden="true"></span>
-    <button class="tab" role="tab" id="tab-5" aria-controls="panel-5" aria-selected="false"><span class="idx">06</span>历史数据</button>
-  </nav>
-</aside>
-<div class="sn-backdrop" id="snBackdrop" hidden></div>
-
-<header>
-  <div class="wrap">
-    <div class="hbar">
-      <button class="navtoggle" id="navToggle" aria-label="打开导航" aria-expanded="false" aria-controls="sidenav">
-        <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor"
-             stroke-width="1.6" stroke-linecap="round" aria-hidden="true">
-          <path d="M1.5 3.5h12M1.5 7.5h12M1.5 11.5h12"/>
-        </svg>
-      </button>
-      <div class="brand hbrand">
-        <div class="n">Lawrence <b>Crypto News</b> Crawler</div>
-      </div>
-      <div class="hspacer"></div>
-      <div class="pill"><span class="dot" id="healthDot"></span><span id="healthTx">连接中…</span></div>
+  <div class="b9-tabgroup">
+    <span class="b9-tabgroup-hd"><span class="b9-tabgroup-dot sage"></span><span class="b9-tabgroup-name">策略产品工作台</span><span class="b9-tabgroup-range">04–05</span></span>
+    <div class="b9-tabpills">
+      <button class="tab b9-tab" role="tab" id="tab-4" aria-controls="panel-4" aria-selected="false"><span class="idx">04</span>评测工具</button>
+      <button class="tab b9-tab" role="tab" id="tab-5" aria-controls="panel-5" aria-selected="false"><span class="idx">05</span>策略实验室</button>
     </div>
   </div>
-</header>
+  <div class="b9-tabgroup">
+    <span class="b9-tabgroup-hd"><span class="b9-tabgroup-dot neutral"></span><span class="b9-tabgroup-name">其它</span><span class="b9-tabgroup-range">06–07</span></span>
+    <div class="b9-tabpills">
+      <button class="tab b9-tab" role="tab" id="tab-6" aria-controls="panel-6" aria-selected="false"><span class="idx">06</span>历史数据</button>
+      <button class="tab b9-tab" role="tab" id="tab-7" aria-controls="panel-7" aria-selected="false"><span class="idx">07</span>开发者资讯</button>
+    </div>
+  </div>
+</nav>
 
 <main class="wrap">
 
@@ -1753,7 +2159,178 @@ footer{border-top:1px solid var(--rule);padding:26px 0 40px;font-size:12px;color
 </div>
 
 <!-- ══════════════════ TAB 6 · 历史数据 ══════════════════ -->
+<!-- ══════════════════ TAB 5 · 策略实验室（原 lab.html 并入）══════════════════ -->
 <div role="tabpanel" id="panel-5" aria-labelledby="tab-5" hidden>
+<div class="lb-hero">
+    <span class="lb-kicker"><span class="lb-dot ok"></span>只读实验环境 · 不写入 news_events</span>
+    <h1>调整因子权重，<em>亲眼看到排序怎么变</em></h1>
+    <p class="lb-lede">
+      本工具直接复用 Macro Insight 生产打分逻辑（<code>crawler/scoring.py</code> 的
+      <b>compute_impact / compute_timeliness / compute_hotness / compute_authority / compute_quality</b>），
+      只是把写死的权重换成你可以拖动的滑块，对最近一批真实事件重新计算 <b>importance_score</b> 并排序。
+      你也可以配置两组权重方案做正面对比，自动得到换手率、具体的上升/下降 case，以及一段规则生成的变化总结。
+    </p>
+    <div class="lb-formula">Score = <b>M</b>·影响面 + <b>T</b>·时效性 + <b>H</b>·热度 + <b>A</b>·权威性 + <b>Q</b>·质量 <span class="lb-dim">[ + <b>Rel</b>·相关性，选择板块后生效 ]</span></div>
+  </div>
+
+  <!-- ══════════════ 全局设置：对象选择 + 数据范围 ══════════════ -->
+  <div class="lb-sec">
+    <div class="lb-card">
+      <div class="lb-filters">
+        <div class="lb-field" style="min-width:250px">
+          <label for="labFSector">相关对象（板块）</label>
+          <span class="lb-sel">
+            <select id="labFSector">
+              <option value="">不选 —— 纯 Macro Insight（无相关性因子）</option>
+            </select>
+          </span>
+        </div>
+        <div class="lb-field">
+          <label for="labFDays">时间范围</label>
+          <span class="lb-sel">
+            <select id="labFDays">
+              <option value="1">近 1 天</option>
+              <option value="3">近 3 天</option>
+              <option value="7" selected>近 7 天</option>
+              <option value="14">近 14 天</option>
+              <option value="30">近 30 天</option>
+            </select>
+          </span>
+        </div>
+        <div class="lb-field">
+          <label for="labFPool">候选池大小</label>
+          <input type="number" id="labFPool" value="300" min="20" max="500" step="20">
+        </div>
+        <div class="lb-field">
+          <label for="labFTopN">展示 Top N</label>
+          <input type="number" id="labFTopN" value="20" min="5" max="50" step="5">
+        </div>
+        <span class="lb-spacer"></span>
+        <span class="lb-tag lb-mono" id="labPoolPill">池大小 —</span>
+      </div>
+      <!-- 相关性连续分口径说明：2026-07-26 定的对外口径，不要删 -->
+      <div class="lb-note" id="labRelNote" style="margin-top:14px" hidden>
+        <span class="lb-lbl">相关性因子 · 打分口径</span>
+        Rel 为<b>连续分</b>（2026-07-26 起，替换了早期的 0/1 二元判断）：优先取<b>入库时
+        LLM 按 skill 口径打的连续相关度</b>（0–1，锚点强制，覆盖 86% 库存事件），无明细的
+        旧行按「<code>sectors</code> 命中 0.60 → 成分币白名单命中 0.55 → 标题关键词 0.40」
+        分层退化，查询时零 LLM 成本、即时响应。注意：实验室里 Rel 是<b>可调权重的内层因子</b>
+        （探索用）；生产 Sector Insight 用「硬门 Rel≥0.5 + Rel<sup>1.5</sup> 外层乘子」，
+        要看生产口径请调 <code>/api/recommend/sector</code>。
+      </div>
+    </div>
+  </div>
+
+  <!-- 两个工具做同页子 tab（吸顶） -->
+  <div class="lb-subbar">
+    <nav class="lb-subtabs" role="tablist" aria-label="策略实验室子导航">
+      <button class="lb-stab" type="button" role="tab" id="lstab-1" aria-controls="lpane-1" aria-selected="true"><span class="idx">01</span>单版本权重调节 · 实时重排</button>
+      <button class="lb-stab" type="button" role="tab" id="lstab-2" aria-controls="lpane-2" aria-selected="false"><span class="idx">02</span>两版本权重对比</button>
+    </nav>
+  </div>
+
+  <!-- ══════════════ 子 Tab 1：单版本实时重排 ══════════════ -->
+  <div class="lb-pane" id="lpane-1" role="tabpanel" aria-labelledby="lstab-1">
+    <div class="lb-sec">
+      <div class="lb-sec-head">
+        <span class="lb-eyebrow">01 · Real-time Reorder</span>
+        <h2>单版本权重调节 · 实时重排</h2>
+        <p class="lb-sub">拖动滑块，权重会自动归一化为合计 100%；下方 Top N 列表随权重变化实时重新计算并排序（含与生产环境当前排名的对比）。</p>
+      </div>
+      <div class="lb-grid lb-gsingle">
+        <div class="lb-card">
+          <div class="lb-phead">
+            <div class="lb-ptitle"><span class="lb-bigdot"></span><strong>权重配置</strong></div>
+          </div>
+          <div class="lb-presets" data-target="single">
+            <button class="lb-btn sm" type="button" data-preset="default">生产默认</button>
+            <button class="lb-btn sm" type="button" data-preset="timeliness">时效优先</button>
+            <button class="lb-btn sm" type="button" data-preset="authority">权威优先</button>
+            <button class="lb-btn sm" type="button" data-preset="hotness">热度优先</button>
+            <button class="lb-btn sm" type="button" data-preset="relevance">相关性优先</button>
+          </div>
+          <div id="wpanel-single"></div>
+          <div class="lb-stack" id="wstack-single"></div>
+          <div class="lb-legend" id="wlegend-single"></div>
+          <p class="lb-hint">权重不需要自己凑够 100% —— 系统会按当前滑块比例自动归一化。</p>
+        </div>
+        <div class="lb-card">
+          <div class="lb-phead">
+            <div class="lb-ptitle"><strong>Top N 重排结果</strong></div>
+            <span class="lb-tag lb-mono" id="singleMeta">—</span>
+          </div>
+          <div id="singleResults"><div class="lb-loading">正在加载…</div></div>
+          <div class="lb-save">
+            <input type="text" id="singleSaveLabel" placeholder="备注（可选，例如「权威优先方案」）">
+            <button class="lb-btn sm" id="singleSaveBtn" type="button">💾 保存结果</button>
+            <span class="lb-savemsg" id="singleSaveMsg"></span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div><!-- /lpane-1 -->
+
+  <!-- ══════════════ 子 Tab 2：两版本对比 ══════════════ -->
+  <div class="lb-pane" id="lpane-2" role="tabpanel" aria-labelledby="lstab-2" hidden>
+    <div class="lb-sec">
+      <div class="lb-sec-head">
+        <span class="lb-eyebrow">02 · A / B Comparison</span>
+        <h2>两版本权重对比</h2>
+        <p class="lb-sub">分别配置版本 A / B 的权重，系统对同一批候选事件各自重排，自动计算 Top N 换手率、列出排名大幅上升/下降的具体新闻，并生成一段规则统计的变化总结（不调用 LLM）。</p>
+      </div>
+
+      <div class="lb-grid lb-g2" style="margin-bottom:18px">
+        <div class="lb-card">
+          <div class="lb-phead">
+            <div class="lb-ptitle"><span class="lb-bigdot a"></span><input class="lb-vname" id="labLabelA" type="text" value="权威优先" aria-label="版本 A 名称"></div>
+          </div>
+          <div class="lb-presets" data-target="a">
+            <button class="lb-btn sm" type="button" data-preset="default">生产默认</button>
+            <button class="lb-btn sm" type="button" data-preset="timeliness">时效优先</button>
+            <button class="lb-btn sm" type="button" data-preset="authority">权威优先</button>
+            <button class="lb-btn sm" type="button" data-preset="hotness">热度优先</button>
+            <button class="lb-btn sm" type="button" data-preset="relevance">相关性优先</button>
+          </div>
+          <div id="wpanel-a"></div>
+          <div class="lb-stack" id="wstack-a"></div>
+          <div class="lb-legend" id="wlegend-a"></div>
+        </div>
+        <div class="lb-card">
+          <div class="lb-phead">
+            <div class="lb-ptitle"><span class="lb-bigdot b"></span><input class="lb-vname" id="labLabelB" type="text" value="时效优先" aria-label="版本 B 名称"></div>
+          </div>
+          <div class="lb-presets" data-target="b">
+            <button class="lb-btn sm" type="button" data-preset="default">生产默认</button>
+            <button class="lb-btn sm" type="button" data-preset="timeliness">时效优先</button>
+            <button class="lb-btn sm" type="button" data-preset="authority">权威优先</button>
+            <button class="lb-btn sm" type="button" data-preset="hotness">热度优先</button>
+            <button class="lb-btn sm" type="button" data-preset="relevance">相关性优先</button>
+          </div>
+          <div id="wpanel-b"></div>
+          <div class="lb-stack" id="wstack-b"></div>
+          <div class="lb-legend" id="wlegend-b"></div>
+        </div>
+      </div>
+
+      <div class="lb-center">
+        <button class="lb-btn primary" type="button" id="labBtnCompare" style="height:42px;padding:0 26px;font-size:13.5px">重新计算对比 →</button>
+      </div>
+
+      <div id="compareResults">
+        <div class="lb-loading">正在加载…</div>
+      </div>
+      <div class="lb-save">
+        <input type="text" id="compareSaveLabel" placeholder="备注（可选，例如「权威优先 vs 时效优先」）">
+        <button class="lb-btn sm" id="compareSaveBtn" type="button">💾 保存结果</button>
+        <span class="lb-savemsg" id="compareSaveMsg"></span>
+      </div>
+
+      <p class="lb-hint" id="labFootMeta">—</p>
+    </div>
+  </div><!-- /lpane-2 -->
+</div>
+
+<div role="tabpanel" id="panel-6" aria-labelledby="tab-6" hidden>
 
   <div class="sec-head">
     <span class="eyebrow">TOOL RESULT HISTORY</span>
@@ -1808,6 +2385,281 @@ footer{border-top:1px solid var(--rule);padding:26px 0 40px;font-size:12px;color
 
 </div>
 
+<!-- ══════════════════ TAB 7 · 开发者资讯 ══════════════════ -->
+<div role="tabpanel" id="panel-7" aria-labelledby="tab-7" hidden>
+<div class="p7">
+
+  <!-- ① 项目与代码访问 -->
+  <section class="p7-sec" id="p7-project" aria-labelledby="p7-project-h">
+    <span class="p7-eyebrow">Project &amp; Code Access</span>
+    <h1 class="p7-h1" id="p7-project-h">开发者资讯</h1>
+    <p class="p7-lead">
+      B9 推荐策略服务：从多信源抓取加密新闻，经结构化抽取、去重合并、真实性校验与五因子打分，
+      产出可直接接入的排序结果。整套流水线每天定时跑两轮，结果通过 03 tab 的只读 API 对外提供。
+    </p>
+
+    <div class="p7-stack">
+      <span class="p7-chip is-accent">Python · Flask</span>
+      <span class="p7-chip is-accent">MySQL</span>
+      <span class="p7-chip">OpenAI GPT-5.4 / 5.4-nano</span>
+      <span class="p7-chip">X API</span>
+      <span class="p7-chip is-green">GCP VM</span>
+      <span class="p7-chip is-green">无构建纯 HTML 前端</span>
+    </div>
+
+    <div class="p7-repo-grid">
+      <a class="p7-repo-card"
+         href="https://github.com/lawrence-1998-jpg/binance_B9_rcmd_strategy_service-"
+         target="_blank" rel="noopener"
+         aria-label="在 GitHub 打开 binance_B9_rcmd_strategy_service- 仓库（新窗口）">
+        <!-- GitHub 官方 mark（octicons mark-github-16），内联 SVG：CSP 友好且离线可用 -->
+        <svg class="p7-gh" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+          <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.012 8.012 0 0 0 16 8c0-4.42-3.58-8-8-8z"></path>
+        </svg>
+        <span class="p7-repo-txt">
+          <span class="p7-repo-k">Source Repository</span>
+          <span class="p7-repo-v p7-mono">lawrence-1998-jpg / binance_B9_rcmd_strategy_service-</span>
+        </span>
+        <span class="p7-repo-go" aria-hidden="true">在 GitHub 打开 ↗</span>
+      </a>
+
+      <div class="p7-notice">
+        <span class="p7-bang" aria-hidden="true">!</span>
+        <span>
+          <span class="p7-notice-en">if you are a developer, please reach out to lawrence zhu for code access</span>
+          <span class="p7-notice-zh">仓库为内部私有，需要读代码、跑本地流水线或申请 API secret 的同学请直接联系 lawrence zhu 开权限。</span>
+        </span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ② Dev Bill -->
+  <section class="p7-sec" id="p7-devbill" aria-labelledby="p7-devbill-h">
+    <span class="p7-eyebrow">Dev Bill</span>
+    <h2 class="p7-h2" id="p7-devbill-h">开发者账单 · 运行成本预估</h2>
+    <p class="p7-lead">
+      跑通一轮完整流水线（抓取 → 结构化 → 去重 → 校验 → 打分 → 落库）的资源开销拆解。
+      按 <b>2 轮 / 天</b>、<b>30 天 / 月</b> 折算。
+    </p>
+
+    <div class="p7-kpis">
+      <div class="p7-kpi">
+        <span class="p7-kpi-k">Per Run · 单轮</span>
+        <span class="p7-kpi-v">$20.20</span>
+        <span class="p7-kpi-s">一次完整 run 的预估上限</span>
+      </div>
+      <div class="p7-kpi">
+        <span class="p7-kpi-k">Per Day · 每天</span>
+        <span class="p7-kpi-v">$40.40</span>
+        <span class="p7-kpi-s">2 轮 + 云主机常驻</span>
+      </div>
+      <div class="p7-kpi">
+        <span class="p7-kpi-k">Per Month · 每月</span>
+        <span class="p7-kpi-v">$1,212</span>
+        <span class="p7-kpi-s">按 30 天折算</span>
+      </div>
+    </div>
+
+    <p class="p7-disclaimer p7-note">
+      <span aria-hidden="true">⚠</span>
+      <span><b>这是预估上限，不是账单实付。</b>
+      表中所有金额均为实测值 <b>×2</b> 后的数字，留出量级波动（信源突增、重试、模型涨价）的安全边际；
+      真实开销通常显著低于此表。云主机一项按用户直给的 $3/天 计，未再乘 2。</span>
+    </p>
+
+    <div class="p7-tablebox">
+      <table class="p7-table">
+        <caption class="sr-only" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)">B9 流水线运行成本预估表（实测值 ×2）</caption>
+        <thead>
+          <tr>
+            <th scope="col">成本项</th>
+            <th scope="col" class="p7-num">单轮</th>
+            <th scope="col" class="p7-num">每天</th>
+            <th scope="col" class="p7-num">每月</th>
+            <th scope="col">说明</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="p7-item">云主机 <small>GCP VM · 常驻实例</small></td>
+            <td class="p7-num">$1.50</td>
+            <td class="p7-num">$3.00</td>
+            <td class="p7-num">$90.00</td>
+            <td class="p7-why">按天计费的常驻实例，不随轮次伸缩；单轮金额是按 2 轮/天摊分出来的，仅供横向对比。此项按实付原值填写，未乘 2。</td>
+          </tr>
+          <tr>
+            <td class="p7-item">OpenAI <small>gpt-5.4 + 5.4-nano</small></td>
+            <td class="p7-num">$12.00</td>
+            <td class="p7-num">$24.00</td>
+            <td class="p7-num">$720.00</td>
+            <td class="p7-why">结构化抽取 + embedding。优化后实测单事件 $0.00925，单轮 500–800 事件 ≈ $5.9 实测；表内为 ×2 后的上限。成本随事件量线性变化，是最大的可变项。</td>
+          </tr>
+          <tr>
+            <td class="p7-item">X API <small>推文召回</small></td>
+            <td class="p7-num">$6.00</td>
+            <td class="p7-num">$12.00</td>
+            <td class="p7-num">$360.00</td>
+            <td class="p7-why">按拉回条数计费 $0.0021/条，平衡档约 1200 条/轮 ≈ $2.6 实测；表内为 ×2 后的上限。降档拉取可直接压缩这一项。</td>
+          </tr>
+          <tr>
+            <td class="p7-item">Claude <small>Claude Max 订阅</small></td>
+            <td class="p7-num">$0.70</td>
+            <td class="p7-num">$1.40</td>
+            <td class="p7-num">$42.00</td>
+            <td class="p7-why">预处理跑在本地 Claude Max 订阅上，<b>无增量 API 计费</b>；这里只是把 $20/月订阅费按天折算（≈ $0.67/天）后 ×2 摊进来，便于看总盘子。</td>
+          </tr>
+          <tr class="p7-total">
+            <td class="p7-item">合计</td>
+            <td class="p7-num">$20.20</td>
+            <td class="p7-num">$40.40</td>
+            <td class="p7-num">$1,212.00</td>
+            <td class="p7-why">预估上限（实测值 ×2）。按当前平衡档配置，实付通常落在此值的 50–60%。</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ③ Built by -->
+  <section class="p7-sec" id="p7-builtby" aria-labelledby="p7-builtby-h">
+    <span class="p7-eyebrow">Built By</span>
+    <h2 class="p7-h2" id="p7-builtby-h">协作链路</h2>
+    <p class="p7-lead">
+      这套服务由一条「人 + 多个 AI agent」的流水线搭起来：需求与运维、工程实现、AI 处理、界面设计，
+      各自由不同的模型/平台承担，串联成从想法到线上的完整链路。
+    </p>
+
+    <div class="p7-flowbox">
+      <!-- 横向流程图。四个环节的顺序即「需求 → 工程 → AI 处理 → 设计」，
+           节点深浅交替（surface / n900）做视觉节奏，连接线用虚线 + dashoffset 动画表达数据流向。
+           所有颜色走 var()，跟随外层主题变量走。 -->
+      <svg class="p7-flow" viewBox="0 0 1040 206" role="img"
+           aria-label="协作链路流程图：Manus 负责需求规划与运维，Claude Code 负责工程实现，OpenAI 提供 AI 处理 API，Claude Design 负责设计">
+        <defs>
+          <marker id="p7-arrow" viewBox="0 0 8 8" refX="7" refY="4"
+                  markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse">
+            <path d="M0 0 L8 4 L0 8 Z" fill="var(--n500)"></path>
+          </marker>
+        </defs>
+
+        <!-- 连接线：轻微 S 形贝塞尔，比直线更有「流动」感 -->
+        <g fill="none" stroke="var(--n500)" stroke-width="1.6"
+           stroke-dasharray="6 5" stroke-linecap="round" marker-end="url(#p7-arrow)">
+          <path class="p7-flow-link" d="M228 95 C 244 74, 254 116, 270 95"></path>
+          <path class="p7-flow-link" d="M490 95 C 506 74, 516 116, 532 95"></path>
+          <path class="p7-flow-link" d="M752 95 C 768 74, 778 116, 794 95"></path>
+        </g>
+
+        <!-- ── 01 Manus（浅色节点） ── -->
+        <g>
+          <rect x="14" y="26" width="214" height="138" rx="24"
+                fill="var(--surface)" stroke="var(--n300)" stroke-width="1"></rect>
+          <text class="p7-flow-step" x="32" y="48" fill="var(--n500)">01</text>
+          <circle cx="121" cy="60" r="20" fill="var(--n100)"></circle>
+          <!-- Manus 无公开通用 logo：用「圆内嵌 M + 节点圆点」的几何抽象标记代替，
+               既暗示节点网络（agent 编排），也保留字母识别度 -->
+          <g transform="translate(121 60)">
+            <g fill="none" stroke="var(--g600)" stroke-width="1.7"
+               stroke-linejoin="round" stroke-linecap="round">
+              <circle cx="0" cy="0" r="12.5"></circle>
+              <path d="M-6.5 5.6 L-6.5 -5.6 L0 1.4 L6.5 -5.6 L6.5 5.6"></path>
+            </g>
+            <g fill="var(--g600)">
+              <circle cx="-6.5" cy="-5.6" r="2"></circle>
+              <circle cx="0" cy="1.4" r="2"></circle>
+              <circle cx="6.5" cy="-5.6" r="2"></circle>
+            </g>
+          </g>
+          <text class="p7-flow-name" x="121" y="99" text-anchor="middle" fill="var(--ink)">Manus</text>
+          <text class="p7-flow-ver" x="121" y="113" text-anchor="middle" fill="var(--n600)">Manus 1.6</text>
+          <text class="p7-flow-role" x="121" y="131" text-anchor="middle" fill="var(--n700)">Demand Planning &amp; DevOps</text>
+          <text class="p7-flow-role" x="121" y="145" text-anchor="middle" fill="var(--n600)">cloud computer &amp; more</text>
+          <text class="p7-flow-stage" x="121" y="188" text-anchor="middle" fill="var(--n600)">需求 · 运维</text>
+        </g>
+
+        <!-- ── 02 Claude Code（深色节点） ── -->
+        <g>
+          <rect x="276" y="26" width="214" height="138" rx="24" fill="var(--n900)"></rect>
+          <text class="p7-flow-step" x="294" y="48" fill="var(--n500)">02</text>
+          <circle cx="383" cy="60" r="20" fill="var(--n800)"></circle>
+          <!-- Claude / Anthropic 标志性的放射状星芒：12 道楔形射线，长短交替做出星芒的节奏 -->
+          <g transform="translate(383 60)" fill="var(--a400)">
+            <path d="M0 -13.5 L2.4 -4.2 L0 0 L-2.4 -4.2 Z"></path>
+            <path d="M0 -9 L1.9 -3.2 L0 0 L-1.9 -3.2 Z" transform="rotate(30)"></path>
+            <path d="M0 -13.5 L2.4 -4.2 L0 0 L-2.4 -4.2 Z" transform="rotate(60)"></path>
+            <path d="M0 -9 L1.9 -3.2 L0 0 L-1.9 -3.2 Z" transform="rotate(90)"></path>
+            <path d="M0 -13.5 L2.4 -4.2 L0 0 L-2.4 -4.2 Z" transform="rotate(120)"></path>
+            <path d="M0 -9 L1.9 -3.2 L0 0 L-1.9 -3.2 Z" transform="rotate(150)"></path>
+            <path d="M0 -13.5 L2.4 -4.2 L0 0 L-2.4 -4.2 Z" transform="rotate(180)"></path>
+            <path d="M0 -9 L1.9 -3.2 L0 0 L-1.9 -3.2 Z" transform="rotate(210)"></path>
+            <path d="M0 -13.5 L2.4 -4.2 L0 0 L-2.4 -4.2 Z" transform="rotate(240)"></path>
+            <path d="M0 -9 L1.9 -3.2 L0 0 L-1.9 -3.2 Z" transform="rotate(270)"></path>
+            <path d="M0 -13.5 L2.4 -4.2 L0 0 L-2.4 -4.2 Z" transform="rotate(300)"></path>
+            <path d="M0 -9 L1.9 -3.2 L0 0 L-1.9 -3.2 Z" transform="rotate(330)"></path>
+          </g>
+          <text class="p7-flow-name" x="383" y="99" text-anchor="middle" fill="var(--paper)">Claude Code</text>
+          <text class="p7-flow-ver" x="383" y="113" text-anchor="middle" fill="var(--a300)">Opus / Fable 5</text>
+          <text class="p7-flow-role" x="383" y="131" text-anchor="middle" fill="var(--n300)">Engineering</text>
+          <text class="p7-flow-stage" x="383" y="188" text-anchor="middle" fill="var(--n600)">工程实现</text>
+        </g>
+
+        <!-- ── 03 OpenAI（浅色节点） ── -->
+        <g>
+          <rect x="538" y="26" width="214" height="138" rx="24"
+                fill="var(--surface)" stroke="var(--n300)" stroke-width="1"></rect>
+          <text class="p7-flow-step" x="556" y="48" fill="var(--n500)">03</text>
+          <circle cx="645" cy="60" r="20" fill="var(--n100)"></circle>
+          <!-- OpenAI 的六瓣花结：用 3 个互成 60° 的细长椭圆叠出六瓣结环，中心留一个实心节点 -->
+          <g transform="translate(645 60)">
+            <g fill="none" stroke="var(--n800)" stroke-width="1.6">
+              <ellipse cx="0" cy="0" rx="6.6" ry="12.6"></ellipse>
+              <ellipse cx="0" cy="0" rx="6.6" ry="12.6" transform="rotate(60)"></ellipse>
+              <ellipse cx="0" cy="0" rx="6.6" ry="12.6" transform="rotate(120)"></ellipse>
+            </g>
+            <circle cx="0" cy="0" r="1.9" fill="var(--n800)"></circle>
+          </g>
+          <text class="p7-flow-name" x="645" y="99" text-anchor="middle" fill="var(--ink)">OpenAI</text>
+          <text class="p7-flow-ver" x="645" y="113" text-anchor="middle" fill="var(--n600)">GPT-5.4 / 5.4-nano</text>
+          <text class="p7-flow-role" x="645" y="131" text-anchor="middle" fill="var(--n700)">AI Processor API</text>
+          <text class="p7-flow-stage" x="645" y="188" text-anchor="middle" fill="var(--n600)">AI 处理</text>
+        </g>
+
+        <!-- ── 04 Claude Design（深色节点） ── -->
+        <g>
+          <rect x="800" y="26" width="214" height="138" rx="24" fill="var(--n900)"></rect>
+          <text class="p7-flow-step" x="818" y="48" fill="var(--n500)">04</text>
+          <circle cx="907" cy="60" r="20" fill="var(--n800)"></circle>
+          <!-- 与 Claude Code 同族的星芒，只换色阶（a200 vs a400）以示区分：
+               同在 n900 深底上，a700/a500 会糊掉，所以整体沿赤陶阶梯上移两档再拉开差值 -->
+          <g transform="translate(907 60)" fill="var(--a200)">
+            <path d="M0 -13.5 L2.4 -4.2 L0 0 L-2.4 -4.2 Z"></path>
+            <path d="M0 -9 L1.9 -3.2 L0 0 L-1.9 -3.2 Z" transform="rotate(30)"></path>
+            <path d="M0 -13.5 L2.4 -4.2 L0 0 L-2.4 -4.2 Z" transform="rotate(60)"></path>
+            <path d="M0 -9 L1.9 -3.2 L0 0 L-1.9 -3.2 Z" transform="rotate(90)"></path>
+            <path d="M0 -13.5 L2.4 -4.2 L0 0 L-2.4 -4.2 Z" transform="rotate(120)"></path>
+            <path d="M0 -9 L1.9 -3.2 L0 0 L-1.9 -3.2 Z" transform="rotate(150)"></path>
+            <path d="M0 -13.5 L2.4 -4.2 L0 0 L-2.4 -4.2 Z" transform="rotate(180)"></path>
+            <path d="M0 -9 L1.9 -3.2 L0 0 L-1.9 -3.2 Z" transform="rotate(210)"></path>
+            <path d="M0 -13.5 L2.4 -4.2 L0 0 L-2.4 -4.2 Z" transform="rotate(240)"></path>
+            <path d="M0 -9 L1.9 -3.2 L0 0 L-1.9 -3.2 Z" transform="rotate(270)"></path>
+            <path d="M0 -13.5 L2.4 -4.2 L0 0 L-2.4 -4.2 Z" transform="rotate(300)"></path>
+            <path d="M0 -9 L1.9 -3.2 L0 0 L-1.9 -3.2 Z" transform="rotate(330)"></path>
+          </g>
+          <text class="p7-flow-name" x="907" y="99" text-anchor="middle" fill="var(--paper)">Claude Design</text>
+          <text class="p7-flow-ver" x="907" y="113" text-anchor="middle" fill="var(--a300)">Fable 5</text>
+          <text class="p7-flow-role" x="907" y="131" text-anchor="middle" fill="var(--n300)">Designer</text>
+          <text class="p7-flow-stage" x="907" y="188" text-anchor="middle" fill="var(--n600)">设计</text>
+        </g>
+      </svg>
+    </div>
+
+    <p class="p7-note" style="margin-top:14px">
+      各家 logo 均为便于识别而重绘的简化标记，非官方素材；商标归各自权利人所有。
+    </p>
+  </section>
+
+</div>
+</div>
 </main>
 
 <footer>
@@ -2005,12 +2857,11 @@ function showTab(n){
   // 三个子工具都是用户点按钮才发请求，不需要 tab 打开时预取，所以 loaded/dispatcher
   // 不含 4；这里的 [1,2,3,4,5] 只是控制 hidden 属性，与是否需要预取无关。
   // Tab 5 内部 id 沿用 panel-5，展示的 idx 是「06」（05 是外链的策略实验室）。
-  [1,2,3,4,5].forEach(function(i){ $("#panel-"+i).hidden=(i!==n); });
+  [1,2,3,4,5,6,7].forEach(function(i){ var el=$("#panel-"+i); if(el) el.hidden=(i!==n); });
   if(location.hash!=="#tab"+n) history.replaceState(null,"","#tab"+n);
-  var loader=({1:loadFlow,2:loadData,3:loadApi,5:(typeof loadHistory==="function"?loadHistory:null)})[n];
+  var loader=({1:loadFlow,2:loadData,3:loadApi,6:(typeof loadHistory==="function"?loadHistory:null)})[n];
   if(loader&&!loaded[n]){ loaded[n]=true; loader(); }
   track("tab_switch",{tab:n});
-  syncSideSub();
   window.scrollTo({top:0,behavior:"smooth"});
 }
 $$(".tab[role=tab]").forEach(function(t){
@@ -2018,60 +2869,9 @@ $$(".tab[role=tab]").forEach(function(t){
 });
 document.addEventListener("keydown",function(e){
   if(/^(INPUT|SELECT|TEXTAREA)$/.test(e.target.tagName)) return;
-  if(e.key>="1"&&e.key<="5"&&!e.metaKey&&!e.ctrlKey&&!e.altKey) showTab(Number(e.key));
+  if(e.key>="1"&&e.key<="7"&&!e.metaKey&&!e.ctrlKey&&!e.altKey) showTab(Number(e.key));
 });
 
-/* ══════════════════════════════════════════════════════════════════════
-   侧边导航：二级子项联动 + 窄屏抽屉
-   主导航项本身不需要额外 JS —— 它们仍是原来那批 .tab[role=tab] 按钮，
-   只是被搬进了侧边栏，上面的 showTab / 键盘快捷键照常生效。
-   ══════════════════════════════════════════════════════════════════════ */
-
-/* 「评测工具」展开时才显示它的三个子工具；用函数声明以便 showTab 提前调用。 */
-function syncSideSub(){
-  var sub=document.getElementById("snSub4"), t4=document.getElementById("tab-4");
-  if(sub&&t4) sub.classList.toggle("show", t4.getAttribute("aria-selected")==="true");
-}
-function markSideSub(n){
-  $$(".sn-subitem").forEach(function(b){
-    b.setAttribute("aria-current", b.dataset.sub===String(n)?"true":"false");
-  });
-}
-function setNav(open){
-  var nav=$("#sidenav"), bd=$("#snBackdrop"), tg=$("#navToggle");
-  if(!nav) return;
-  nav.classList.toggle("open",open);
-  if(bd){ bd.classList.toggle("show",open); bd.hidden=!open; }
-  if(tg) tg.setAttribute("aria-expanded",open?"true":"false");
-}
-/* 只在窄屏收起——宽屏侧边栏是常驻的，点导航不该让它消失 */
-function closeNavIfDrawer(){
-  if(window.matchMedia("(max-width:1080px)").matches) setNav(false);
-}
-
-$$(".sn-subitem").forEach(function(btn){
-  btn.addEventListener("click",function(){
-    showTab(4);
-    // 转发给面板内已有的子 tab 按钮，不复制一份切换逻辑，避免两处状态各走各的
-    var target=document.getElementById("stab-"+btn.dataset.sub);
-    if(target) target.click();
-    markSideSub(btn.dataset.sub);
-    closeNavIfDrawer();
-  });
-});
-/* 反向同步：用户直接点面板里的子 tab 时，侧边栏高亮跟着走 */
-["1","2","3"].forEach(function(i){
-  var s=document.getElementById("stab-"+i);
-  if(s) s.addEventListener("click",function(){ markSideSub(i); });
-});
-
-$("#navToggle").addEventListener("click",function(){
-  setNav(!$("#sidenav").classList.contains("open"));
-});
-$("#snBackdrop").addEventListener("click",function(){ setNav(false); });
-document.addEventListener("keydown",function(e){ if(e.key==="Escape") setNav(false); });
-$$(".tab").forEach(function(t){ t.addEventListener("click",closeNavIfDrawer); });
-syncSideSub();
 
 /* ══════════════════════════════════════════════════════════════════════
    通用带鉴权的写请求（POST/DELETE）—— 供历史数据 tab 与「保存结果」按钮共用。
@@ -2275,6 +3075,19 @@ function loadHistorySummary(){
 })();
 
 /* ── health ───────────────────────────────────────────────────────── */
+/* 顶栏时钟：全项目已统一 UTC+8（VM 系统/MySQL/cron 都切了），这里直接按
+   Asia/Shanghai 渲染，避免用户看到两套时区打架。 */
+function tickTopbarClock(){
+  var el=document.getElementById("topbarTime");
+  if(!el) return;
+  var now=new Date();
+  var s=now.toLocaleString("zh-CN",{timeZone:"Asia/Shanghai",hour12:false,
+        year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit"});
+  el.textContent=s.replace(/\//g,"-")+" UTC+8";
+}
+tickTopbarClock();
+setInterval(tickTopbarClock,30000);
+
 function loadHealth(){
   return fetch(API+"/health").then(function(r){return r.json();}).then(function(d){
     var ok=d.status==="ok";
@@ -2961,7 +3774,7 @@ function loadApi(){
 (function(){
   loadHealth().catch(function(){});          // 顶栏指示灯常驻，与当前 tab 无关
   track("page_view",{referrer:document.referrer||null});
-  var m=String(location.hash||"").match(/^#tab([12345])$/);
+  var m=String(location.hash||"").match(/^#tab([1-7])$/);
   showTab(m?Number(m[1]):1);
 })();
 </script>
@@ -3713,5 +4526,453 @@ document.getElementById('abRunBtn').addEventListener('click', async () => {
 
 })();
 </script>
+
+<script>(function(){
+"use strict";
+/* ══════════════════════════════════════════════════════════════════════════
+   Tab 05 · 策略实验室 —— 原 web/lab.html 的整段脚本，包进 IIFE 后并入主站。
+   为什么要 IIFE：lab.html 原来是独立页面，panelSingle / panelA / panelB /
+   FACTORS / PRESETS / SECTORS / compareSeq / reweightSeq / init / api / track…
+   全是顶层 var 和函数声明。并进 index.html 之后它们会跟主脚本的同名符号在同一个
+   全局作用域里互相覆盖（SECTORS、API、track、$ 都是真实存在的重名）。包一层
+   立即执行函数，这些名字全部退回函数作用域，对外零暴露。
+   唯一有意的外部依赖是主脚本的全局 activeToken()，用 typeof 守卫防御性调用。
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* 所有 DOM 查询都以 #panel-5 为根，而不是 document。除了防 id 撞车，更重要的是
+   .lb-presets / input[type=range] 这类选择器如果扫全文档，会把主站其它 tab 里
+   将来新增的同类元素一起抓进来。*/
+var ROOT = document.getElementById("panel-5");
+if (!ROOT) return;
+
+function $(s){ return ROOT.querySelector(s); }
+function $all(s){ return Array.prototype.slice.call(ROOT.querySelectorAll(s)); }
+function esc(s){ return (s==null?"":String(s)).replace(/[&<>"]/g, function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c]; }); }
+function pct(v){ return Math.round(v*1000)/10; }
+
+/* ── Config ───────────────────────────────────────────────────────────── */
+var FALLBACK = "http://34.138.247.158:8080";
+var API = (location.protocol === "http:" || location.protocol === "https:")
+          ? location.origin.replace(/\/+$/, "") : FALLBACK;
+
+/* 鉴权：优先用主站 Tab03 里用户自己填的 secret（activeToken 是主脚本的全局函数），
+   取不到再回退页面自带的演示 token —— lab.html 时期这里是写死的常量。*/
+var TOKEN_FALLBACK = "***REMOVED***";
+function token(){
+  var t = (typeof activeToken === "function") ? activeToken() : "";
+  return t || TOKEN_FALLBACK;
+}
+
+var SECTORS = ["New Listing","bStocks","Seed","tCommodities","BSC","DeFi","Gaming","NFT",
+  "Layer1/Layer2","Launchpad","Payments","Monitoring","RWA","Solana","Fan Token",
+  "Infrastructure","AI","Launchpool","Megadrop","MEME"];
+
+/* 因子色不再写死十六进制，指向 #panel-5 作用域里的 --lab-f-* 变量（见样式段）。*/
+var FACTORS = [
+  {k:"M",   name:"影响面", sub:"Impact",     color:"var(--lab-f-m)"},
+  {k:"T",   name:"时效性", sub:"Timeliness", color:"var(--lab-f-t)"},
+  {k:"H",   name:"热度",   sub:"Hotness",    color:"var(--lab-f-h)"},
+  {k:"A",   name:"权威性", sub:"Authority",  color:"var(--lab-f-a)"},
+  {k:"Q",   name:"质量",   sub:"Quality",    color:"var(--lab-f-q)"},
+  {k:"Rel", name:"相关性", sub:"Relevance",  color:"var(--lab-f-rel)"}
+];
+
+var PRESETS = {
+  default:    {M:35, T:20, H:15, A:15, Q:15, Rel:0},
+  timeliness: {M:10, T:65, H:10, A:10, Q:5,  Rel:0},
+  authority:  {M:10, T:10, H:10, A:65, Q:5,  Rel:0},
+  hotness:    {M:10, T:10, H:65, A:10, Q:5,  Rel:0},
+  relevance:  {M:15, T:15, H:10, A:10, Q:5,  Rel:45}
+};
+
+function api(path, body){
+  return fetch(API + path, {
+    method: "POST",
+    headers: {"Content-Type":"application/json", "Authorization":"Bearer " + token()},
+    body: JSON.stringify(body || {})
+  }).then(function(r){
+    if (!r.ok) return r.json().catch(function(){ return {}; }).then(function(j){ throw new Error(j.error || ("HTTP " + r.status)); });
+    return r.json();
+  });
+}
+
+/* 埋点：fire-and-forget，失败静默吞掉，不影响页面正常使用。*/
+function track(eventType, meta){
+  try{ api("/api/analytics/track", {event_type: eventType, page: "lab", meta: meta || {}}).catch(function(){}); }
+  catch(e){}
+}
+
+/* 「保存结果」：两个子 tab 共用，把已经拿到手的响应 JSON 原样 POST 给 /api/history/save。*/
+var lastReweightResult = null, lastCompareResult = null;
+function saveLabResult(tool, payload, btnId, labelId, msgId){
+  var btn = $("#" + btnId), msg = $("#" + msgId);
+  if (!payload){ msg.textContent = "还没有可保存的结果，请等待加载完成后再试。"; return; }
+  var label = ($("#" + labelId) || {}).value || "";
+  var original = btn.textContent;
+  btn.disabled = true; btn.textContent = "保存中…";
+  api("/api/history/save", {tool: tool, label: label, payload: payload, cost_usd: 0}).then(function(){
+    btn.classList.add("saved"); btn.textContent = "已保存 ✓"; msg.textContent = "已保存，可在「06 历史数据」tab 查看";
+    setTimeout(function(){ btn.classList.remove("saved"); btn.textContent = original; btn.disabled = false; }, 1800);
+  }).catch(function(e){
+    btn.textContent = "保存失败"; msg.textContent = e.message;
+    setTimeout(function(){ btn.textContent = original; btn.disabled = false; }, 1800);
+  });
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   权重面板组件（single / a / b 三份实例共用同一套逻辑）
+   ══════════════════════════════════════════════════════════════════════════ */
+function Panel(version, initial){
+  this.version = version;
+  this.values = Object.assign({}, initial);
+  this.container = $("#wpanel-" + version);
+  this.stack = $("#wstack-" + version);
+  this.legend = $("#wlegend-" + version);
+  this.build();
+}
+Panel.prototype.build = function(){
+  var self = this;
+  this.container.innerHTML = FACTORS.map(function(f){
+    return (
+      '<div class="lb-wrow' + (f.k === "Rel" ? " rel-row" : "") + '" data-k="' + f.k + '">' +
+        '<div class="lb-wtop">' +
+          '<span class="lb-wl"><span class="sw" style="background:' + f.color + '"></span>' + f.name +
+            '<span class="sub">' + f.sub + '</span></span>' +
+          '<span class="lb-wv" data-k="' + f.k + '">0<span class="u">%</span></span>' +
+        '</div>' +
+        '<input type="range" min="0" max="100" value="' + self.values[f.k] + '" data-k="' + f.k + '" aria-label="' + f.name + ' 权重">' +
+      '</div>'
+    );
+  }).join("");
+  Array.prototype.slice.call(this.container.querySelectorAll("input[type=range]")).forEach(function(inp){
+    inp.addEventListener("input", function(){
+      self.values[inp.dataset.k] = parseInt(inp.value, 10);
+      self.refresh();
+      onWeightsChanged(self.version);
+    });
+  });
+  this.refresh();
+};
+Panel.prototype.setRelEnabled = function(enabled){
+  var row = this.container.querySelector(".rel-row");
+  var input = row.querySelector("input[type=range]");
+  input.disabled = !enabled;
+  row.classList.toggle("disabled", !enabled);
+  if (!enabled) { this.values.Rel = 0; input.value = 0; }
+  this.refresh();
+};
+Panel.prototype.applyPreset = function(name){
+  var p = PRESETS[name];
+  if (!p) return;
+  var self = this;
+  Object.keys(p).forEach(function(k){
+    self.values[k] = p[k];
+    var inp = self.container.querySelector('input[data-k="' + k + '"]');
+    if (inp) inp.value = p[k];
+  });
+  var relEnabled = !!currentSector();
+  this.setRelEnabled(relEnabled);
+  this.refresh();
+  onWeightsChanged(this.version);
+};
+Panel.prototype.normalized = function(){
+  var relEnabled = !!currentSector();
+  var w = Object.assign({}, this.values);
+  if (!relEnabled) w.Rel = 0;
+  var total = FACTORS.reduce(function(s, f){ return s + Math.max(0, w[f.k]); }, 0);
+  var out = {};
+  if (total <= 0){
+    var active = relEnabled ? FACTORS : FACTORS.filter(function(f){ return f.k !== "Rel"; });
+    var eq = 1 / active.length;
+    FACTORS.forEach(function(f){ out[f.k] = active.indexOf(f) >= 0 ? eq : 0; });
+  } else {
+    FACTORS.forEach(function(f){ out[f.k] = Math.max(0, w[f.k]) / total; });
+  }
+  return out;
+};
+Panel.prototype.refresh = function(){
+  var self = this;
+  var norm = this.normalized();
+  FACTORS.forEach(function(f){
+    var vEl = self.container.querySelector('.lb-wv[data-k="' + f.k + '"]');
+    if (vEl) vEl.innerHTML = pct(norm[f.k]).toFixed(1) + '<span class="u">%</span>';
+  });
+  // 归一化堆叠条
+  this.stack.innerHTML = FACTORS.map(function(f){
+    var w = norm[f.k];
+    if (w <= 0.0005) return "";
+    return '<i style="flex-basis:' + (w*100) + '%;background:' + f.color + '" title="' + f.name + ' ' + pct(w).toFixed(1) + '%"></i>';
+  }).join("");
+  this.legend.innerHTML = FACTORS.map(function(f){
+    if (f.k === "Rel" && !currentSector()) return "";
+    return '<span><i class="sw" style="background:' + f.color + '"></i>' + f.name + ' <b>' + pct(norm[f.k]).toFixed(0) + '%</b></span>';
+  }).join("");
+};
+Panel.prototype.rawWeights = function(){ return Object.assign({}, this.values); };
+
+function currentSector(){ return $("#labFSector").value || null; }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   子 tab 切换
+   原 lab.html 还会 history.replaceState("#sub"+n)；并入主站后 hash 归主脚本的
+   showTab() 管（#tab5），子 tab 再去改 hash 会把主 tab 的定位冲掉，所以去掉。
+   ══════════════════════════════════════════════════════════════════════════ */
+function showLabPane(n){
+  [1,2].forEach(function(i){
+    var pane = $("#lpane-" + i), tab = $("#lstab-" + i);
+    if (pane) pane.hidden = (i !== n);
+    if (tab)  tab.setAttribute("aria-selected", i === n ? "true" : "false");
+  });
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   Init
+   ══════════════════════════════════════════════════════════════════════════ */
+var panelSingle, panelA, panelB;
+var debounceTimers = {};
+
+function init(){
+  var sectorSel = $("#labFSector");
+  SECTORS.forEach(function(s){
+    var o = document.createElement("option"); o.value = s; o.textContent = s;
+    sectorSel.appendChild(o);
+  });
+
+  panelSingle = new Panel("single", PRESETS.default);
+  panelA = new Panel("a", PRESETS.authority);
+  panelB = new Panel("b", PRESETS.timeliness);
+
+  $all(".lb-presets").forEach(function(group){
+    group.addEventListener("click", function(e){
+      var btn = e.target.closest("button[data-preset]");
+      if (!btn) return;
+      var target = group.dataset.target;
+      var panel = target === "single" ? panelSingle : (target === "a" ? panelA : panelB);
+      panel.applyPreset(btn.dataset.preset);
+    });
+  });
+
+  [1,2].forEach(function(i){
+    var tab = $("#lstab-" + i);
+    if (tab) tab.addEventListener("click", function(){ showLabPane(i); });
+  });
+
+  sectorSel.addEventListener("change", function(){
+    var enabled = !!currentSector();
+    $("#labRelNote").hidden = !enabled;
+    [panelSingle, panelA, panelB].forEach(function(p){ p.setRelEnabled(enabled); });
+    onGlobalFilterChanged();
+  });
+  ["labFDays","labFPool","labFTopN"].forEach(function(id){
+    $("#" + id).addEventListener("change", onGlobalFilterChanged);
+  });
+
+  $("#labBtnCompare").addEventListener("click", function(){ track("tool_run", {tool:"lab_ab_compare"}); runCompare(); });
+  $("#singleSaveBtn").addEventListener("click", function(){
+    saveLabResult("lab_weight", lastReweightResult, "singleSaveBtn", "singleSaveLabel", "singleSaveMsg");
+  });
+  $("#compareSaveBtn").addEventListener("click", function(){
+    saveLabResult("lab_ab_compare", lastCompareResult, "compareSaveBtn", "compareSaveLabel", "compareSaveMsg");
+  });
+
+  track("page_view", {});
+  runReweight();
+  runCompare();
+}
+
+/* 全局筛选（板块 / 天数 / 池大小 / TopN）是单版本和 AB 对比共用的入参，改了两边都要重算。
+   原来这里写的是 onWeightsChanged("single") + ("a") + ("b")：debounce 计时器按
+   version 分别存，"a" 和 "b" 各排了一次 runCompare，同一份对比请求被 POST 两遍，
+   白烧一次后端计算。 */
+function onGlobalFilterChanged(){
+  onWeightsChanged("single");
+  onWeightsChanged("compare");
+}
+
+function onWeightsChanged(version){
+  // A/B 两个权重面板改的是同一个对比请求，必须共用一个 debounce key，
+  // 否则「先拖 A 再拖 B」也会连发两次 runCompare
+  var key = (version === "single") ? "single" : "compare";
+  clearTimeout(debounceTimers[key]);
+  debounceTimers[key] = setTimeout(function(){
+    if (key === "single") runReweight();
+    else runCompare();
+  }, 450);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   Section 1 — 单版本重排
+   ══════════════════════════════════════════════════════════════════════════ */
+function baseParams(){
+  return {
+    sector: currentSector(),
+    days: parseInt($("#labFDays").value, 10),
+    pool_limit: parseInt($("#labFPool").value, 10) || 300,
+    top_n: parseInt($("#labFTopN").value, 10) || 20
+  };
+}
+
+function tierBadge(tier){ return '<span class="lb-tier lb-tier-' + esc(tier||"D") + '">' + esc(tier||"?") + '</span>'; }
+/* 位次变化徽章的配色改走 Organic：升=鼠尾草 g200/g800，降=赤陶 a200/a800，
+   持平/新入池=中性 n200/n600（原来是绿/红两色）。*/
+function deltaBadge(delta){
+  if (delta === null || delta === undefined) return '<span class="lb-tag flat">新入池</span>';
+  if (delta > 0) return '<span class="lb-tag up">▲ ' + delta + '</span>';
+  if (delta < 0) return '<span class="lb-tag down">▼ ' + Math.abs(delta) + '</span>';
+  return '<span class="lb-tag flat">— 0</span>';
+}
+function factorLine(factors){
+  return FACTORS.filter(function(f){ return f.k !== "Rel" || factors.Rel !== undefined; })
+    .map(function(f){ return f.k + " " + (factors[f.k]!==undefined? factors[f.k].toFixed(2):"–"); }).join("  ");
+}
+function sourcesLine(names){
+  names = names || [];
+  if (!names.length) return "无信源标注";
+  var head = names.slice(0,2).join(" · ");
+  return names.length > 2 ? head + " +" + (names.length-2) : head;
+}
+
+// 与 runCompare 的 compareSeq 同一套竞态防护：连续拖滑块会连发多个请求，
+// 晚返回的旧响应不能覆盖新响应（review 修 runCompare 时点名这里有同类问题）。
+var reweightSeq = 0;
+
+function runReweight(){
+  var el = $("#singleResults");
+  var seq = ++reweightSeq;
+  var body = Object.assign(baseParams(), { weights: panelSingle.rawWeights() });
+  api("/api/tools/reweight", body).then(function(d){
+    if (seq !== reweightSeq) return;                      // 过期响应，丢弃
+    lastReweightResult = d;
+    $("#labPoolPill").textContent = "池大小 " + d.meta.pool_size;
+    $("#singleMeta").textContent = "Top " + d.results.length + " · 基准 " + d.meta.social_baseline;
+    $("#labFootMeta").textContent = "上次计算：" + new Date(d.meta.generated_at).toLocaleString("zh-CN");
+    if (!d.results.length){ el.innerHTML = '<div class="lb-empty">该时间范围内没有事件</div>'; return; }
+    var moved = d.results.filter(function(r){ return r.rank_delta !== null && r.rank_delta !== undefined && r.rank_delta !== 0; }).length;
+    el.innerHTML = '<div class="lb-rlist">' + d.results.map(function(r){
+      return (
+        '<div class="lb-ritem">' +
+          '<div class="rk">#' + r.rank + '</div>' +
+          '<div>' + tierBadge(r.event_tier) + '</div>' +
+          '<div class="ti">' +
+            '<div class="tzh">' + esc(r.title_zh || r.title_en) + '</div>' +
+            '<div class="meta">' + factorLine(r.factors) + '  ·  ' + esc(sourcesLine(r.source_names)) + '</div>' +
+            ((r.is_rumor || r.verification_status === "VERIFIED") ?
+              '<div class="meta">' +
+                (r.is_rumor ? '<span class="lb-tag rumor">疑似传闻</span> ' : '') +
+                (r.verification_status === "VERIFIED" ? '<span class="lb-tag ver">已核实</span>' : '') +
+              '</div>' : '') +
+          '</div>' +
+          '<div class="sc">' + r.score.toFixed(3) + '</div>' +
+          '<div class="dl">' + deltaBadge(r.rank_delta) + '</div>' +
+        '</div>'
+      );
+    }).join("") + '</div>' +
+    '<div class="lb-movednote">「位次」为相对生产环境当前排名的变化；本轮共 <b>' + moved + '</b> 条位次变化。</div>';
+  }).catch(function(err){
+    if (seq !== reweightSeq) return;                      // 旧请求的失败别覆盖新请求
+    el.innerHTML = '<div class="lb-err">加载失败：' + esc(err.message) + '</div>';
+  });
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   Section 2 — 两版本对比
+   ══════════════════════════════════════════════════════════════════════════ */
+function topListHTML(items){
+  if (!items.length) return '<div class="lb-empty">无数据</div>';
+  return '<div class="lb-tlist">' + items.map(function(r){
+    return (
+      '<div class="lb-titem">' +
+        '<div class="rk">' + r.rank + '</div>' +
+        '<div class="tt">' + tierBadge(r.event_tier) + '<span>' + esc(r.title_zh || r.title_en) + '</span></div>' +
+        '<div class="sc">' + r.score.toFixed(3) + '</div>' +
+      '</div>'
+    );
+  }).join("") + '</div>';
+}
+
+function caseListHTML(items, dir){
+  if (!items.length) return '<div class="lb-empty">没有满足条件的案例</div>';
+  return '<div class="lb-clist">' + items.map(function(c){
+    return (
+      '<div class="lb-citem ' + dir + '">' +
+        '<div class="arrow">' + (dir === "up" ? "↑" : "↓") + '</div>' +
+        '<div class="body">' +
+          '<div class="ttl">' + tierBadge(c.event_tier) + '<span>' + esc(c.title_zh || c.title_en) + '</span></div>' +
+          '<div class="rk">第 <b>' + c.rank_b + '</b> 名<span class="arw">→</span>第 <b>' + c.rank_a + '</b> 名 · ' + esc(sourcesLine(c.source_names)) + '</div>' +
+        '</div>' +
+        '<div class="delta">' + (c.delta > 0 ? "+" : "") + c.delta + '</div>' +
+      '</div>'
+    );
+  }).join("") + '</div>';
+}
+
+/* 对比请求的自增序号：debounce 只能压掉「连续触发」，压不掉「先发的请求后返回」。
+   拖动滑块或连改筛选时后端耗时不定，晚返回的旧响应会盖掉新响应，页面上留下一份
+   和当前控件不匹配的结果。所以每次发请求领一个号，回来时不是最新号就整个丢弃。 */
+var compareSeq = 0;
+
+function runCompare(){
+  var el = $("#compareResults");
+  var seq = ++compareSeq;
+  var p = baseParams();
+  var body = {
+    sector: p.sector, days: p.days, pool_limit: p.pool_limit,
+    top_n: p.top_n, case_limit: 8,
+    weights_a: panelA.rawWeights(), weights_b: panelB.rawWeights(),
+    label_a: $("#labLabelA").value || "版本 A",
+    label_b: $("#labLabelB").value || "版本 B"
+  };
+  el.innerHTML = '<div class="lb-loading">正在计算对比…</div>';
+  api("/api/tools/compare", body).then(function(d){
+    if (seq !== compareSeq) return;                       // 过期响应，丢弃
+    if (d.error){ el.innerHTML = '<div class="lb-err">' + esc(d.error) + '</div>'; return; }
+    lastCompareResult = d;
+    var t = d.turnover;
+    $("#labFootMeta").textContent = "上次计算：" + new Date(d.meta.generated_at).toLocaleString("zh-CN");
+    el.innerHTML =
+      '<div class="lb-stats3">' +
+        '<div class="lb-card lb-stat"><span class="l">Top' + t.top_n + ' 换手率</span><span class="v">' + (t.turnover_rate*100).toFixed(0) + '<span class="u">%</span></span><span class="n">两版本 Top' + t.top_n + ' 中不重合的新闻占比</span></div>' +
+        '<div class="lb-card lb-stat"><span class="l">重合数量</span><span class="v">' + t.overlap_count + '<span class="u">/ ' + t.top_n + '</span></span><span class="n">同时出现在 A、B 两版本 Top' + t.top_n + ' 里的事件</span></div>' +
+        '<div class="lb-card lb-stat"><span class="l">候选池规模</span><span class="v">' + d.meta.pool_size + '<span class="u">条</span></span><span class="n">近 ' + d.meta.days + ' 天事件，本次对比的共同基准</span></div>' +
+      '</div>' +
+      '<div class="lb-note sage" style="margin-bottom:22px"><span class="lb-lbl">变化 Summary（规则统计生成，未调用 LLM）</span>' + esc(d.summary) + '</div>' +
+      '<div class="lb-grid lb-g2" style="margin-bottom:22px">' +
+        '<div class="lb-card"><div class="lb-phead"><div class="lb-ptitle"><strong>排名上升 Case</strong></div><span class="lb-tag lb-mono">' + d.rising_cases.length + ' 条</span></div>' + caseListHTML(d.rising_cases, "up") + '</div>' +
+        '<div class="lb-card"><div class="lb-phead"><div class="lb-ptitle"><strong>排名下降 Case</strong></div><span class="lb-tag lb-mono">' + d.falling_cases.length + ' 条</span></div>' + caseListHTML(d.falling_cases, "down") + '</div>' +
+      '</div>' +
+      '<div class="lb-grid lb-g2">' +
+        '<div class="lb-card"><div class="lb-phead"><div class="lb-ptitle"><span class="lb-bigdot a"></span><strong>' + esc(d.meta.label_a) + ' · Top' + t.top_n + '</strong></div></div>' + topListHTML(d.top_a) + '</div>' +
+        '<div class="lb-card"><div class="lb-phead"><div class="lb-ptitle"><span class="lb-bigdot b"></span><strong>' + esc(d.meta.label_b) + ' · Top' + t.top_n + '</strong></div></div>' + topListHTML(d.top_b) + '</div>' +
+      '</div>';
+  }).catch(function(err){
+    if (seq !== compareSeq) return;                       // 旧请求的失败别覆盖新请求的 loading 态
+    el.innerHTML = '<div class="lb-err">加载失败：' + esc(err.message) + '</div>';
+  });
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   启动时机
+   lab.html 是独立页面，脚本末尾直接 init()：进页面 = 用户要用这个工具。
+   并入主站后 panel-5 默认是隐藏的，如果照旧立刻 init()，每次打开首页都会白发
+   /api/tools/reweight + /api/tools/compare 两个重计算请求。所以改成「首次显示
+   时再启动」：不依赖主脚本内部实现，只观察 #panel-5 的 hidden 属性——showTab()
+   正是通过它切换面板的。逻辑本身一行没改，只是把入口从「页面加载」挪到
+   「面板首次可见」，与原来「打开 /lab 才跑」的成本模型一致。
+   ══════════════════════════════════════════════════════════════════════════ */
+var booted = false;
+function boot(){
+  if (booted) return;
+  booted = true;
+  init();
+}
+if (!ROOT.hidden){
+  boot();
+} else {
+  var mo = new MutationObserver(function(){
+    if (!ROOT.hidden){ mo.disconnect(); boot(); }
+  });
+  mo.observe(ROOT, {attributes:true, attributeFilter:["hidden"]});
+}
+})();</script>
 </body>
 </html>

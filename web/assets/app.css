@@ -1,0 +1,617 @@
+@charset "utf-8";
+/* ══════════════════════════════════════════════════════════════════════════
+   B9 推荐策略工作台 —— 共享设计系统样式表 (Organic)
+   ══════════════════════════════════════════════════════════════════════════
+
+   这是什么
+     本次视觉改版的「样式地基」。token（颜色/圆角/投影/字体栈）、顶部两层导航、
+     吸顶页内锚点条、以及卡片/按钮/标签/Tier 徽章/表格/码块/表单这些通用组件，
+     全部集中在这一个文件里。
+
+   谁引用它
+     web/index.html（01–07 全部 tab）与 web/lab.html（策略实验室）。
+     两页各自的内联 <style> 只保留页面独有的、无法复用的局部样式；凡是两边都要用
+     的东西一律下沉到这里 —— 改版前双份内联样式互相漂移，是这次要根治的问题。
+     服务端由 api/server.py 的 web_assets() 路由以 /assets/app.css 暴露。
+
+   token 出处
+     设计交付物 design_handoff_b9_workbench/README.md 第三节，及其原始出处
+     organic-styles.css。这里的取值是照抄，**不要就地微调**：设计稿、原型、本表
+     三者必须同源，否则下次改版对不上账。
+     （原表用 color-mix() 表达半透明色，这里改写成等价的 rgba 字面量，避免依赖
+       color-mix 的浏览器支持面，也方便在 SVG 的 fill/stroke 里直接引用。）
+
+   ⚠ 性能红线：禁止 backdrop-filter
+     旧版顶栏/吸顶条用过 backdrop-filter 做毛玻璃。它会让浏览器对整个背后区域
+     逐帧重算高斯模糊；页面里同时存在无限循环动画（pipeline 状态脉动点、loading
+     条），于是每一帧都触发一次全页重算，表现为整页闪烁、滚动撕裂。
+     所以本表所有吸顶元素（.b9-topbar / .b9-tabbar / .b9-anchorbar）一律用
+     **不透明纯色**垫底，绝不引入 backdrop-filter。后续维护同样禁止加。
+     配套的另一半经验：真正 position:fixed 的元素要保留合成层提升，见 .b9-layer。
+
+   颜色约定
+     组件规则里**不写死十六进制**，一律 var(--token)（SVG 内的 fill/stroke 也是）。
+     字面色值只允许出现在下面这个 :root 里 —— 它是唯一的真源。
+   ══════════════════════════════════════════════════════════════════════ */
+
+/* 中文不引 webfont（字重多、体积以 MB 计，得不偿失），只让拉丁字形走 Google Fonts；
+   display=swap 保证字体没到之前先用系统栈渲染，不出现首屏空白。 */
+@import url('https://fonts.googleapis.com/css2?family=Caprasimo&family=Figtree:wght@400;600;700&display=swap');
+
+
+/* ══════════════════════════════════════════════════════════════════════════
+   1. TOKENS
+   ══════════════════════════════════════════════════════════════════════ */
+
+:root{
+  /* — 基础角色色 — */
+  --paper:#f5ead8;     /* 页面底色 */
+  --surface:#ebddc5;   /* 卡片底 */
+  --ink:#201e1d;       /* 主文字 */
+  --gold:#c67139;      /* 强调：赤陶（沿用 --gold 变量名，取值换成赤陶，老代码无需改名） */
+  --indigo:#7a8a5e;    /* 次强调：鼠尾草（同上，保名换值） */
+  --green:#7a8a5e;     /* 正向 / 已核实，与次强调同系 */
+
+  /* — 中性阶梯 — */
+  --n100:#f9f4ed; --n200:#eee7db; --n300:#dcd3c4; --n400:#c0b6a5; --n500:#a19786;
+  --n600:#82796a; --n700:#645c50; --n800:#474238; --n900:#2e2b25;
+
+  /* — 赤陶阶梯 — */
+  --a100:#fff2eb; --a200:#ffe1d0; --a300:#ffc6a5; --a400:#f6a06b; --a500:#d67f48;
+  --a600:#b2622d; --a700:#8c491a; --a800:#643312; --a900:#402310;
+
+  /* — 鼠尾草阶梯 — */
+  --g100:#f0fae1; --g200:#e1eecc; --g300:#ccdbb2; --g400:#aebf92; --g500:#8fa073;
+  --g600:#728157; --g700:#56633f; --g800:#3d472b; --g900:#272e1b;
+
+  /* — 圆角 —
+     按钮 / 输入 / 标签一律 999px 药丸，不走这三档；这三档只给卡片、码块、面板。 */
+  --radius-sm:8px; --radius-md:16px; --radius-lg:28px;
+
+  /* — 投影：暖墨色，不用中性灰，否则压在米色纸底上会发脏 — */
+  --shadow-sm:0 1px 2px rgba(46,43,37,.14);
+  --shadow-md:0 3px 10px rgba(46,43,37,.16);
+  --shadow-lg:0 12px 32px rgba(46,43,37,.22);
+
+  /* — 字体栈 —
+     中文一律系统黑体；Caprasimo 只有拉丁字形，中文标题自然回退到系统黑体，
+     这是设计上刻意接受的效果，不是 bug。 */
+  --sans:"Figtree",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+  --heading:"Caprasimo","PingFang SC","Hiragino Sans GB","Microsoft YaHei",system-ui,sans-serif;
+
+  /* — 派生半透明色 —
+     深色条上的文字层级、以及分隔线。写成 rgba 字面量而不是 color-mix()，
+     一是老 Safari/WebView 兼容，二是能直接塞进 SVG 属性。 */
+  --divider:rgba(32,30,29,.16);          /* 通用分隔线 = ink 16% */
+  --ondark:#f5ead8;                       /* 深色条上的主文字（米白） */
+  --ondark-2:rgba(245,234,216,.55);       /* 次级：eyebrow / 说明 */
+  --ondark-3:rgba(245,234,216,.45);       /* 三级：码块注释、时间戳 */
+  --ondark-line:rgba(245,234,216,.22);    /* 深色条上的竖分隔线 */
+  --status-ok-bg:rgba(122,138,94,.22);    /* 状态胶囊底（鼠尾草 22%） */
+  --gold-glow:rgba(198,113,57,.18);       /* 输入框 focus 光晕 */
+  --gold-tint:rgba(198,113,57,.30);       /* ::selection */
+
+  /* ── 语义别名 ────────────────────────────────────────────────────────
+     index.html / lab.html 里有几百处 --ink-3 / --rule / --gold-wash 这类旧变量名。
+     与其逐处替换（改动面大、易漏、和并行改版冲突），不如在这里把旧名指向新阶梯：
+     老代码一行不动就能继承新配色。新写的代码请直接用上面的阶梯变量。 */
+  --rule:var(--n300);          --rule-2:var(--n200);
+  --ink-2:var(--n800);         --ink-3:var(--n600);      --ink-4:var(--n500);
+  --surface-2:var(--n100);     --surface-3:var(--n200);
+  --gold-deep:var(--a700);     --gold-wash:var(--a100);  --gold-line:var(--a300);
+  --indigo-wash:var(--g100);   --indigo-line:var(--g300);
+  --green-wash:var(--g100);
+  --red:var(--a800);           --red-wash:var(--a100);
+
+  /* 下面这批不在交付清单里，但仓库现有代码确实在用；一并映射，避免集成后出现
+     「某几个色块变透明」的零星塌陷。Organic 没有紫色，purple 归到中性。 */
+  --green-line:var(--g300);    --red-line:var(--a300);
+  --amber:var(--a600);         --amber-wash:var(--a100); --amber-line:var(--a300);
+  --teal:var(--g600);          --teal-wash:var(--g100);
+  --slate:var(--n700);         --slate-wash:var(--n200);
+  --purple:var(--n700);        --purple-wash:var(--n200);
+  --r:var(--radius-sm);        --r-lg:var(--radius-md);
+  --shadow:var(--shadow-md);
+}
+
+
+/* ══════════════════════════════════════════════════════════════════════════
+   2. 基础排版
+   —— 只做最低限度的全局设定。页面内联 <style> 在 <link> 之后，同特异性下后者胜出，
+      所以这里的规则不会覆盖页面已有的局部样式。
+   ══════════════════════════════════════════════════════════════════════ */
+
+*,*::before,*::after{box-sizing:border-box}
+
+body{
+  margin:0;
+  background:var(--paper);
+  color:var(--ink);
+  font:400 15px/1.55 var(--sans);
+  -webkit-font-smoothing:antialiased;
+}
+
+h1,h2,h3,h4,h5,h6{
+  font-family:var(--heading);
+  font-weight:400;              /* Caprasimo 只有 400 一档，写 700 会触发合成加粗 */
+  line-height:1.12;
+  letter-spacing:-.015em;
+  margin:0 0 9px;
+}
+h1{font-size:32px}
+h2{font-size:24px}
+h3{font-size:19px}
+h4{font-size:16px}
+
+/* 节眉：小号大写 + 大字距，用来分节而不占标题层级 */
+.eyebrow{
+  font:600 10px/1 var(--sans);
+  letter-spacing:.18em;
+  text-transform:uppercase;
+  color:var(--a700);
+}
+
+/* 数字一律等宽对齐，表格里的分数/耗时才不会跳动 */
+.mono,code,kbd,samp,pre{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.text-muted{color:var(--n600)}
+
+a{color:var(--a700);text-decoration:none;text-underline-offset:3px}
+a:hover{color:var(--gold)}
+
+::selection{background:var(--gold-tint)}
+
+/* 键盘焦点：给赤陶描边，不留浏览器默认蓝框（蓝色在这套暖色系里格格不入）。
+   注意用 :focus-visible 而非 :focus —— 鼠标点击不该出现焦点环。 */
+:focus{outline:none}
+:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+
+/* 合成层提升工具类。
+   给 position:fixed 的元素用：单独提到合成层后，滚动时不再和主文档一起重绘，
+   避免旧版侧边栏那种「滚动撕裂 / 残影」。contain 再把布局与绘制范围锁死，
+   内部动画不会向外触发整页重排。fixed 元素务必挂上这个类。 */
+.b9-layer{transform:translateZ(0);contain:layout paint}
+
+
+/* ══════════════════════════════════════════════════════════════════════════
+   3. 顶部导航（第一层：全局深色条）
+   ══════════════════════════════════════════════════════════════════════ */
+
+.b9-topbar{
+  flex:none;
+  height:52px;
+  display:flex;
+  align-items:center;
+  gap:14px;
+  padding:0 22px;
+  background:var(--n900);       /* 不透明纯色，见文件头性能红线 */
+  color:var(--ondark);
+}
+.b9-topbar-logo{flex:none;display:block;width:26px;height:26px}
+.b9-topbar-title{
+  font-family:var(--heading);
+  font-size:15px;
+  letter-spacing:.01em;
+  color:var(--ondark);
+  white-space:nowrap;
+}
+/* 品牌与副标题之间的竖发丝线 */
+.b9-topbar-sep{flex:none;width:1px;height:18px;background:var(--ondark-line)}
+.b9-topbar-kicker{
+  font:600 10px/1 var(--mono);
+  letter-spacing:.14em;
+  text-transform:uppercase;
+  color:var(--ondark-2);
+  white-space:nowrap;
+}
+/* 撑开左右两组的弹性空隙（.b9-tabbar 里复用同一个类） */
+.b9-spacer{flex:1;min-width:0}
+
+/* pipeline 状态胶囊 */
+.b9-status{
+  flex:none;
+  display:inline-flex;
+  align-items:center;
+  gap:7px;
+  height:26px;
+  padding:0 11px;
+  border-radius:999px;
+  background:var(--status-ok-bg);
+  font:600 12px/1 var(--sans);
+  color:var(--g300);
+  white-space:nowrap;
+}
+.b9-status-dot{flex:none;width:7px;height:7px;border-radius:999px;background:var(--g400)}
+/* 异常态：整条换赤陶，颜色本身就是信号，不额外加图标 */
+.b9-status.warn{background:var(--a700);color:var(--a200)}
+.b9-status.warn .b9-status-dot{background:var(--a300)}
+
+.b9-clock{
+  flex:none;
+  font-family:var(--mono);
+  font-size:11px;
+  color:var(--ondark-3);
+  white-space:nowrap;
+}
+.b9-avatar{
+  flex:none;
+  width:26px;height:26px;
+  border-radius:999px;
+  background:var(--g500);
+  color:var(--paper);
+  font:600 11px/26px var(--sans);
+  text-align:center;
+  letter-spacing:.02em;
+}
+
+
+/* ══════════════════════════════════════════════════════════════════════════
+   4. 顶部导航（第二层：分组 tab 条）
+   ══════════════════════════════════════════════════════════════════════ */
+
+.b9-tabbar{
+  flex:none;
+  display:flex;
+  align-items:flex-end;        /* 各组标题行高度一致，药丸组底对齐 */
+  gap:16px;
+  padding:12px 22px 14px;
+  background:var(--n100);      /* 不透明纯色 */
+  border-bottom:1px solid var(--divider);
+}
+
+/* 一个语义分组 = 组标题行 + 药丸容器 */
+.b9-tabgroup{flex:none;display:flex;flex-direction:column;gap:8px}
+.b9-tabgroup-hd{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  padding-left:8px;            /* 和药丸容器 4px 内边距 + 药丸自身留白对齐 */
+}
+/* 色块用圆角方形而非圆点，跟满屏的药丸圆角拉开区分，一眼能认出这是"组"层级 */
+.b9-tabgroup-dot{flex:none;width:9px;height:9px;border-radius:3px;background:var(--gold)}
+.b9-tabgroup-dot.sage{background:var(--g500)}
+.b9-tabgroup-dot.neutral{background:var(--n500)}
+.b9-tabgroup-name{font:700 13px/1 var(--sans);letter-spacing:.03em;color:var(--n900);white-space:nowrap}
+.b9-tabgroup-range{font-family:var(--mono);font-size:10px;color:var(--n500);white-space:nowrap}
+
+/* 药丸容器：底色比 tabbar 深一阶，形成"轨道"，选中药丸在轨道里滑动的隐喻 */
+.b9-tabpills{
+  display:flex;
+  gap:3px;
+  padding:4px;
+  border-radius:999px;
+  background:var(--n200);
+}
+
+.b9-tab{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  height:34px;
+  padding:0 18px;
+  border:0;
+  border-radius:999px;
+  background:transparent;
+  color:var(--n900);
+  font:600 14px/1 var(--sans);
+  white-space:nowrap;
+  cursor:pointer;
+  transition:background .14s ease,color .14s ease;
+}
+/* 序号弱化到 60%，是定位辅助不是内容 */
+.b9-tab .idx{font-family:var(--mono);font-size:11px;opacity:.6}
+.b9-tab:hover{background:var(--n100)}
+/* 选中态同时支持 aria-selected 与 .active：
+   aria-selected 是无障碍正解，.active 是仓库现有 showTab() 的习惯写法，
+   两者都认，集成时不必被迫改 JS。 */
+.b9-tab[aria-selected="true"],
+.b9-tab.active{background:var(--gold);color:var(--paper)}
+.b9-tab[aria-selected="true"]:hover,
+.b9-tab.active:hover{background:var(--gold)}
+.b9-tab[aria-selected="true"] .idx,
+.b9-tab.active .idx{opacity:.72}
+
+/* 右侧搜索框。
+   既可以是包着 <input> 的壳，也可以直接把类挂在 <input> 上 —— 主线程按需选择。
+   本表不接任何逻辑。 */
+.b9-search{
+  flex:none;
+  display:inline-flex;
+  align-items:center;
+  gap:7px;
+  height:36px;
+  padding:0 14px;
+  margin-bottom:3px;           /* 与药丸组基线对齐 */
+  border:1px solid var(--divider);
+  border-radius:999px;
+  background:var(--paper);
+  color:var(--n600);
+  font:400 13px/1 var(--sans);
+}
+.b9-search input{
+  flex:1;min-width:0;
+  border:0;background:transparent;outline:none;
+  font:inherit;color:var(--ink);
+}
+.b9-search input::placeholder,
+input.b9-search::placeholder{color:var(--n600)}
+input.b9-search:focus{border-color:var(--gold);box-shadow:0 0 0 3px var(--gold-glow)}
+.b9-search .kbd,.b9-search kbd{
+  flex:none;
+  font-family:var(--mono);font-size:10px;
+  padding:1px 5px;
+  border-radius:5px;
+  background:var(--n200);
+  color:var(--n600);
+}
+
+/* 窄屏：tab 条整体横向滚动，分组顺序与层级完全保留。
+   刻意不做汉堡抽屉 —— 这是内部工作台，用户长期停在固定几个 tab 上，
+   把导航藏进抽屉反而增加每次切换的成本。 */
+@media (max-width:1080px){
+  .b9-tabbar{
+    overflow-x:auto;
+    overflow-y:hidden;
+    scrollbar-width:none;           /* Firefox */
+    -ms-overflow-style:none;        /* 旧 Edge */
+    -webkit-overflow-scrolling:touch;
+  }
+  .b9-tabbar::-webkit-scrollbar{display:none;height:0}
+  .b9-tabbar>.b9-spacer{display:none}  /* 让位给可滑动的分组 */
+  .b9-search{margin-left:8px}
+}
+@media (max-width:760px){
+  /* 顶栏挤不下时先丢弃纯装饰信息，状态胶囊和头像保留 */
+  .b9-topbar-sep,.b9-topbar-kicker,.b9-clock{display:none}
+}
+
+
+/* ══════════════════════════════════════════════════════════════════════════
+   5. 吸顶页内锚点条
+   —— 长 tab（01/02/03/06）内容区顶部的节跳转条。
+   ══════════════════════════════════════════════════════════════════════ */
+
+.b9-anchorbar{
+  position:sticky;
+  top:0;
+  z-index:6;
+  /* 外层用 --paper 铺满做垫底：内容从下方滚过时被完全遮住。
+     这是替代 backdrop-filter 毛玻璃的方案，零合成开销。 */
+  background:var(--paper);
+  padding:14px 0 10px;
+}
+.b9-anchorbar-inner{
+  display:flex;
+  gap:4px;
+  padding:4px;
+  width:max-content;             /* 只包住药丸本身，右侧留白透出内容 */
+  max-width:100%;
+  border:1px solid var(--divider);
+  border-radius:999px;
+  background:var(--n100);
+  box-shadow:var(--shadow-sm);
+}
+.b9-anchor{
+  flex:none;
+  border:0;
+  padding:6px 13px;
+  border-radius:999px;
+  background:transparent;
+  color:var(--n700);
+  font:600 12px/1.35 var(--sans);
+  white-space:nowrap;
+  cursor:pointer;
+  transition:background .14s ease,color .14s ease;
+}
+.b9-anchor:hover{background:var(--n200)}
+/* 可选的"当前所在节"高亮；不挂类就没有此态，不影响现有行为 */
+.b9-anchor[aria-current="true"],
+.b9-anchor.active{background:var(--a100);color:var(--a700)}
+
+/* 锚点条本身窄屏可横滑 */
+@media (max-width:1080px){
+  .b9-anchorbar-inner{overflow-x:auto;scrollbar-width:none;-ms-overflow-style:none}
+  .b9-anchorbar-inner::-webkit-scrollbar{display:none;height:0}
+}
+
+
+/* ══════════════════════════════════════════════════════════════════════════
+   6. 通用组件
+   ══════════════════════════════════════════════════════════════════════ */
+
+/* — 卡片 —
+   无边框，只靠底色差 + 极浅投影分层。边框在暖色系里会切碎版面，
+   32px 大圆角是这套系统的识别特征。 */
+.card{
+  padding:20px;
+  border:0;
+  border-radius:32px;
+  background:var(--surface);
+  box-shadow:var(--shadow-sm);
+}
+.card.flat{background:var(--n100);box-shadow:none}
+
+/* — 按钮 — */
+.btn{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap:6px;
+  height:34px;
+  padding:0 16px;
+  border:1px solid var(--n300);
+  border-radius:999px;
+  background:var(--paper);
+  color:var(--ink);
+  font:600 13px/1 var(--sans);
+  white-space:nowrap;
+  cursor:pointer;
+  transition:background .14s ease,border-color .14s ease,color .14s ease;
+}
+.btn:hover{background:var(--n100);border-color:var(--n400)}
+.btn.primary{background:var(--gold);border-color:var(--gold);color:var(--paper)}
+.btn.primary:hover{background:var(--a600);border-color:var(--a600)}
+.btn.primary:active{background:var(--a700);border-color:var(--a700)}
+.btn.ghost{background:transparent;border-color:transparent;color:var(--n700)}
+.btn.ghost:hover{background:var(--n200);border-color:transparent;color:var(--n900)}
+.btn.small,.btn.sm{height:28px;padding:0 12px;font-size:12px}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn:disabled:hover{background:var(--paper);border-color:var(--n300)}
+
+/* — 标签 — */
+.tag{
+  display:inline-flex;
+  align-items:center;
+  gap:4px;
+  padding:3px 10px;
+  border:0;
+  border-radius:999px;
+  font-size:11px;
+  line-height:1.45;
+  letter-spacing:.02em;
+  white-space:nowrap;
+  background:var(--n200);
+  color:var(--n700);
+}
+.tag-accent{background:var(--a100);color:var(--a800)}
+.tag-accent-2{background:var(--g100);color:var(--g800)}
+.tag-coin{background:var(--a200);color:var(--a800);font-family:var(--mono)}
+.tag-neutral{background:var(--n200);color:var(--n700)}
+/* 仓库现有 JS 生成的是 class="tag coin" / "tag neu" / "tag ver" / "tag rumor"，
+   在这里等价映射一份，省得回去改字符串拼接。 */
+.tag.coin{background:var(--a200);color:var(--a800);font-family:var(--mono)}
+.tag.neu{background:var(--n200);color:var(--n700)}
+.tag.ver{background:var(--g100);color:var(--g800)}
+.tag.rumor,.rumor-tag{background:var(--a800);color:var(--paper);font-weight:600}
+
+/* — Tier 徽章（S/A/B/C/D）—
+   正方 21px + 6px 圆角，是全表唯一不做药丸的小控件：方形在密集表格里更容易扫读。
+   描边用 inset box-shadow 而不是 border，免得撑大盒子破坏行高。 */
+.tier{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  width:21px;height:21px;
+  flex:none;
+  border-radius:6px;
+  font:700 11px/1 var(--mono);
+}
+.tier-S{background:var(--a200);color:var(--a900);box-shadow:inset 0 0 0 1px var(--a400)}
+.tier-A{background:var(--a100);color:var(--a800);box-shadow:inset 0 0 0 1px var(--a300)}
+.tier-B{background:var(--g100);color:var(--g800);box-shadow:inset 0 0 0 1px var(--g300)}
+.tier-C{background:var(--n200);color:var(--n700);box-shadow:inset 0 0 0 1px var(--n400)}
+.tier-D{background:var(--n100);color:var(--n500);box-shadow:inset 0 0 0 1px var(--n300)}
+
+/* — 真实性校验状态 —
+   只染文字色不加底色：这几个状态出现在信息密度很高的详情栏里，
+   再加色块会和 tag / tier 抢注意力。 */
+.vf-VERIFIED{color:var(--g700)}
+.vf-PROBABLE{color:var(--a700)}
+.vf-UNVERIFIED{color:var(--n600)}
+.vf-DISPUTED{color:var(--a800)}
+
+/* — 表格 — */
+.b9-table{width:100%;border-collapse:collapse;font-size:14px}
+.b9-table th{
+  text-align:left;
+  padding:9px 10px;
+  font:600 11px/1.3 var(--sans);
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  color:var(--n600);
+  border-bottom:1px solid var(--divider);
+  white-space:nowrap;
+}
+.b9-table td{
+  padding:10px;
+  border-bottom:1px solid var(--n200);
+  vertical-align:top;
+}
+.b9-table tbody tr{transition:background .12s ease}
+.b9-table tbody tr:hover{background:var(--n200)}
+/* 展开行与 hover 同底色：视觉上"这一行被拎出来了"，同时不引入第三种底色 */
+.b9-table tbody tr.expanded,
+.b9-table tbody tr.expanded:hover,
+.b9-table tbody tr.detail-row{background:var(--n200)}
+
+/* — 深色码块 —
+   API 响应、payload JSON、示例代码共用。深色是为了让长段等宽文本从米色纸底上
+   "沉下去"，读代码时不与正文抢焦点。 */
+.codeblock{
+  padding:14px 16px;
+  border-radius:var(--radius-md);
+  background:var(--n900);
+  color:var(--g200);
+  font-family:var(--mono);
+  font-size:12px;
+  line-height:1.65;
+  overflow-x:auto;
+  white-space:pre;
+  tab-size:2;
+}
+.codeblock .cmt,
+.codeblock .codeblock-hd,
+.codeblock-hd{color:var(--ondark-3)}
+.codeblock-hd{
+  display:flex;align-items:center;gap:8px;
+  margin-bottom:8px;
+  font:600 10px/1 var(--mono);
+  letter-spacing:.12em;
+  text-transform:uppercase;
+}
+
+/* — 表单控件 —
+   刻意排除 checkbox/radio/range：它们靠 accent-color 走原生渲染，
+   套上药丸边框反而变形。 */
+input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=file]),
+select,
+textarea{
+  height:34px;
+  padding:0 14px;
+  border:1px solid var(--n300);
+  border-radius:999px;
+  background:var(--paper);
+  color:var(--ink);
+  font:400 13px/1 var(--sans);
+  transition:border-color .14s ease,box-shadow .14s ease;
+}
+textarea{
+  height:auto;
+  min-height:90px;
+  padding:10px 14px;
+  border-radius:var(--radius-md);   /* 多行文本用药丸会让首尾字被圆角切掉 */
+  line-height:1.55;
+  resize:vertical;
+}
+select{padding-right:10px;cursor:pointer}
+input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=file]):focus,
+select:focus,
+textarea:focus{
+  outline:none;
+  border-color:var(--gold);
+  box-shadow:0 0 0 3px var(--gold-glow);   /* 淡赤陶光晕替代默认蓝框 */
+}
+input::placeholder,textarea::placeholder{color:var(--n500)}
+input:disabled,select:disabled,textarea:disabled{background:var(--n200);color:var(--n500);cursor:not-allowed}
+/* 滑块 / 勾选框走原生控件 + 品牌色，比自绘可靠且天然可访问 */
+input[type=range],input[type=checkbox],input[type=radio]{accent-color:var(--gold)}
+
+
+/* ══════════════════════════════════════════════════════════════════════════
+   7. 动画
+   ══════════════════════════════════════════════════════════════════════ */
+
+/* 状态灯脉动。只动 opacity 与 transform —— 这两个属性走合成器，
+   不触发布局或重绘；换成动 width/background 就会每帧重排整条顶栏。
+   同理，挂载它的祖先绝不能有 backdrop-filter（见文件头）。 */
+@keyframes b9pulse{
+  0%,100%{opacity:1;transform:scale(1)}
+  50%{opacity:.45;transform:scale(.82)}
+}
+.b9-pulse{animation:b9pulse 1.8s ease-in-out infinite}
+
+/* 尊重系统「减少动态效果」：脉动只是装饰，状态本身靠颜色已经表达清楚了 */
+@media (prefers-reduced-motion:reduce){
+  .b9-pulse{animation:none}
+  *{transition-duration:.01ms !important}
+}

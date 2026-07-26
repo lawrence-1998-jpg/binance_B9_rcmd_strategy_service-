@@ -37,7 +37,7 @@ from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from functools import wraps
 
-from flask import Blueprint, request, jsonify, send_from_directory
+from flask import Blueprint, request, jsonify, redirect, send_from_directory
 
 from crawler import scoring, storage
 from crawler.sector_relevance import SECTOR_ANCHORS
@@ -82,9 +82,14 @@ lab_bp = Blueprint("lab_tools", __name__)
 # ─────────────────────────────────────────────────────────────────────────────
 @lab_bp.route("/lab", methods=["GET"])
 def lab_page():
-    resp = send_from_directory(WEB_DIR, "lab.html")
-    resp.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
-    return resp
+    """旧的独立页面入口，2026-07-26 设计改版后 301 到主站 tab05。
+
+    策略实验室已整页并入 index.html 的 panel-5（顶部导航 05），lab.html 不再作为
+    独立页面提供——留着会变成一个没人维护、样式和数据口径都会慢慢漂移的孤儿页。
+    保留这个路由是因为旧链接（文档、聊天记录、书签）还在指过来，直接 404 太粗暴。
+    用 301 而不是 302：这是永久性的信息架构变更，让浏览器和爬虫更新记录。
+    """
+    return redirect("/#tab5", code=301)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
