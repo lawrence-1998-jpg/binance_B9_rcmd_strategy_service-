@@ -49,6 +49,8 @@ code,pre,.mono{font-family:var(--mono)}
 
 /* ── Layout ─────────────────────────────────────────────────────────── */
 .wrap{max-width:1320px;margin:0 auto;padding:0 32px}
+@media(min-width:1600px){ .wrap{max-width:1500px} }
+@media(min-width:1840px){ .wrap{max-width:1680px} }
 .section{margin:0 0 52px}
 .sec-head{margin-bottom:20px}
 .eyebrow{
@@ -1367,7 +1369,7 @@ footer{border-top:1px solid var(--rule);padding:26px 0 40px;font-size:12px;color
   <!-- 吸顶页内锚点条：长 tab 里跳节用，不改变任何内容结构 -->
   <div class="b9-anchorwrap">
     <nav class="b9-anchorbar" aria-label="本页小节">
-      <button class="b9-anchor" type="button" data-goto="sec-overview">概览</button>
+      <button class="b9-anchor" type="button" data-goto="statRow">概览</button>
       <button class="b9-anchor" type="button" data-goto="sec-flow">流程图</button>
       <button class="b9-anchor" type="button" data-goto="sec-pipeline">八步流水线</button>
       <button class="b9-anchor" type="button" data-goto="sec-scoring">打分模型</button>
@@ -1387,7 +1389,7 @@ footer{border-top:1px solid var(--rule);padding:26px 0 40px;font-size:12px;color
     </p>
   </div>
 
-  <div class="stats section" id="statRow"><span id="sec-overview"></span>
+  <div class="stats section" id="statRow">
     <div class="stat"><div class="l">事件库总量</div><div class="v" id="k-total">—</div><div class="n">已结构化、去重、打分</div></div>
     <div class="stat"><div class="l">活跃信源</div><div class="v" id="k-src">—</div><div class="n">近期产出过事件的独立信源</div></div>
     <div class="stat"><div class="l">最近一轮折叠率</div><div class="v" id="k-dedup">—</div><div class="n">原始条目 → 唯一事件</div></div>
