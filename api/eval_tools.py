@@ -1034,7 +1034,22 @@ def _resolve_ab_group(prefix: str, tracker: UsageTracker) -> tuple[list[dict], s
     返回 (items, source_mode, meta)：source_mode 是 "db"/"text"/"image"，决定
     下游质量对比是直接读库字段还是要调 LLM 估计；meta 目前只装图片处理的部分失败信息。
     """
-    mode = (request.form.get(f"{prefix}_mode") or "db").strip().lower()
+    # 必须显式声明 mode。原来这里是 `or "db"` 兜底，后果很实在：一个空请求
+    # （JSON body 而非 FormData、前端 bug、误发的 curl）会被静默当成"数据库
+    # 一键填充"，拉 20 条最新事件跑完整的 embedding + GSB，白花约 $0.024，
+    # 还返回一份没人要的"对比结果"。2026-07-26 QA 套件实测抓到（当时真扣了钱）。
+    # 前端一直显式发 group_x_mode（web/index.html buildAbFormDataForGroup），
+    # 所以要求显式声明不影响正常流程。
+    raw_mode = (request.form.get(f"{prefix}_mode") or "").strip().lower()
+    if not raw_mode:
+        raise ValueError(
+            f"{prefix}：缺少 {prefix}_mode 参数，无法判断数据来源。"
+            f"请显式指定 db / text / image —— 拒绝默认执行是为了避免误发的请求"
+            f"白白产生 LLM 费用")
+    if raw_mode not in ("db", "text", "image"):
+        raise ValueError(f"{prefix}：不支持的 {prefix}_mode='{raw_mode}'，"
+                         f"只接受 db / text / image")
+    mode = raw_mode
     meta: dict = {}
 
     if mode == "text":
@@ -1046,8 +1061,7 @@ def _resolve_ab_group(prefix: str, tracker: UsageTracker) -> tuple[list[dict], s
         items, errors = _ab_items_from_images(files, tracker)
         if errors:
             meta["image_errors"] = errors
-    else:
-        mode = "db"
+    else:   # mode == "db"
         sector = (request.form.get(f"{prefix}_sector") or "").strip()
         try:
             limit = min(int(request.form.get(f"{prefix}_limit") or 20), MAX_AB_ITEMS_PER_GROUP)
