@@ -54,14 +54,29 @@ tool_results / analytics_events / feedback_submissions。部署前需要先跑�
 import json
 import logging
 import os
+import sys
+import uuid
 from datetime import datetime, timedelta, timezone
 from functools import wraps
 
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify, request, send_from_directory
 
 from crawler import storage  # noqa: E402
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from notify import notify_feedback  # noqa: E402
+
 logger = logging.getLogger(__name__)
+
+# 反馈图片落盘目录（2026-07-26 新增，配合"Tell Lawrence More"的图片上传）。
+# 不进 MySQL BLOB——大文件塞数据库既拖慢查询也不利于备份/迁移，落磁盘 + 存
+# 文件名是这类附件更常规的做法。目录名固定在项目根下，不随 cwd 变化。
+FEEDBACK_UPLOAD_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "feedback_uploads")
+os.makedirs(FEEDBACK_UPLOAD_DIR, exist_ok=True)
+
+FEEDBACK_IMAGE_MAX_BYTES = 8 * 1024 * 1024   # 8MB，与其它工具的截图上传上限一致
+FEEDBACK_ALLOWED_EXT = {".png", ".jpg", ".jpeg", ".webp", ".gif"}
 
 history_bp = Blueprint("history_tools", __name__)
 
@@ -315,19 +330,52 @@ def analytics_summary():
 @history_bp.route("/api/feedback", methods=["POST"])
 @require_api_key
 def submit_feedback():
-    body = request.get_json(force=True, silent=True) or {}
-    category = str(body.get("category") or "").strip()[:32]
-    content = str(body.get("content") or "").strip()
+    """"Tell Lawrence More" 反馈提交。
+
+    2026-07-26 改为兼容两种请求体：
+    - multipart/form-data（前端现在用这个，支持带图片附件）
+    - application/json（向下兼容，早期版本 / 纯文字场景，无附件）
+
+    落库顺序很关键：先写数据库，图片落盘和邮件通知都在写库**成功之后**才做，
+    且各自 try/except 不传播——反馈内容本身写库成功就必须给用户成功响应，
+    图片存盘失败或邮件发不出去都只降级、不阻断。
+    """
+    if request.content_type and "multipart/form-data" in request.content_type:
+        category = (request.form.get("category") or "").strip()[:32]
+        content = (request.form.get("content") or "").strip()
+        page_context = (request.form.get("page_context") or "")[:128]
+        image_file = request.files.get("image")
+    else:
+        body = request.get_json(silent=True) or {}
+        category = str(body.get("category") or "").strip()[:32]
+        content = str(body.get("content") or "").strip()
+        page_context = str(body.get("page_context") or "")[:128]
+        image_file = None
+
     if not category or not content:
         return jsonify({"error": "category 和 content 均为必填"}), 400
-    page_context = str(body.get("page_context") or "")[:128]
+
+    image_bytes = None
+    image_filename_disk = None
+    image_filename_original = None
+    if image_file and image_file.filename:
+        ext = os.path.splitext(image_file.filename)[1].lower()
+        if ext not in FEEDBACK_ALLOWED_EXT:
+            return jsonify({"error": f"不支持的图片格式 {ext}，"
+                                     f"支持 {', '.join(sorted(FEEDBACK_ALLOWED_EXT))}"}), 400
+        image_bytes = image_file.read()
+        if len(image_bytes) > FEEDBACK_IMAGE_MAX_BYTES:
+            return jsonify({"error": f"图片超过 {FEEDBACK_IMAGE_MAX_BYTES // 1024 // 1024}MB 上限"}), 400
+        image_filename_original = image_file.filename
+        image_filename_disk = f"{uuid.uuid4().hex}{ext}"
 
     conn = storage.get_mysql_conn()
     try:
         cursor = conn.cursor()
         cursor.execute(
-            "INSERT INTO feedback_submissions (category, content, page_context) VALUES (%s, %s, %s)",
-            (category, content, page_context),
+            "INSERT INTO feedback_submissions (category, content, page_context, image_filename) "
+            "VALUES (%s, %s, %s, %s)",
+            (category, content, page_context, image_filename_disk),
         )
         conn.commit()
         new_id = cursor.lastrowid
@@ -335,4 +383,44 @@ def submit_feedback():
     finally:
         conn.close()
 
-    return jsonify({"id": new_id})
+    # 落库已经成功——下面两步是"锦上添花"，任何一步失败都不影响已经返回给
+    # 用户的成功结果，也不会让这条反馈从数据库里消失。
+    if image_bytes and image_filename_disk:
+        try:
+            with open(os.path.join(FEEDBACK_UPLOAD_DIR, image_filename_disk), "wb") as f:
+                f.write(image_bytes)
+        except OSError as e:
+            logger.warning(f"反馈图片落盘失败（反馈记录本身已保存）id={new_id}: {e}")
+
+    notified = notify_feedback(new_id, category, content, page_context,
+                               image_bytes=image_bytes,
+                               image_filename=image_filename_original)
+    if notified:
+        try:
+            conn2 = storage.get_mysql_conn()
+            cur2 = conn2.cursor()
+            cur2.execute("UPDATE feedback_submissions SET notified_at = NOW() WHERE id = %s", (new_id,))
+            conn2.commit()
+            cur2.close()
+            conn2.close()
+        except Exception as e:
+            logger.warning(f"notified_at 回写失败（不影响邮件已发出）id={new_id}: {e}")
+
+    return jsonify({"id": new_id, "has_image": bool(image_filename_disk), "notified": notified})
+
+
+@history_bp.route("/api/feedback/image/<int:feedback_id>", methods=["GET"])
+@require_api_key
+def get_feedback_image(feedback_id):
+    """按需回看某条反馈的图片附件（鉴权保护，不是公开静态资源）。"""
+    conn = storage.get_mysql_conn()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SELECT image_filename FROM feedback_submissions WHERE id = %s", (feedback_id,))
+        row = cursor.fetchone()
+        cursor.close()
+    finally:
+        conn.close()
+    if not row or not row[0]:
+        return jsonify({"error": "该反馈没有图片附件"}), 404
+    return send_from_directory(FEEDBACK_UPLOAD_DIR, row[0])

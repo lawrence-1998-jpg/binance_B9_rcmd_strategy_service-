@@ -1817,16 +1817,16 @@ footer{border-top:1px solid var(--rule);padding:26px 0 40px;font-size:12px;color
   </div>
 </footer>
 
-<!-- ══════════════════ Tell me more · 反馈悬浮模块（全站，不分 tab） ══════════════════ -->
+<!-- ══════════════════ Tell Lawrence More · 反馈悬浮模块（全站，不分 tab） ══════════════════ -->
 <button class="fab" id="fabFeedback" type="button" aria-haspopup="dialog" aria-expanded="false">
-  <span class="fab-ic">💬</span> Tell me more
+  <span class="fab-ic">💬</span> Tell Lawrence More
 </button>
 <div class="feedback-panel" id="feedbackPanel" role="dialog" aria-label="反馈">
   <div class="fp-head">
-    <strong>Tell me more</strong>
+    <strong>Tell Lawrence More</strong>
     <button class="fp-close" id="feedbackClose" type="button" aria-label="关闭">×</button>
   </div>
-  <p class="fp-sub">工具用得顺不顺手、想要什么新功能、发现哪条结果不对劲 —— 都可以在这里说一句。</p>
+  <p class="fp-sub">工具用得顺不顺手、想要什么新功能、发现哪条结果不对劲 —— 都可以在这里说一句，可以附截图。</p>
   <label class="fp-label" for="feedbackCategory">类别</label>
   <select id="feedbackCategory">
     <option value="工具反馈">工具反馈</option>
@@ -1835,6 +1835,9 @@ footer{border-top:1px solid var(--rule);padding:26px 0 40px;font-size:12px;color
   </select>
   <label class="fp-label" for="feedbackContent">内容</label>
   <textarea id="feedbackContent" placeholder="具体说说……（bad case 建议附上事件标题或链接）"></textarea>
+  <label class="fp-label" for="feedbackImageInput">截图（可选）</label>
+  <input type="file" id="feedbackImageInput" accept="image/png,image/jpeg,image/jpg,image/webp,image/gif" style="font-size:11.5px;width:100%">
+  <div id="feedbackImageThumb" style="margin-top:8px"></div>
   <button class="btn primary" id="feedbackSubmit" style="width:100%;justify-content:center;margin-top:10px">提交</button>
   <div id="feedbackMsg" style="font-size:12px;color:var(--ink-3);margin-top:8px;min-height:16px"></div>
 </div>
@@ -2202,7 +2205,9 @@ function loadHistorySummary(){
 }
 
 /* ══════════════════════════════════════════════════════════════════════
-   Tell me more · 反馈悬浮模块（全站，不属于任何一个 tab，挂在 body 最外层）
+   Tell Lawrence More · 反馈悬浮模块（全站，不属于任何一个 tab，挂在 body 最外层）
+   2026-07-26：支持图片附件，改用 FormData 提交（有图时走 multipart，
+   history_tools.py 的 /api/feedback 已同步支持两种请求体）。
    ══════════════════════════════════════════════════════════════════════ */
 (function(){
   var fab=document.getElementById("fabFeedback");
@@ -2210,26 +2215,62 @@ function loadHistorySummary(){
   var closeBtn=document.getElementById("feedbackClose");
   var submitBtn=document.getElementById("feedbackSubmit");
   var msgEl=document.getElementById("feedbackMsg");
+  var imageInput=document.getElementById("feedbackImageInput");
+  var thumbWrap=document.getElementById("feedbackImageThumb");
+  var feedbackImageFile=null;
+
   function openPanel(){ panel.classList.add("open"); fab.setAttribute("aria-expanded","true"); }
   function closePanel(){ panel.classList.remove("open"); fab.setAttribute("aria-expanded","false"); }
   fab.addEventListener("click",function(){ panel.classList.contains("open") ? closePanel() : openPanel(); });
   closeBtn.addEventListener("click", closePanel);
+
+  function clearImage(){
+    feedbackImageFile=null; imageInput.value=""; thumbWrap.innerHTML="";
+  }
+  imageInput.addEventListener("change",function(){
+    var f=imageInput.files[0];
+    if(!f) return;
+    feedbackImageFile=f;
+    thumbWrap.innerHTML="";
+    var div=document.createElement("div");
+    div.style.cssText="position:relative;display:inline-block;width:96px;height:96px;border-radius:8px;overflow:hidden;border:1px solid var(--rule)";
+    var img=document.createElement("img");
+    img.src=URL.createObjectURL(f);
+    img.style.cssText="width:100%;height:100%;object-fit:cover";
+    var rm=document.createElement("button");
+    rm.type="button"; rm.textContent="×";
+    rm.style.cssText="position:absolute;top:2px;right:2px;width:20px;height:20px;border:0;border-radius:50%;background:rgba(18,20,26,.65);color:#fff;cursor:pointer;line-height:1";
+    rm.onclick=clearImage;
+    div.appendChild(img); div.appendChild(rm);
+    thumbWrap.appendChild(div);
+  });
+
   submitBtn.addEventListener("click",function(){
     var category=document.getElementById("feedbackCategory").value;
     var content=document.getElementById("feedbackContent").value.trim();
     if(!content){ msgEl.textContent="请先填写反馈内容。"; msgEl.style.color="var(--red)"; return; }
     submitBtn.disabled=true;
-    apiCall("POST","/api/feedback",{
-      category:category, content:content,
-      page_context:(location.hash||"#tab1").replace("#","")
-    }).then(function(){
-      msgEl.textContent="已提交，感谢反馈！"; msgEl.style.color="var(--green)";
-      document.getElementById("feedbackContent").value="";
-      track("feedback_submit",{category:category});
-      setTimeout(closePanel,1400);
-    }).catch(function(e){
-      msgEl.textContent="提交失败："+e.message; msgEl.style.color="var(--red)";
-    }).finally(function(){ submitBtn.disabled=false; });
+    msgEl.textContent="提交中…"; msgEl.style.color="var(--ink-3)";
+
+    var fd=new FormData();
+    fd.append("category",category);
+    fd.append("content",content);
+    fd.append("page_context",(location.hash||"#tab1").replace("#",""));
+    if(feedbackImageFile) fd.append("image",feedbackImageFile,feedbackImageFile.name);
+
+    fetch(liveUrl("/api/feedback",{}),{method:"POST",body:fd})
+      .then(function(r){ return r.json().then(function(j){ return {ok:r.ok,status:r.status,body:j}; }); })
+      .then(function(res){
+        if(!res.ok){ throw new Error((res.body&&res.body.error)||("HTTP "+res.status)); }
+        var extra = res.body.has_image ? "（含截图）" : "";
+        msgEl.textContent="已提交"+extra+"，感谢反馈！"; msgEl.style.color="var(--green)";
+        document.getElementById("feedbackContent").value="";
+        clearImage();
+        track("feedback_submit",{category:category, has_image:!!res.body.has_image});
+        setTimeout(closePanel,1600);
+      }).catch(function(e){
+        msgEl.textContent="提交失败："+e.message; msgEl.style.color="var(--red)";
+      }).finally(function(){ submitBtn.disabled=false; });
   });
 })();
 
@@ -3246,6 +3287,12 @@ const SAMPLE_B = `匿名 Telegram 频道称某头部交易所明早10点将上�
 document.getElementById('sampleA').addEventListener('click', () => { document.getElementById('newsTextInput').value = SAMPLE_A; });
 document.getElementById('sampleB').addEventListener('click', () => { document.getElementById('newsTextInput').value = SAMPLE_B; });
 
+/* 默认示例结果（2026-07-26 起）：一次真实调用（$0.028，ETF资金流示例）算好后
+   固化成静态 JSON，进 LLM评测室子tab 立刻能看到 5 张 persona 卡片长什么样，
+   不用每次都真花钱重新生成一遍。用户想看真实效果时，"开始评测" 按钮照常
+   触发真实付费调用并覆盖这份示例。 */
+const EVAL_EXAMPLE_RESULT = {"news_text": "美国比特币以太坊现货ETF净流出3.11亿美元\n据 SoSoValue 数据，美东时间7月24日，美国比特币现货ETF单日总净流出2.40亿美元，以太坊现货ETF总净流出7061.79万美元，两类产品合计净流出约3.1062亿美元。其中，比特币ETF方面，贝莱德IBIT净流出2.12亿美元居首，富达FBTC净流出2791.16万美元，显示主流基金产品均出现明显赎回。\n现货ETF资金流一向被视为观察美国机构资金风险偏好的核心指标。此次BTC与ETH ETF同步转为净流出，且单日规模超过3亿美元，说明短线机构需求有所降温，也可能对BTC、ETH现货价格形成情绪压制。", "personas": [{"emoji": "🐣", "improvement_suggestion": "加一句白话总结，比如“短期偏利空，但不是暴雷”，再对比下这3亿美元在近期属于大还是小，顺便说明普通持币的人该关注什么。", "is_understandable": false, "name": "阿哲", "persona_id": "newbie", "qualitative_assessment": "我大概知道这是在说美国那边买 BTC、ETH 的大资金在往外撤，可能会让币价短期有点难受，所以跟我手里的币不是完全没关系。但“净流出”“现货ETF”“机构风险偏好”这几个词还是挺绕的，看完我只得到一个模糊结论：可能偏利空，但也不知道是不是到了要赶紧卖的程度。", "score": 5, "tagline": "入圈 3 个月的新手小白", "understandable_reason": "我能看懂“有钱流出去，情绪可能变差”这个大方向，但具体为什么ETF流出就这么重要、3亿美元到底算大还是小，我其实没概念。新闻也没告诉我对普通持有者意味着什么。"}, {"emoji": "📈", "improvement_suggestion": "补上近7日/30日资金流趋势、各ETF历史分位、当日BTC/ETH价格反应和具体信源链接，别只拿单日数据硬拔结论。", "is_understandable": true, "name": "老K", "persona_id": "veteran_trader", "qualitative_assessment": "这条我会看，但也就到“扫一眼数据”这级别。好处是有具体日期、金额、分产品流出，至少不是空话；但坏处也明显：就报了单日净流出，没给近7日/30日趋势、成交额占比，也没对上价格和盘中时点。拿来判断短线情绪可以，拿来直接下单还差点火候。", "score": 6, "tagline": "5 年经验的资深交易员", "understandable_reason": "数据口径很清楚：时间、ETF类别、净流出金额、主要流出产品都写了，ETF资金流和机构风险偏好的关系也不难理解。术语都是常见市场表达，没有阅读门槛。"}, {"emoji": "🏦", "improvement_suggestion": "补充 SoSoValue 原始链接、近5日/30日累计流向、总AUM占比，并结合当日价格走势和宏观事件解释资金流出的传导逻辑。", "is_understandable": true, "name": "Diana Chen", "persona_id": "institutional", "qualitative_assessment": "这条我会看，而且可以作为周度资金流监控里的一个 datapoint 引用，因为 SoSoValue 至少是可追溯的数据源，产品层面的流出也点到了 IBIT、FBTC 这些关键载体。但它的解释仍偏表层：只有单日净流出，没有放到过去一周、一个月滚动口径里，也没有交代价格、基差或宏观事件背景，单独拿来写备忘录说服力还不够。", "score": 7, "tagline": "机构加密资管的高级研究员", "understandable_reason": "信息结构很清楚：给了日期、BTC/ETH 现货ETF单日净流出规模，以及主要基金的分项数据。我能直接理解其含义和潜在市场情绪影响，只是缺少更完整的上下文。"}, {"emoji": "🚀", "improvement_suggestion": "直接补一句“对哪些板块最利空、短线该避开什么币、有没有逆势热点可冲”，再带上链上资金和热榜数据，会更有用。", "is_understandable": true, "name": "阿飞", "persona_id": "meme_degen", "qualitative_assessment": "这条对我这种蹲新币冲空投的人来说真有点没意思，就是老美那边BTC、ETH ETF又流出3.1亿，偏情绪利空，但不给我任何“现在冲啥”的答案。除非你要我拿这个当大盘风向做短线避险，不然跟 meme、链上新机会基本不沾边。", "score": 2, "tagline": "追热点的 MEME/空投党", "understandable_reason": "这新闻很好懂，本质就是美国BTC和ETH现货ETF当天被赎回了3亿多刀，说明机构短线偏谨慎，可能压一下币价情绪。术语也都是圈内常见的ETF净流出、赎回这些。"}, {"emoji": "🛠️", "improvement_suggestion": "最好补充资金流出是否传导到链上：哪些赛道TVL受影响、做市/资管/托管机构是否调整策略，以及相关项目名。", "is_understandable": true, "name": "王工", "persona_id": "industry_insider", "qualitative_assessment": "这条我大概扫一眼就过了。ETF净流出能说明美股那边机构短线风险偏好在降，但对我手头BD和产品判断帮助很有限。没提到具体协议、链上资金迁移、合作方动作，最多当市场情绪背景，不太值得单独写周报。", "score": 3, "tagline": "Layer2/DeFi 协议的 BD 兼产品经理", "understandable_reason": "内容很直白，就是美国BTC、ETH现货ETF单日出现较大净流出，并点名了IBIT、FBTC等产品的赎回情况。我能理解它反映的是机构情绪变化，但信息停留在资金面，没有更深的生态动作。"}], "cost_usd": 0.028338, "model": "gpt-5.4", "reference_metrics": {"available": false, "reason": "Momentum/Novelty 依赖 news_events 库里已落库的 social_interactions/event_subject/embedding 字段，只有通过 event_id 输入时才能计算；文本粘贴或截图上传的新闻没有这些字段可用。"}, "persona_errors": []};
+
 const SCORE_COLOR = s => s >= 7 ? 'var(--ev-green)' : (s >= 4 ? 'var(--ev-amber)' : 'var(--ev-red)');
 
 document.getElementById('runEvalBtn').addEventListener('click', async () => {
@@ -3316,9 +3363,18 @@ function renderReferenceMetrics(rm){
   return html;
 }
 
-function renderEvalResults(body){
+function renderEvalResults(body, isExample){
   const wrap = document.getElementById('evalResults');
-  let html = `<div class="news-preview">${escapeHtml(body.news_text)}</div>`;
+  let html = '';
+  if (isExample){
+    html += `<div class="note amber" style="margin-bottom:14px">
+      <span class="lbl">示例结果 · 非实时生成</span>
+      这是预先跑好的一次真实评测（$0.028，下方新闻原文），进这个子 tab 立刻能看到
+      5 张 persona 卡片长什么样，不用每次都重新花钱生成。想看真实新内容的评测效果，
+      粘贴/上传后点"开始评测"即可，会覆盖这份示例并真实调用。
+    </div>`;
+  }
+  html += `<div class="news-preview">${escapeHtml(body.news_text)}</div>`;
   html += `<div class="kpi-row" style="margin-bottom:4px">
     <div class="kpi"><div class="l">评测 Persona 数</div><div class="v">${body.personas.length}</div></div>
     <div class="kpi"><div class="l">本次成本</div><div class="v">$${body.cost_usd.toFixed(4)}</div></div>
@@ -3359,10 +3415,13 @@ function renderEvalResults(body){
   if ((body.persona_errors || []).length){
     html += `<div class="err-box">部分 persona 评测失败：${escapeHtml(JSON.stringify(body.persona_errors))}</div>`;
   }
-  html += saveBarHtml('eval');
+  if (!isExample) html += saveBarHtml('eval');   // 示例结果本来就是固化的，不需要再存一遍
   wrap.innerHTML = html;
-  wireSaveButton('eval', 'llm_eval', body);
+  if (!isExample) wireSaveButton('eval', 'llm_eval', body);
 }
+
+// 页面加载即展示默认示例（不发任何请求，纯本地静态数据渲染）
+renderEvalResults(EVAL_EXAMPLE_RESULT, true);
 
 // ══════════════════════════════════════════════════════════════════
 // AB 对比（新增）
