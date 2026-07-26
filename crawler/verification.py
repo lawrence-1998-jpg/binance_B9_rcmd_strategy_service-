@@ -38,6 +38,7 @@ from datetime import datetime, timedelta, timezone
 import numpy as np
 
 from .dedup import blob_to_embedding, parse_dt
+from .timeutil import now_local
 
 logger = logging.getLogger(__name__)
 
@@ -759,7 +760,7 @@ def load_reference_events(conn, hours: int = REFERENCE_LOOKBACK_HOURS) -> list[d
     只读，不改 storage.py。取的列刻意精简：矛盾检测只需要标题/摘要（辟谣措辞）、
     三元组（反义动作）、向量（语义）和时间。
     """
-    since = (datetime.now(timezone.utc) - timedelta(hours=hours)).strftime("%Y-%m-%d %H:%M:%S")
+    since = (now_local() - timedelta(hours=hours)).strftime("%Y-%m-%d %H:%M:%S")
     cursor = conn.cursor()
     cursor.execute(
         """SELECT id, title_en, title_zh, description_short_en, description_short_zh,
@@ -824,7 +825,7 @@ def verify_events(events: list[dict], conn=None,
     if not events:
         return {"total": 0}
 
-    now = now or datetime.now(timezone.utc)
+    now = now or now_local()
     if reference is None:
         reference = []
         if conn is not None:
@@ -962,9 +963,9 @@ def _main() -> None:
         events = _load_all_events(conn, args.limit)
         print(f"\n载入 {len(events)} 条事件\n")
 
-        start = datetime.now(timezone.utc)
+        start = now_local()
         stats = verify_events(events, reference=[])   # 全库互比，无需再取 reference
-        elapsed = (datetime.now(timezone.utc) - start).total_seconds()
+        elapsed = (now_local() - start).total_seconds()
 
         total = stats["total"]
         print(f"\n{'='*78}\n各档分布（耗时 {elapsed:.2f}s，LLM 调用 0 次，成本 $0）\n{'='*78}")

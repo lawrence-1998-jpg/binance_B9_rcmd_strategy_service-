@@ -21,6 +21,7 @@ from eval_tools import eval_bp
 from sector_insight import sector_insight_bp
 from history_tools import history_bp
 from enrich_bridge import enrich_bridge_bp
+from crawler.timeutil import now_local
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -389,7 +390,7 @@ def health():
         cursor.execute("SELECT COUNT(*) FROM news_events")
         count = cursor.fetchone()[0]
         cursor.close()
-        return jsonify({"status": "ok", "news_count": count, "time": datetime.utcnow().isoformat()})
+        return jsonify({"status": "ok", "news_count": count, "time": now_local().isoformat()})
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
 

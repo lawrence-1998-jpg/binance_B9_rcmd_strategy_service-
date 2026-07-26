@@ -12,6 +12,7 @@ from datetime import datetime, timezone
 
 from . import verification
 from .dedup import parse_dt
+from .timeutil import now_local
 
 logger = logging.getLogger(__name__)
 
@@ -60,7 +61,7 @@ def compute_timeliness(event: dict, now: datetime | None = None) -> float:
     published = parse_dt(event.get("published_at"))
     if published is None:
         return 0.5
-    now = now or datetime.now(timezone.utc)
+    now = now or now_local()
     hours_ago = max(0.0, (now - published).total_seconds() / 3600)
     return _clamp(math.exp(-hours_ago * math.log(2) / TIMELINESS_HALFLIFE_HOURS))
 
@@ -147,7 +148,7 @@ def compute_macro_score(event: dict, baseline: float,
 def score_events(events: list[dict], now: datetime | None = None) -> list[dict]:
     """给整批事件打分（批内共享同一个社交基准）。"""
     baseline = social_baseline(events)
-    now = now or datetime.now(timezone.utc)
+    now = now or now_local()
     for event in events:
         event["scores"] = compute_macro_score(event, baseline, now)
     logger.info(f"Scored {len(events)} events (social baseline P95={baseline:.0f})")

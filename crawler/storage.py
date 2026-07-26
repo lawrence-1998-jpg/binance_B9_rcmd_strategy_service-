@@ -22,6 +22,7 @@ from .dedup import (
     COSINE_THRESHOLD, TIME_WINDOW_HOURS,
     blob_to_embedding, embedding_to_blob, hours_between,
 )
+from .timeutil import now_local, to_mysql_datetime as _to_mysql_datetime
 
 logger = logging.getLogger(__name__)
 
@@ -41,20 +42,9 @@ def get_mysql_conn():
     )
 
 
-def to_mysql_datetime(value: str | None) -> str | None:
-    """ISO8601（含 T/Z/毫秒/时区）→ MySQL DATETIME 字符串。
-
-    历史 bug：X API 返回 '2026-07-25T14:02:54.000Z'，MySQL DATETIME 直接拒绝，
-    曾导致 77 条 X 事件静默丢失。所有入库时间都必须过这个函数。
-    """
-    if not value:
-        return None
-    try:
-        return datetime.fromisoformat(
-            str(value).replace("Z", "+00:00")
-        ).strftime("%Y-%m-%d %H:%M:%S")
-    except (ValueError, TypeError):
-        return None
+# 实现搬到 crawler/timeutil.py（那里统一做 UTC+8 换算），这里保留同名再导出：
+# 项目里十几处 `from crawler.storage import to_mysql_datetime` 不用改。
+to_mysql_datetime = _to_mysql_datetime
 
 
 # ── 社交互动信号（供 H 因子）────────────────────────────────────────
@@ -103,7 +93,7 @@ def attach_social_metrics(events: list[dict], conn) -> None:
 
 def load_recent_events(conn, hours: int = LOOKBACK_HOURS) -> list[dict]:
     """拉取近 N 小时入库的事件，作为跨轮归并的比对基准。"""
-    since = (datetime.now(timezone.utc) - timedelta(hours=hours)).strftime("%Y-%m-%d %H:%M:%S")
+    since = (now_local() - timedelta(hours=hours)).strftime("%Y-%m-%d %H:%M:%S")
     cursor = conn.cursor()
     cursor.execute(
         """SELECT id, event_fingerprint, embedding, source_names, sources,
@@ -305,7 +295,7 @@ def write_events(events: list[dict], conn) -> int:
         return 0
 
     cursor = conn.cursor()
-    now_str = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+    now_str = now_local().strftime("%Y-%m-%d %H:%M:%S")
     written = 0
 
     for event in events:

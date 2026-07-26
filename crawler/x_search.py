@@ -30,6 +30,7 @@ import requests
 from datetime import datetime, timedelta, timezone
 
 from .sources import X_SEARCH_QUERIES, CRYPTO_KOLS
+from .timeutil import now_local
 
 logger = logging.getLogger(__name__)
 
@@ -396,7 +397,7 @@ def fetch_x_search(known_tweet_ids: set[str] | None = None,
     seen_ids = set(known_tweet_ids or ())
     seen_texts: set[str] = set()
     budget = _Budget(MAX_REQUESTS_PER_RUN)
-    start_time = (datetime.now(timezone.utc)
+    start_time = (now_local()
                   - timedelta(hours=SEARCH_LOOKBACK_HOURS)).strftime("%Y-%m-%dT%H:%M:%SZ")
 
     stats = collect_stats if collect_stats is not None else {}
@@ -417,8 +418,8 @@ def fetch_x_search(known_tweet_ids: set[str] | None = None,
     # cron（UTC 0/12）各从不同位置开始，跨天覆盖全部类别。security 类
     # 排在原列表最前，轮转后依然大概率先执行（21 组里它占 6 组）。
     if queries:
-        offset = (datetime.now(timezone.utc).hour // 12
-                  + datetime.now(timezone.utc).timetuple().tm_yday * 2) % len(queries)
+        offset = (now_local().hour // 12
+                  + now_local().timetuple().tm_yday * 2) % len(queries)
         queries = list(queries[offset:]) + list(queries[:offset])
 
     for group_id, category, query in queries:

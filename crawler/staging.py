@@ -27,6 +27,7 @@ X 不走存档：按用户明确要求，"除了 X 这种要 API 额度的接口
 import hashlib
 import logging
 from datetime import datetime, timezone
+from .timeutil import now_local
 
 logger = logging.getLogger(__name__)
 
@@ -135,7 +136,7 @@ def mark_staged_consumed(conn, staged_items: list[dict]) -> None:
     placeholders = ",".join(["%s"] * len(ids))
     cursor.execute(
         f"UPDATE raw_items_staging SET consumed_at = %s WHERE id IN ({placeholders})",
-        (datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S"), *ids),
+        (now_local().strftime("%Y-%m-%d %H:%M:%S"), *ids),
     )
     conn.commit()
     cursor.close()

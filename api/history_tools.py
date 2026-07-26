@@ -65,6 +65,7 @@ from crawler import storage  # noqa: E402
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from notify import notify_feedback  # noqa: E402
+from crawler.timeutil import now_local
 
 logger = logging.getLogger(__name__)
 
@@ -89,6 +90,7 @@ API_TOKENS = {
     "team-b":    os.environ.get("API_TOKEN_TEAM_B",    "***REMOVED***"),
     "partner-1": os.environ.get("API_TOKEN_PARTNER1",  "***REMOVED***"),
     "partner-2": os.environ.get("API_TOKEN_PARTNER2",  "***REMOVED***"),
+    "web":       os.environ.get("API_TOKEN_WEB",       "***REMOVED***"),
 }
 VALID_API_KEYS = {API_SECRET_KEY, *API_TOKENS.values()}
 
@@ -303,7 +305,7 @@ def analytics_summary():
         days = max(1, min(int(request.args.get("days", 7)), 90))
     except (TypeError, ValueError):
         days = 7
-    since = (datetime.now(timezone.utc) - timedelta(days=days)).strftime("%Y-%m-%d %H:%M:%S")
+    since = (now_local() - timedelta(days=days)).strftime("%Y-%m-%d %H:%M:%S")
 
     conn = storage.get_mysql_conn()
     try:

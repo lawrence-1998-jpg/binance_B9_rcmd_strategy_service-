@@ -17,6 +17,7 @@ from .sources import (
 from .x_search import fetch_x_search
 from .web_search import fetch_web_search
 from .market_signals import run_market_signals
+from .timeutil import now_local
 
 logger = logging.getLogger(__name__)
 
@@ -105,7 +106,7 @@ def _parse_chaincatcher(html: str, source: dict) -> list[dict]:
             "title": title,
             "url": source["base_url"] + href,
             "summary": title,
-            "published_at": datetime.now(timezone.utc).isoformat(),
+            "published_at": now_local().isoformat(),
             "lang": source["lang"],
             "authority": source["authority"],
             "type": "scraper",
@@ -128,7 +129,7 @@ def _parse_panews(html: str, source: dict) -> list[dict]:
             "title": title[:200],
             "url": full,
             "summary": title[:200],
-            "published_at": datetime.now(timezone.utc).isoformat(),
+            "published_at": now_local().isoformat(),
             "lang": source["lang"],
             "authority": source["authority"],
             "type": "scraper",
@@ -287,7 +288,7 @@ def normalize_published_at(value: str, now: datetime | None = None) -> str | Non
       - 早于 now - MAX_CONTENT_AGE_DAYS → 返回 None，调用方丢弃
       - 晚于 now + MAX_FUTURE_HOURS → 视为时区标注错误，回落到当前时间
     """
-    now = now or datetime.now(timezone.utc)
+    now = now or now_local()
     if not value:
         return now.isoformat()
     try:
@@ -307,7 +308,7 @@ def normalize_published_at(value: str, now: datetime | None = None) -> str | Non
 
 def filter_by_freshness(items: list[dict]) -> list[dict]:
     """丢弃陈年内容，并把异常时间戳归一。按信源统计丢弃量便于排查。"""
-    now = datetime.now(timezone.utc)
+    now = now_local()
     kept, dropped = [], {}
     for item in items:
         normalized = normalize_published_at(item.get("published_at", ""), now)
@@ -428,7 +429,7 @@ def fetch_coinmarketcal() -> list[dict]:
         return []
     try:
         from datetime import timedelta
-        now = datetime.now(timezone.utc)
+        now = now_local()
         params = {
             "dateRangeStart": now.strftime("%Y-%m-%d"),
             "dateRangeEnd": (now + timedelta(days=14)).strftime("%Y-%m-%d"),

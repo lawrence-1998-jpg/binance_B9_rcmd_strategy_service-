@@ -43,6 +43,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import requests
+from .timeutil import now_local
 
 logger = logging.getLogger(__name__)
 
@@ -341,7 +342,7 @@ def load_snapshot(force_refresh: bool = False) -> dict:
         "coins": coins,
         "binance": fetch_binance_spot_prices(),
         "fetched_at": now,
-        "fetched_at_iso": datetime.now(timezone.utc).isoformat(),
+        "fetched_at_iso": now_local().isoformat(),
     }
     _write_cache(snapshot)
     _snapshot_memo = snapshot

@@ -56,6 +56,7 @@ API_TOKENS = {
     "team-b":    os.environ.get("API_TOKEN_TEAM_B",    "***REMOVED***"),
     "partner-1": os.environ.get("API_TOKEN_PARTNER1",  "***REMOVED***"),
     "partner-2": os.environ.get("API_TOKEN_PARTNER2",  "***REMOVED***"),
+    "web":       os.environ.get("API_TOKEN_WEB",       "***REMOVED***"),
 }
 VALID_API_KEYS = {API_SECRET_KEY, *API_TOKENS.values()}
 

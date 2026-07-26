@@ -1778,7 +1778,7 @@ footer{border-top:1px solid var(--rule);padding:26px 0 40px;font-size:12px;color
       <table>
         <thead><tr>
           <th class="c-rank">#</th><th class="c-score">重要性</th><th class="c-title">事件标题</th>
-          <th class="c-tags">板块 / 币种</th><th class="c-src">信源</th><th class="c-time">观测时间</th><th class="c-x"></th>
+          <th class="c-tags">板块 / 币种</th><th class="c-src">信源</th><th class="c-time">事件时间 / 观测</th><th class="c-x"></th>
         </tr></thead>
         <tbody id="tbody"></tbody>
       </table>
@@ -3342,6 +3342,7 @@ function renderRows(){
   tb.innerHTML=rows.map(function(r,i){
     var tier=r.event_tier||"D", score=(r.importance_score!=null)?Number(r.importance_score):0;
     var t=fmtTime(r.time_event||r.time_get_data);
+    var g=fmtTime(r.time_get_data||r.time_event);
     var secs=(r.sectors||[]).slice(0,3).map(function(s){return '<span class="tag">'+esc(s)+'</span>';}).join("");
     var coins=(r.coins||[]).slice(0,4).map(function(c){return '<span class="tag coin">'+esc(c)+'</span>';}).join("");
     if(!secs&&!coins) secs='<span class="tag neu">未标注</span>';
@@ -3362,7 +3363,8 @@ function renderRows(){
       '<td class="c-tags">'+secs+coins+'<div style="margin-top:5px"><span class="tag neu">'+esc(r.news_type||"—")+'</span></div></td>'+
       '<td class="c-src"><div class="src-list">'+srcTx+'</div>'+
         '<div class="tm" style="margin-top:4px">'+(r.source_count||srcs.length||0)+' 源 · 互动 '+nf(r.social_interactions||0)+'</div></td>'+
-      '<td class="c-time"><div class="tm"><span class="d">'+t.d+'</span></div><div class="tm">'+t.t+'</div></td>'+
+      '<td class="c-time"><div class="tm"><span class="d">'+t.d+'</span></div><div class="tm">'+t.t+'</div>'+
+        '<div class="tm" style="opacity:.62;margin-top:3px" title="观测时间（本服务抓到它的时刻）">观 '+(g.d===t.d?g.t:g.d.slice(5)+" "+g.t)+'</div></td>'+
       '<td class="c-x"><span class="caret">▶</span></td></tr>';
   }).join("");
   $$("tr.row",tb).forEach(function(tr){

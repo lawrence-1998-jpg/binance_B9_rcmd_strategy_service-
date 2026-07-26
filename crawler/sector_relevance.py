@@ -53,6 +53,7 @@ from .scoring import (
     social_baseline,
 )
 from .sources import SECTOR_LABELS
+from .timeutil import now_local
 
 logger = logging.getLogger(__name__)
 
@@ -817,7 +818,7 @@ def hard_gate_and_score(candidates: list[dict], now: datetime | None = None,
     上算一次，所有板块共用——这样跨板块比较 H 分才有意义。不传时退化为对
     传入的 candidates 自己算（单测 / 独立调用场景的兜底）。
     """
-    now = now or datetime.now(timezone.utc)
+    now = now or now_local()
     if baseline is None:
         baseline = social_baseline(candidates)
 
@@ -967,7 +968,7 @@ def fetch_candidates(conn, hours: int = DEFAULT_CANDIDATE_HOURS) -> list[dict]:
     打了 Solana 0.58，本模块需要能独立把它判低）。时间窗内全量候选交给
     Stage 1 预筛做成本控制，而不是靠 sectors 字段做候选池的第一道过滤。
     """
-    since = (datetime.now(timezone.utc) - timedelta(hours=hours)).strftime("%Y-%m-%d %H:%M:%S")
+    since = (now_local() - timedelta(hours=hours)).strftime("%Y-%m-%d %H:%M:%S")
     cursor = conn.cursor()
     cursor.execute(_CANDIDATE_SQL, (since,))
     rows = cursor.fetchall()
@@ -1046,7 +1047,7 @@ def recommend_sector(sector: str, conn, hours: int = DEFAULT_CANDIDATE_HOURS,
         }
 
     llm_judge(sector, passed, client, tracker)
-    now = datetime.now(timezone.utc)
+    now = now_local()
     pool_baseline = social_baseline(pool)   # 见 hard_gate_and_score() 注释：全量池共享同一基准
     hard_gate_and_score(passed, now, baseline=pool_baseline)
 

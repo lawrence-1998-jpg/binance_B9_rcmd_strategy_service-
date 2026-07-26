@@ -63,6 +63,7 @@ from datetime import datetime, timedelta, timezone
 import requests
 
 from crawler import storage
+from .timeutil import now_local
 
 logger = logging.getLogger(__name__)
 
@@ -426,13 +427,13 @@ def fmt_usd(v: float) -> str:
 
 def _now() -> datetime:
     """tz-aware UTC，用于 item 的 published_at（下游/其他 fetch_* 都是这个格式）。"""
-    return datetime.now(timezone.utc)
+    return now_local()
 
 
 def _now_naive() -> datetime:
     """naive UTC，用于和 MySQL DATETIME 列比较——项目里 storage.to_mysql_datetime()
     也是把 tz 信息去掉存 naive 时间，这里保持同一约定，避免 aware/naive 混用报错。"""
-    return datetime.utcnow()
+    return now_local()
 
 
 # ══════════════════════════════════════════════════════════════════════

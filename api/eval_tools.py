@@ -65,6 +65,7 @@ from crawler.dedup import (  # noqa: E402
 )
 from crawler.usage_tracker import PRICING_USD_PER_MILLION_TOKENS, UsageTracker  # noqa: E402
 from crawler import storage  # noqa: E402  （只读用，见 persona-eval 的 event_id 便捷参数）
+from crawler.timeutil import now_local
 
 logger = logging.getLogger(__name__)
 
@@ -83,6 +84,7 @@ API_TOKENS = {
     "team-b":    os.environ.get("API_TOKEN_TEAM_B",    "***REMOVED***"),
     "partner-1": os.environ.get("API_TOKEN_PARTNER1",  "***REMOVED***"),
     "partner-2": os.environ.get("API_TOKEN_PARTNER2",  "***REMOVED***"),
+    "web":       os.environ.get("API_TOKEN_WEB",       "***REMOVED***"),
 }
 VALID_API_KEYS = {API_SECRET_KEY, *API_TOKENS.values()}
 
@@ -676,7 +678,7 @@ def _compute_momentum(meta: dict) -> dict:
     hours_since = None
     if published is not None and hasattr(published, "isoformat"):
         pub_dt = published if published.tzinfo else published.replace(tzinfo=timezone.utc)
-        hours_since = max(0.0, (datetime.now(timezone.utc) - pub_dt).total_seconds() / 3600)
+        hours_since = max(0.0, (now_local() - pub_dt).total_seconds() / 3600)
 
     denom = max(1.0, hours_since if hours_since is not None else 1.0)
     value = social / denom
@@ -732,7 +734,7 @@ def _compute_novelty(meta: dict) -> dict:
     if anchor is not None and hasattr(anchor, "isoformat"):
         anchor_dt = anchor if anchor.tzinfo else anchor.replace(tzinfo=timezone.utc)
     else:
-        anchor_dt = datetime.now(timezone.utc)
+        anchor_dt = now_local()
     since = (anchor_dt - timedelta(days=NOVELTY_LOOKBACK_DAYS)).strftime("%Y-%m-%d %H:%M:%S")
     until = anchor_dt.strftime("%Y-%m-%d %H:%M:%S")
     conn = storage.get_mysql_conn()

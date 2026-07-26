@@ -41,6 +41,7 @@ from flask import Blueprint, request, jsonify, redirect, send_from_directory
 
 from crawler import scoring, storage
 from crawler.sector_relevance import SECTOR_ANCHORS
+from crawler.timeutil import now_local
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 鉴权：与 api/server.py 里的 require_api_key 逻辑保持一致（同一个静态 token），
@@ -56,6 +57,7 @@ API_TOKENS = {
     "team-b":    os.environ.get("API_TOKEN_TEAM_B",    "***REMOVED***"),
     "partner-1": os.environ.get("API_TOKEN_PARTNER1",  "***REMOVED***"),
     "partner-2": os.environ.get("API_TOKEN_PARTNER2",  "***REMOVED***"),
+    "web":       os.environ.get("API_TOKEN_WEB",       "***REMOVED***"),
 }
 VALID_API_KEYS = {API_SECRET_KEY, *API_TOKENS.values()}
 
@@ -108,7 +110,7 @@ MAX_POOL_LIMIT = 500
 
 def fetch_pool(conn, days: int, limit: int) -> list[dict]:
     """拉取近 N 天入库的事件，转成 scoring.py 各 compute_* 函数能直接吃的 dict。"""
-    since = (datetime.now(timezone.utc) - timedelta(days=days)).strftime("%Y-%m-%d %H:%M:%S")
+    since = (now_local() - timedelta(days=days)).strftime("%Y-%m-%d %H:%M:%S")
     cursor = conn.cursor()
     cursor.execute(
         f"SELECT {POOL_COLUMNS} FROM news_events WHERE time_get_data >= %s "
@@ -322,7 +324,7 @@ def reweight():
         conn.close()
 
     top_n = min(int(body.get("top_n", 30)), max(1, len(events)))
-    now = datetime.now(timezone.utc)
+    now = now_local()
     baseline = scoring.social_baseline(events)
     use_rel = bool(sector)
     weights = normalize_weights(weights_raw, use_rel)
@@ -389,7 +391,7 @@ def compare():
     top_n = min(int(body.get("top_n", 20)), len(events))
     case_limit = min(int(body.get("case_limit", 8)), 30)
 
-    now = datetime.now(timezone.utc)
+    now = now_local()
     baseline = scoring.social_baseline(events)
     use_rel = bool(sector)
     weights_a = normalize_weights(weights_a_raw, use_rel)
