@@ -139,6 +139,60 @@ main{padding:38px 0 90px}
 .stat .n{font-size:11.5px;color:var(--ink-4);margin-top:8px;line-height:1.5}
 
 /* ── SVG diagram ────────────────────────────────────────────────────── */
+/* ── 吸顶页内锚点条 ─────────────────────────────────────────────────
+   外层用不透明 --paper 垫底，防止内容从半透明缝隙里透出来；
+   整条不含任何 backdrop-filter（见性能红线）。 */
+.b9-anchorwrap{position:sticky;top:0;z-index:6;background:var(--paper);
+  padding:10px 0 12px;margin-bottom:4px}
+.b9-anchorbar{display:flex;gap:4px;flex-wrap:wrap;align-items:center;
+  background:var(--n100);border:1px solid var(--n300);border-radius:999px;
+  padding:4px;box-shadow:var(--shadow-sm);width:fit-content;max-width:100%}
+.b9-anchor{font:inherit;font-size:12.5px;font-weight:600;color:var(--ink-3);
+  background:none;border:0;border-radius:999px;padding:6px 14px;cursor:pointer;white-space:nowrap}
+.b9-anchor:hover{background:var(--n200);color:var(--ink)}
+.b9-anchor[aria-current="true"]{background:var(--gold);color:var(--paper)}
+@media(max-width:760px){
+  .b9-anchorbar{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none}
+  .b9-anchorbar::-webkit-scrollbar{display:none}
+}
+
+/* ── 信源统计表 ── */
+.sc-url{color:var(--a700);text-decoration:none;font-family:var(--mono);font-size:11.5px;
+  word-break:break-all}
+.sc-url:hover{text-decoration:underline}
+
+/* ── 最近调度监控横条 ───────────────────────────────────────────────── */
+.sched{padding:0;overflow:hidden}
+.sched-row{display:flex;align-items:center;gap:12px;width:100%;padding:15px 20px;
+  background:none;border:0;cursor:pointer;text-align:left;font:inherit;color:inherit}
+.sched-row:hover{background:var(--n200)}
+.sched-k{font-size:13px;font-weight:700;flex:none}
+.sched-v{font-family:var(--mono);font-size:12px;color:var(--ink-3);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;flex:1 1 auto}
+.sched-dots{display:flex;gap:4px;flex:none}
+.sched-dots i{width:7px;height:7px;border-radius:50%;background:var(--g500);display:block}
+.sched-dots i.bad{background:var(--a600)}
+.sched-next{font-family:var(--mono);font-size:11.5px;color:var(--ink-4);flex:none}
+.sched-caret{font-size:11px;color:var(--ink-4);flex:none;transition:transform .18s ease}
+.sched-row[aria-expanded="true"] .sched-caret{transform:rotate(180deg)}
+.sched-panel{border-top:1px solid var(--n300);padding:6px 20px 16px}
+.sched-list{display:flex;flex-direction:column}
+.sched-item{display:grid;grid-template-columns:150px 64px 1fr auto;gap:12px;align-items:center;
+  padding:10px 0;border-bottom:1px solid var(--n200);font-size:12.5px}
+.sched-item:last-child{border-bottom:0}
+.sched-item .t{font-family:var(--mono);font-size:12px;color:var(--ink-2)}
+.sched-item .n{color:var(--ink-3)}
+.sched-item .d{font-family:var(--mono);color:var(--ink-3);white-space:nowrap}
+.sched-foot{display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center;
+  margin-top:12px;font-size:11.5px;color:var(--ink-4)}
+.sched-cmd{font-family:var(--mono);font-size:11px;background:var(--n900);color:var(--g200);
+  padding:4px 10px;border-radius:999px}
+@media(max-width:760px){
+  .sched-v,.sched-next{display:none}
+  .sched-item{grid-template-columns:1fr auto}
+  .sched-item .n{grid-column:1/-1}
+}
+
 .diagram{
   background:var(--surface);border:1px solid var(--rule);border-radius:var(--r-lg);
   box-shadow:var(--shadow);overflow:hidden;
@@ -1219,18 +1273,18 @@ footer{border-top:1px solid var(--rule);padding:26px 0 40px;font-size:12px;color
 /* 字号整体上调一档：原尺寸是照着 1040px 满宽定的，实际容器常被压到 ~900px，
    SVG 等比缩放后版本号/角色那两行小到看不清。行距（14 / 18px）不变，
    所以字号上限受制于行距，取 12px 左右刚好不撞基线。 */
-#panel-7 .p7-flow-name{font-size:15px;font-weight:700}
+#panel-7 .p7-flow-name{font-size:17px;font-weight:700}
 #panel-7 .p7-flow-ver{
-  font-size:11.5px;
+  font-size:13px;
   font-family:var(--mono,ui-monospace,SFMono-Regular,Menlo,Consolas,monospace);
 }
-#panel-7 .p7-flow-role{font-size:12px}
+#panel-7 .p7-flow-role{font-size:13.5px}
 #panel-7 .p7-flow-step{
-  font-size:10px;letter-spacing:.1em;
+  font-size:11px;letter-spacing:.1em;
   font-family:var(--mono,ui-monospace,SFMono-Regular,Menlo,Consolas,monospace);
 }
 #panel-7 .p7-flow-stage{
-  font-size:11.5px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;
+  font-size:13px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;
 }
 /* 流动感：虚线沿路径缓慢位移。只有 3 条短路径参与，且 panel 隐藏时 display:none 会停掉动画，
    开销可忽略；仍然对 reduce-motion 做降级。这里不涉及任何毛玻璃滤镜，与性能红线无冲突。 */
@@ -1310,6 +1364,19 @@ footer{border-top:1px solid var(--rule);padding:26px 0 40px;font-size:12px;color
 <!-- ══════════════════ TAB 1 · 生成流程 ══════════════════ -->
 <div role="tabpanel" id="panel-1" aria-labelledby="tab-1">
 
+  <!-- 吸顶页内锚点条：长 tab 里跳节用，不改变任何内容结构 -->
+  <div class="b9-anchorwrap">
+    <nav class="b9-anchorbar" aria-label="本页小节">
+      <button class="b9-anchor" type="button" data-goto="sec-overview">概览</button>
+      <button class="b9-anchor" type="button" data-goto="sec-flow">流程图</button>
+      <button class="b9-anchor" type="button" data-goto="sec-pipeline">八步流水线</button>
+      <button class="b9-anchor" type="button" data-goto="sec-scoring">打分模型</button>
+      <button class="b9-anchor" type="button" data-goto="sec-dedup">去重与校验</button>
+      <button class="b9-anchor" type="button" data-goto="sec-runs">运行记录</button>
+    </nav>
+  </div>
+
+
   <div class="hero">
     <span class="kicker"><span class="dot ok"></span>Production · 每日 2 次自动运行</span>
     <h1>从全网噪音里，<em>提炼出可排序的事件</em></h1>
@@ -1320,15 +1387,39 @@ footer{border-top:1px solid var(--rule);padding:26px 0 40px;font-size:12px;color
     </p>
   </div>
 
-  <div class="stats section" id="statRow">
+  <div class="stats section" id="statRow"><span id="sec-overview"></span>
     <div class="stat"><div class="l">事件库总量</div><div class="v" id="k-total">—</div><div class="n">已结构化、去重、打分</div></div>
     <div class="stat"><div class="l">活跃信源</div><div class="v" id="k-src">—</div><div class="n">近期产出过事件的独立信源</div></div>
     <div class="stat"><div class="l">最近一轮折叠率</div><div class="v" id="k-dedup">—</div><div class="n">原始条目 → 唯一事件</div></div>
     <div class="stat"><div class="l">真实性校验通过</div><div class="v" id="k-verify">—</div><div class="n">VERIFIED + PROBABLE 占比</div></div>
   </div>
 
+  <!-- ═══ 最近调度监控横条 ═══
+       单行只回答一个问题："这套东西现在还在正常跑吗"。展开才是近三轮明细，
+       避免把运维信息塞进产品叙述的主线里。数据与下方「最近一次运行」共用
+       同一次 /api/runs 请求。 -->
+  <section class="section" id="sec-sched">
+    <div class="card sched" id="schedCard">
+      <button class="sched-row" id="schedToggle" type="button" aria-expanded="false" aria-controls="schedPanel">
+        <span class="b9-pulse" aria-hidden="true"></span>
+        <span class="sched-k">最近调度</span>
+        <span class="sched-v" id="schedMeta">读取中…</span>
+        <span class="sched-dots" id="schedDots" aria-hidden="true"></span>
+        <span class="sched-next" id="schedNext">下轮 —</span>
+        <span class="sched-caret" aria-hidden="true">▾</span>
+      </button>
+      <div class="sched-panel" id="schedPanel" hidden>
+        <div class="sched-list" id="schedList"></div>
+        <div class="sched-foot">
+          <span>调度：每天 <b>08:00 / 20:00</b>（UTC+8）· 数据来自 <code>GET /api/runs</code></span>
+          <code class="sched-cmd">tail -f ~/crypto-news-crawler/logs/cron.log</code>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <!-- ═══ 流程图 ═══ -->
-  <section class="section">
+  <section class="section" id="sec-flow">
     <div class="sec-head">
       <span class="eyebrow">Architecture</span>
       <h2>服务生成流程</h2>
@@ -1337,12 +1428,9 @@ footer{border-top:1px solid var(--rule);padding:26px 0 40px;font-size:12px;color
         中段为抓取与理解；右侧分两条输出分支 —— 分支 1 不打分直出结构化事件，分支 2 追加五因子排序分。
         底部虚线标出两个 AI 模型在各阶段的分工与协同。
       </p>
-      <p class="sub" style="margin-top:8px">
-        图中灰色小字是各环节的<b>真实耗时</b>（取自 2026-07-26 00:19 那一轮的
-        <code>stage_timings</code>，非估算）。<b>单轮总计约 19 分钟</b>，其中
-        <b style="color:var(--red)">LLM 结构化一项就占 78%</b>（899 秒）—— 抓取约 4 分钟，
-        其余所有环节（粗去重、语义聚类、跨轮归并、真实性校验、市值标签、打分入库）加起来不到 6 秒。
-        要压缩单轮时长，唯一有意义的着力点是 LLM 结构化那一步。
+      <p class="sub" style="margin-top:8px" id="flowTimeSummary">
+        顶部流程轴上的数字是各阶段的<b>真实耗时</b>，取自最近一轮的
+        <code>stage_timings</code>，非估算 —— 正在读取…
       </p>
     </div>
 
@@ -1351,117 +1439,160 @@ footer{border-top:1px solid var(--rule);padding:26px 0 40px;font-size:12px;color
         <svg viewBox="0 0 1300 690" role="img" aria-label="服务生成流程图">
           <defs>
             <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-              <path d="M0,1 L9,5 L0,9 z" fill="#9AA1AE"/>
+              <path d="M0,1 L9,5 L0,9 z" fill="var(--n500)"/>
             </marker>
             <marker id="ah-g" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7.5" markerHeight="7.5" orient="auto-start-reverse">
-              <path d="M0,1 L9,5 L0,9 z" fill="#C9970A"/>
+              <path d="M0,1 L9,5 L0,9 z" fill="var(--a600)"/>
             </marker>
             <marker id="ah-i" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7.5" markerHeight="7.5" orient="auto-start-reverse">
-              <path d="M0,1 L9,5 L0,9 z" fill="#3A4A8F"/>
+              <path d="M0,1 L9,5 L0,9 z" fill="var(--g700)"/>
             </marker>
             <marker id="ah-d" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-              <path d="M0,1.5 L8,5 L0,8.5 z" fill="#8B93E0"/>
+              <path d="M0,1.5 L8,5 L0,8.5 z" fill="var(--g400)"/>
             </marker>
             <linearGradient id="gStage" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0" stop-color="#FFFFFF"/><stop offset="1" stop-color="#FAF9F5"/>
+              <stop offset="0" stop-color="var(--n100)"/><stop offset="1" stop-color="var(--n200)"/>
             </linearGradient>
           </defs>
 
           <style>
-            .lbl{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:9.5px;letter-spacing:.13em;
-                 text-transform:uppercase;fill:#9AA1AE;font-weight:600}
-            .sn{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;font-size:12px;fill:#12141A;font-weight:600}
-            .ss{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;font-size:10px;fill:#6B7280}
+            /* 流程轴步骤胶囊。深底上正文用 --paper，耗时压到 62% 不透明度作次要信息；
+               `.hot` 给耗时大头（LLM 结构化）用赤陶浅阶，是全图唯一需要被一眼看到的数字。 */
+            .stepno{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:9.5px;
+                    fill:var(--a400);font-weight:700;letter-spacing:.06em}
+            .stepttl{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;
+                     font-size:13px;fill:var(--paper);font-weight:700}
+            .steptm{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:9.5px;
+                    fill:var(--paper);opacity:.62;font-weight:600;letter-spacing:.02em}
+            .steptm.hot{fill:var(--a300);opacity:1}
+            .sn{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;font-size:12px;fill:var(--n900);font-weight:600}
+            .ss{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;font-size:10px;fill:var(--n600)}
             .mchip{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:8.5px;font-weight:700;letter-spacing:.03em}
-            .nt{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;font-size:14px;fill:#12141A;font-weight:650;letter-spacing:-.01em}
-            .nd{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;font-size:10.5px;fill:#6B7280}
-            .nb{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:9px;fill:#8A6200;font-weight:700;letter-spacing:.05em}
+            .nt{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;font-size:14px;fill:var(--n900);font-weight:650;letter-spacing:-.01em}
+            .nd{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;font-size:10.5px;fill:var(--n600)}
+            .nb{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:9px;fill:var(--a800);font-weight:700;letter-spacing:.05em}
             .brl{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;font-size:11px;font-weight:650}
-            .brd{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;font-size:9.5px;fill:#6B7280}
-            .sub{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;font-size:10.5px;fill:#3B414D;font-weight:600}
-            .subd{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:9px;fill:#6B7280}
+            .brd{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;font-size:9.5px;fill:var(--n600)}
+            .sub{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;font-size:10.5px;fill:var(--n800);font-weight:600}
+            .subd{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:9px;fill:var(--n600)}
             /* 耗时标注。数字取自 2026-07-26 00:19 那一轮的真实 stage_timings，
                不是估算；`.tmH` 是耗时大头（LLM 结构化）用的高亮色。 */
-            .tm{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:8.5px;fill:#9AA1AE;font-weight:700;letter-spacing:.04em}
-            .tmH{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:8.5px;fill:#B4243C;font-weight:700;letter-spacing:.04em}
+            .tm{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:8.5px;fill:var(--n500);font-weight:700;letter-spacing:.04em}
+            .tmH{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:8.5px;fill:var(--a700);font-weight:700;letter-spacing:.04em}
           </style>
 
-          <!-- ─── 列标题 ─── -->
-          <text class="lbl" x="24"   y="30">01 · 数据源与接入方式</text>
-          <text class="lbl" x="392"  y="30">02 · 抓取</text>
-          <text class="lbl" x="572"  y="30">03 · 聚类 &amp; 理解</text>
-          <text class="lbl" x="900"  y="30">04 · 输出分支</text>
-          <text class="lbl" x="1150" y="30">05 · 服务</text>
+          <!-- ─── 流程轴：01→05 深色步骤胶囊，各阶段耗时收在胶囊右侧 ───
+               设计稿要求把散落在各节点的微观耗时标注全部撤掉，只在这条轴上给
+               每一步一个汇总数字，这样"时间花在哪"一眼可见而不是满图找小字。
+               耗时由 JS 从 /api/runs 的 stage_timings 实时填入，静态值只是兜底。 -->
+          <g id="flowAxis">
+            <rect x="24"   y="10" width="214" height="28" rx="14" fill="var(--n900)"/>
+            <text class="stepno"  x="37"   y="28.5">01</text>
+            <text class="stepttl" x="58"   y="28.5">数据源与接入方式</text>
+            <text class="steptm"  x="225"  y="28.5" text-anchor="end">8 类信源</text>
+
+            <line x1="246" y1="24" x2="378" y2="24" stroke="var(--n400)" stroke-width="1.5"
+                  stroke-dasharray="3 4" marker-end="url(#ah)"/>
+
+            <rect x="392"  y="10" width="152" height="28" rx="14" fill="var(--n900)"/>
+            <text class="stepno"  x="405"  y="28.5">02</text>
+            <text class="stepttl" x="426"  y="28.5">抓取</text>
+            <text class="steptm"  x="531"  y="28.5" text-anchor="end" id="flowTm2">≈ 28 秒</text>
+
+            <line x1="552" y1="24" x2="566" y2="24" stroke="var(--n400)" stroke-width="1.5"
+                  marker-end="url(#ah)"/>
+
+            <rect x="572"  y="10" width="252" height="28" rx="14" fill="var(--n900)"/>
+            <text class="stepno"  x="585"  y="28.5">03</text>
+            <text class="stepttl" x="606"  y="28.5">聚类 &amp; 理解</text>
+            <text class="steptm hot" x="811" y="28.5" text-anchor="end" id="flowTm3">≈ 12 分 03 秒 · 92%</text>
+
+            <line x1="832" y1="24" x2="886" y2="24" stroke="var(--n400)" stroke-width="1.5"
+                  stroke-dasharray="3 4" marker-end="url(#ah)"/>
+
+            <rect x="900"  y="10" width="176" height="28" rx="14" fill="var(--n900)"/>
+            <text class="stepno"  x="913"  y="28.5">04</text>
+            <text class="stepttl" x="934"  y="28.5">输出分支</text>
+            <text class="steptm"  x="1063" y="28.5" text-anchor="end" id="flowTm4">≈ 34 秒</text>
+
+            <line x1="1084" y1="24" x2="1136" y2="24" stroke="var(--n400)" stroke-width="1.5"
+                  stroke-dasharray="3 4" marker-end="url(#ah)"/>
+
+            <rect x="1150" y="10" width="126" height="28" rx="14" fill="var(--n900)"/>
+            <text class="stepno"  x="1163" y="28.5">05</text>
+            <text class="stepttl" x="1184" y="28.5">服务</text>
+            <text class="steptm"  x="1263" y="28.5" text-anchor="end">实时</text>
+          </g>
 
           <!-- ─── 数据源 8 行 ─── -->
           <g id="sources">
             <!-- 1 英文 RSS -->
-            <rect x="24" y="46" width="300" height="46" rx="9" fill="#FFFFFF" stroke="#E4E3DD"/>
+            <rect x="24" y="46" width="300" height="46" rx="9" fill="var(--n100)" stroke="var(--n300)"/>
             <rect x="24" y="46" width="3.5" height="46" rx="2" fill="var(--gold)"/>
             <text class="sn" x="40" y="66">英文媒体 RSS</text>
             <text class="ss" x="40" y="81">CoinDesk · TheBlock · Cointelegraph · Decrypt +2</text>
-            <rect x="246" y="55" width="66" height="17" rx="5" fill="#FDF6E1" stroke="#EBD9A0"/>
-            <text class="mchip" x="279" y="67" text-anchor="middle" fill="#8A6200">RSS 直连</text>
+            <rect x="246" y="55" width="66" height="17" rx="5" fill="var(--a100)" stroke="var(--a300)"/>
+            <text class="mchip" x="279" y="67" text-anchor="middle" fill="var(--a800)">RSS 直连</text>
 
             <!-- 2 中文 RSSHub -->
-            <rect x="24" y="100" width="300" height="46" rx="9" fill="#FFFFFF" stroke="#E4E3DD"/>
+            <rect x="24" y="100" width="300" height="46" rx="9" fill="var(--n100)" stroke="var(--n300)"/>
             <rect x="24" y="100" width="3.5" height="46" rx="2" fill="var(--gold)"/>
             <text class="sn" x="40" y="120">中文媒体</text>
             <text class="ss" x="40" y="135">吴说 · BlockBeats · 金色 · Followin · TechFlow</text>
-            <rect x="234" y="109" width="78" height="17" rx="5" fill="#FDF6E1" stroke="#EBD9A0"/>
-            <text class="mchip" x="273" y="121" text-anchor="middle" fill="#8A6200">自建 RSSHub</text>
+            <rect x="234" y="109" width="78" height="17" rx="5" fill="var(--a100)" stroke="var(--a300)"/>
+            <text class="mchip" x="273" y="121" text-anchor="middle" fill="var(--a800)">自建 RSSHub</text>
 
             <!-- 3 HTML -->
-            <rect x="24" y="154" width="300" height="46" rx="9" fill="#FFFFFF" stroke="#E4E3DD"/>
-            <rect x="24" y="154" width="3.5" height="46" rx="2" fill="#5A6472"/>
+            <rect x="24" y="154" width="300" height="46" rx="9" fill="var(--n100)" stroke="var(--n300)"/>
+            <rect x="24" y="154" width="3.5" height="46" rx="2" fill="var(--n700)"/>
             <text class="sn" x="40" y="174">页面直接解析</text>
             <text class="ss" x="40" y="189">ChainCatcher（NUXT SSR）· PANews 快讯页</text>
-            <rect x="240" y="163" width="72" height="17" rx="5" fill="#EEF0F2" stroke="#DCE0E4"/>
-            <text class="mchip" x="276" y="175" text-anchor="middle" fill="#5A6472">HTML 解析</text>
+            <rect x="240" y="163" width="72" height="17" rx="5" fill="var(--n200)" stroke="var(--n300)"/>
+            <text class="mchip" x="276" y="175" text-anchor="middle" fill="var(--n700)">HTML 解析</text>
 
             <!-- 4 X KOL -->
-            <rect x="24" y="208" width="300" height="46" rx="9" fill="#FFFFFF" stroke="#E4E3DD"/>
-            <rect x="24" y="208" width="3.5" height="46" rx="2" fill="#3A4A8F"/>
+            <rect x="24" y="208" width="300" height="46" rx="9" fill="var(--n100)" stroke="var(--n300)"/>
+            <rect x="24" y="208" width="3.5" height="46" rx="2" fill="var(--g700)"/>
             <text class="sn" x="40" y="228">X KOL 时间线</text>
             <text class="ss" x="40" y="243">32 个账号 · 链上/安全/监管/官方/宏观</text>
-            <rect x="256" y="217" width="56" height="17" rx="5" fill="#EEF0F9" stroke="#C9CFE8"/>
-            <text class="mchip" x="284" y="229" text-anchor="middle" fill="#3A4A8F">X API</text>
+            <rect x="256" y="217" width="56" height="17" rx="5" fill="var(--g100)" stroke="var(--g300)"/>
+            <text class="mchip" x="284" y="229" text-anchor="middle" fill="var(--g700)">X API</text>
 
             <!-- 5 X search -->
-            <rect x="24" y="262" width="300" height="46" rx="9" fill="#FFFFFF" stroke="#E4E3DD"/>
-            <rect x="24" y="262" width="3.5" height="46" rx="2" fill="#3A4A8F"/>
+            <rect x="24" y="262" width="300" height="46" rx="9" fill="var(--n100)" stroke="var(--n300)"/>
+            <rect x="24" y="262" width="3.5" height="46" rx="2" fill="var(--g700)"/>
             <text class="sn" x="40" y="282">X 全网搜索</text>
             <text class="ss" x="40" y="297">21 组两段式查询 · search/recent 端点</text>
-            <rect x="256" y="271" width="56" height="17" rx="5" fill="#EEF0F9" stroke="#C9CFE8"/>
-            <text class="mchip" x="284" y="283" text-anchor="middle" fill="#3A4A8F">X API</text>
+            <rect x="256" y="271" width="56" height="17" rx="5" fill="var(--g100)" stroke="var(--g300)"/>
+            <text class="mchip" x="284" y="283" text-anchor="middle" fill="var(--g700)">X API</text>
 
             <!-- 6 搜索引擎 -->
-            <rect x="24" y="316" width="300" height="46" rx="9" fill="#FFFFFF" stroke="#E4E3DD"/>
-            <rect x="24" y="316" width="3.5" height="46" rx="2" fill="#0B7A4B"/>
+            <rect x="24" y="316" width="300" height="46" rx="9" fill="var(--n100)" stroke="var(--n300)"/>
+            <rect x="24" y="316" width="3.5" height="46" rx="2" fill="var(--g700)"/>
             <text class="sn" x="40" y="336">搜索引擎召回</text>
             <text class="ss" x="40" y="351">Google News RSS（when:1d）· 币安广场</text>
-            <rect x="242" y="325" width="70" height="17" rx="5" fill="#E8F5EE" stroke="#BFE3D0"/>
-            <text class="mchip" x="277" y="337" text-anchor="middle" fill="#0B7A4B">搜索 · ddgs</text>
+            <rect x="242" y="325" width="70" height="17" rx="5" fill="var(--g100)" stroke="var(--g300)"/>
+            <text class="mchip" x="277" y="337" text-anchor="middle" fill="var(--g700)">搜索 · ddgs</text>
 
             <!-- 7 行情 -->
-            <rect x="24" y="370" width="300" height="46" rx="9" fill="#FFFFFF" stroke="#E4E3DD"/>
-            <rect x="24" y="370" width="3.5" height="46" rx="2" fill="#3A4A8F"/>
+            <rect x="24" y="370" width="300" height="46" rx="9" fill="var(--n100)" stroke="var(--n300)"/>
+            <rect x="24" y="370" width="3.5" height="46" rx="2" fill="var(--g700)"/>
             <text class="sn" x="40" y="390">行情异动信号</text>
             <text class="ss" x="40" y="405">data-api.binance.vision · OKX · 零 LLM 成本</text>
-            <rect x="248" y="379" width="64" height="17" rx="5" fill="#EEF0F9" stroke="#C9CFE8"/>
-            <text class="mchip" x="280" y="391" text-anchor="middle" fill="#3A4A8F">行情 API</text>
+            <rect x="248" y="379" width="64" height="17" rx="5" fill="var(--g100)" stroke="var(--g300)"/>
+            <text class="mchip" x="280" y="391" text-anchor="middle" fill="var(--g700)">行情 API</text>
 
             <!-- 8 日历 -->
-            <rect x="24" y="424" width="300" height="46" rx="9" fill="#FFFFFF" stroke="#E4E3DD"/>
-            <rect x="24" y="424" width="3.5" height="46" rx="2" fill="#3A4A8F"/>
+            <rect x="24" y="424" width="300" height="46" rx="9" fill="var(--n100)" stroke="var(--n300)"/>
+            <rect x="24" y="424" width="3.5" height="46" rx="2" fill="var(--g700)"/>
             <text class="sn" x="40" y="444">催化剂日历</text>
             <text class="ss" x="40" y="459">CoinMarketCal · 硬分叉 / 主网 / 解锁</text>
-            <rect x="240" y="433" width="72" height="17" rx="5" fill="#EEF0F9" stroke="#C9CFE8"/>
-            <text class="mchip" x="276" y="445" text-anchor="middle" fill="#3A4A8F">第三方 API</text>
+            <rect x="240" y="433" width="72" height="17" rx="5" fill="var(--g100)" stroke="var(--g300)"/>
+            <text class="mchip" x="276" y="445" text-anchor="middle" fill="var(--g700)">第三方 API</text>
           </g>
 
           <!-- ─── 汇聚线 ─── -->
-          <g fill="none" stroke="#D5D4CE" stroke-width="1.4">
+          <g fill="none" stroke="var(--n300)" stroke-width="1.4">
             <path d="M324 69  C352 69, 352 258, 380 258"/>
             <path d="M324 123 C352 123, 352 258, 380 258"/>
             <path d="M324 177 C352 177, 352 258, 380 258"/>
@@ -1473,121 +1604,114 @@ footer{border-top:1px solid var(--rule);padding:26px 0 40px;font-size:12px;color
           </g>
 
           <!-- ─── 爬虫 ─── -->
-          <rect x="382" y="208" width="140" height="100" rx="13" fill="url(#gStage)" stroke="#D9D8D2" stroke-width="1.4"/>
+          <rect x="382" y="208" width="140" height="100" rx="13" fill="url(#gStage)" stroke="var(--n300)" stroke-width="1.4"/>
           <rect x="382" y="208" width="140" height="4" rx="2" fill="var(--gold)"/>
           <text class="nt" x="452" y="240" text-anchor="middle">爬虫</text>
           <text class="nd" x="452" y="258" text-anchor="middle">并发抓取 · 7 天时间窗</text>
           <text class="nd" x="452" y="273" text-anchor="middle">每天 2 轮 · 08:00 / 20:00</text>
-          <rect x="404" y="282" width="96" height="17" rx="5" fill="#FDF6E1" stroke="#EBD9A0"/>
+          <rect x="404" y="282" width="96" height="17" rx="5" fill="var(--a100)" stroke="var(--a300)"/>
           <text class="nb" x="452" y="294" text-anchor="middle">~1200 条 / 轮</text>
-          <text class="tm" x="452" y="313" text-anchor="middle">≈ 4 分 05 秒</text>
 
           <!-- 爬虫 → 聚类，中间挂粗去重。
                粗去重挂在爬虫正上方而不是两个框中间：中间只有 50px 空隙（爬虫右边
                522、聚类左边 572），放不下这个标签，早先版本压在了聚类框上面。 -->
-          <path d="M522 258 L570 258" fill="none" stroke="#9AA1AE" stroke-width="1.6" marker-end="url(#ah)"/>
-          <rect x="396" y="166" width="112" height="30" rx="8" fill="#F6F5F1" stroke="#E4E3DD" stroke-dasharray="3 2.5"/>
-          <text class="subd" x="452" y="179" text-anchor="middle" fill="#3B414D">粗去重</text>
+          <path d="M522 258 L570 258" fill="none" stroke="var(--n500)" stroke-width="1.6" marker-end="url(#ah)"/>
+          <rect x="396" y="166" width="112" height="30" rx="8" fill="var(--n200)" stroke="var(--n300)" stroke-dasharray="3 2.5"/>
+          <text class="subd" x="452" y="179" text-anchor="middle" fill="var(--n800)">粗去重</text>
           <text class="subd" x="452" y="190" text-anchor="middle">标题归一 · TF-IDF</text>
-          <text class="tm" x="516" y="181">&lt;1 秒</text>
-          <path d="M452 196 L452 208" fill="none" stroke="#C6C5BF" stroke-width="1.2" stroke-dasharray="3 3"/>
+          <path d="M452 196 L452 208" fill="none" stroke="var(--n400)" stroke-width="1.2" stroke-dasharray="3 3"/>
 
           <!-- ─── 聚类 & 理解 ─── -->
-          <rect x="572" y="120" width="290" height="280" rx="15" fill="#FFFFFF" stroke="#3A4A8F" stroke-width="1.4" opacity=".98"/>
-          <rect x="572" y="120" width="290" height="4" rx="2" fill="#3A4A8F"/>
+          <rect x="572" y="120" width="290" height="280" rx="15" fill="var(--n100)" stroke="var(--g700)" stroke-width="1.4" opacity=".98"/>
+          <rect x="572" y="120" width="290" height="4" rx="2" fill="var(--g700)"/>
           <text class="nt" x="717" y="150" text-anchor="middle">聚类 &amp; 理解</text>
           <text class="nd" x="717" y="167" text-anchor="middle">把原始条目变成唯一、可信、带标签的事件</text>
 
           <!-- 子步骤 1 -->
-          <rect x="590" y="180" width="254" height="46" rx="9" fill="#FAF9F5" stroke="#E4E3DD"/>
+          <rect x="590" y="180" width="254" height="46" rx="9" fill="var(--n200)" stroke="var(--n300)"/>
           <text class="sub" x="604" y="199">① LLM 结构化</text>
           <text class="subd" x="604" y="214">双语标题 / 长短摘要 / 板块 / 币种 / 三元组</text>
-          <text class="tmH" x="818" y="193" text-anchor="end">≈ 15 分 · 占全程 78%</text>
-          <circle cx="828" cy="203" r="4.5" fill="#8B93E0"/>
+          <circle cx="828" cy="203" r="4.5" fill="var(--g400)"/>
 
           <!-- 子步骤 2 -->
-          <rect x="590" y="232" width="254" height="46" rx="9" fill="#FAF9F5" stroke="#E4E3DD"/>
+          <rect x="590" y="232" width="254" height="46" rx="9" fill="var(--n200)" stroke="var(--n300)"/>
           <text class="sub" x="604" y="251">② 语义聚合去重</text>
           <text class="subd" x="604" y="266">256 维向量 · cosine ≥ 0.82 并簇</text>
-          <text class="tm" x="818" y="245" text-anchor="end">≈ 2 秒</text>
-          <circle cx="828" cy="255" r="4.5" fill="#3A4A8F"/>
+          <circle cx="828" cy="255" r="4.5" fill="var(--g700)"/>
 
           <!-- 子步骤 3 -->
-          <rect x="590" y="284" width="254" height="46" rx="9" fill="#FAF9F5" stroke="#E4E3DD"/>
+          <rect x="590" y="284" width="254" height="46" rx="9" fill="var(--n200)" stroke="var(--n300)"/>
           <text class="sub" x="604" y="303">③ 跨轮归并</text>
           <text class="subd" x="604" y="318">写库前比对历史指纹，命中则合并信源</text>
-          <text class="tm" x="830" y="297" text-anchor="end">&lt;1 秒</text>
 
           <!-- 子步骤 4 -->
-          <rect x="590" y="336" width="254" height="46" rx="9" fill="#FAF9F5" stroke="#E4E3DD"/>
+          <rect x="590" y="336" width="254" height="46" rx="9" fill="var(--n200)" stroke="var(--n300)"/>
           <text class="sub" x="604" y="355">④ 真实性校验</text>
           <text class="subd" x="604" y="370">独立信源交叉 → VERIFIED / PROBABLE / …</text>
-          <text class="tm" x="818" y="349" text-anchor="end">&lt;1 秒 · 零 LLM 成本</text>
-          <circle cx="828" cy="359" r="4.5" fill="#8B93E0"/>
+          <circle cx="828" cy="359" r="4.5" fill="var(--g400)"/>
 
           <!-- ─── 分叉 ─── -->
-          <path d="M862 260 L900 260" fill="none" stroke="#9AA1AE" stroke-width="1.6"/>
-          <circle cx="900" cy="260" r="4" fill="#9AA1AE"/>
+          <path d="M862 260 L900 260" fill="none" stroke="var(--n500)" stroke-width="1.6"/>
+          <circle cx="900" cy="260" r="4" fill="var(--n500)"/>
 
           <!-- 分支 1：直出 -->
           <path d="M900 260 C924 260, 924 150, 948 150 L1128 150"
-                fill="none" stroke="#C9970A" stroke-width="2" marker-end="url(#ah-g)"/>
-          <rect x="952" y="106" width="168" height="38" rx="9" fill="#FDF6E1" stroke="#EBD9A0"/>
-          <text class="brl" x="966" y="123" fill="#8A6200">分支 1 · 结构化事件流</text>
+                fill="none" stroke="var(--a600)" stroke-width="2" marker-end="url(#ah-g)"/>
+          <rect x="952" y="106" width="168" height="38" rx="9" fill="var(--a100)" stroke="var(--a300)"/>
+          <text class="brl" x="966" y="123" fill="var(--a800)">分支 1 · 结构化事件流</text>
           <text class="brd" x="966" y="136">不打分直出，下游自行排序</text>
 
           <!-- 分支 2：经排序分 -->
           <path d="M900 260 C924 260, 924 372, 948 372"
-                fill="none" stroke="#3A4A8F" stroke-width="2" marker-end="url(#ah-i)"/>
-          <rect x="952" y="330" width="168" height="84" rx="11" fill="#FFFFFF" stroke="#3A4A8F" stroke-width="1.4"/>
-          <rect x="952" y="330" width="168" height="4" rx="2" fill="#3A4A8F"/>
+                fill="none" stroke="var(--g700)" stroke-width="2" marker-end="url(#ah-i)"/>
+          <rect x="952" y="330" width="168" height="84" rx="11" fill="var(--n100)" stroke="var(--g700)" stroke-width="1.4"/>
+          <rect x="952" y="330" width="168" height="4" rx="2" fill="var(--g700)"/>
           <text class="nt" x="1036" y="358" text-anchor="middle">排序分</text>
           <text class="nd" x="1036" y="375" text-anchor="middle">五因子加权 → 0–1 综合分</text>
           <text class="nd" x="1036" y="390" text-anchor="middle">映射 S / A / B / C / D 五级</text>
-          <text class="tm" x="1036" y="406" text-anchor="middle">打分 + 入库 ≈ 2 秒</text>
-          <circle cx="1108" cy="352" r="4.5" fill="#8B93E0"/>
+          <circle cx="1108" cy="352" r="4.5" fill="var(--g400)"/>
           <path d="M1120 372 C1146 372, 1146 300, 1172 300 L1172 262"
-                fill="none" stroke="#3A4A8F" stroke-width="2" marker-end="url(#ah-i)"/>
-          <rect x="988" y="424" width="132" height="17" rx="5" fill="#EEF0F9" stroke="#C9CFE8"/>
-          <text class="mchip" x="1054" y="436" text-anchor="middle" fill="#3A4A8F">分支 2 · 重要性排序流</text>
+                fill="none" stroke="var(--g700)" stroke-width="2" marker-end="url(#ah-i)"/>
+          <rect x="988" y="424" width="132" height="17" rx="5" fill="var(--g100)" stroke="var(--g300)"/>
+          <text class="mchip" x="1054" y="436" text-anchor="middle" fill="var(--g700)">分支 2 · 重要性排序流</text>
 
           <!-- ─── API 服务 ─── -->
-          <rect x="1128" y="118" width="148" height="146" rx="13" fill="url(#gStage)" stroke="#D9D8D2" stroke-width="1.4"/>
+          <rect x="1128" y="118" width="148" height="146" rx="13" fill="url(#gStage)" stroke="var(--n300)" stroke-width="1.4"/>
           <rect x="1128" y="118" width="148" height="4" rx="2" fill="var(--gold)"/>
           <text class="nt" x="1202" y="150" text-anchor="middle">API 服务</text>
           <text class="nd" x="1202" y="168" text-anchor="middle">MySQL + Flask REST</text>
-          <rect x="1146" y="180" width="112" height="17" rx="5" fill="#F6F5F1" stroke="#E4E3DD"/>
-          <text class="mchip" x="1202" y="192" text-anchor="middle" fill="#3B414D">GET /api/news</text>
-          <rect x="1146" y="202" width="112" height="17" rx="5" fill="#F6F5F1" stroke="#E4E3DD"/>
-          <text class="mchip" x="1202" y="214" text-anchor="middle" fill="#3B414D">GET /api/sources</text>
-          <rect x="1146" y="224" width="112" height="17" rx="5" fill="#F6F5F1" stroke="#E4E3DD"/>
-          <text class="mchip" x="1202" y="236" text-anchor="middle" fill="#3B414D">GET /api/runs</text>
+          <rect x="1146" y="180" width="112" height="17" rx="5" fill="var(--n200)" stroke="var(--n300)"/>
+          <text class="mchip" x="1202" y="192" text-anchor="middle" fill="var(--n800)">GET /api/news</text>
+          <rect x="1146" y="202" width="112" height="17" rx="5" fill="var(--n200)" stroke="var(--n300)"/>
+          <text class="mchip" x="1202" y="214" text-anchor="middle" fill="var(--n800)">GET /api/sources</text>
+          <rect x="1146" y="224" width="112" height="17" rx="5" fill="var(--n200)" stroke="var(--n300)"/>
+          <text class="mchip" x="1202" y="236" text-anchor="middle" fill="var(--n800)">GET /api/runs</text>
           <text class="brd" x="1202" y="256" text-anchor="middle">Sector / Macro Insight 消费</text>
 
           <!-- ─── AI 模型协同层 ─── -->
-          <line x1="24" y1="500" x2="1276" y2="500" stroke="#E4E3DD" stroke-width="1"/>
+          <line x1="24" y1="500" x2="1276" y2="500" stroke="var(--n300)" stroke-width="1"/>
           <text class="lbl" x="24" y="524">06 · AI 模型协同</text>
 
           <!-- 模型 A -->
-          <rect x="470" y="556" width="234" height="76" rx="12" fill="#FFFFFF" stroke="#8B93E0" stroke-width="1.4" stroke-dasharray="5 3"/>
-          <text class="nt" x="587" y="582" text-anchor="middle" fill="#3A4A8F">gpt-5.4</text>
+          <rect x="470" y="556" width="234" height="76" rx="12" fill="var(--n100)" stroke="var(--g400)" stroke-width="1.4" stroke-dasharray="5 3"/>
+          <text class="nt" x="587" y="582" text-anchor="middle" fill="var(--g700)">gpt-5.4</text>
           <text class="nd" x="587" y="599" text-anchor="middle">语言理解 · 抽取 · 判断</text>
           <text class="nd" x="587" y="616" text-anchor="middle">承担 ① 结构化、④ 校验、五因子评分</text>
 
           <!-- 模型 B -->
-          <rect x="752" y="556" width="234" height="76" rx="12" fill="#FFFFFF" stroke="#3A4A8F" stroke-width="1.4" stroke-dasharray="5 3"/>
-          <text class="nt" x="869" y="582" text-anchor="middle" fill="#3A4A8F">text-embedding-3-small</text>
+          <rect x="752" y="556" width="234" height="76" rx="12" fill="var(--n100)" stroke="var(--g700)" stroke-width="1.4" stroke-dasharray="5 3"/>
+          <text class="nt" x="869" y="582" text-anchor="middle" fill="var(--g700)">text-embedding-3-small</text>
           <text class="nd" x="869" y="599" text-anchor="middle">256 维语义向量</text>
           <text class="nd" x="869" y="616" text-anchor="middle">承担 ② 语义聚类，只做相似度不做语言</text>
 
           <!-- 虚线：gpt-5.4 → ①④、排序分 -->
-          <g fill="none" stroke="#8B93E0" stroke-width="1.3" stroke-dasharray="4 3">
+          <g fill="none" stroke="var(--g400)" stroke-width="1.3" stroke-dasharray="4 3">
             <path d="M540 556 C540 440, 828 400, 828 366" marker-end="url(#ah-d)"/>
             <path d="M520 556 C440 440, 700 250, 823 205" marker-end="url(#ah-d)"/>
             <path d="M690 570 C900 552, 1108 470, 1108 359" marker-end="url(#ah-d)"/>
           </g>
           <!-- 虚线：embedding → ② -->
-          <g fill="none" stroke="#3A4A8F" stroke-width="1.3" stroke-dasharray="4 3">
+          <g fill="none" stroke="var(--g700)" stroke-width="1.3" stroke-dasharray="4 3">
             <path d="M860 556 C860 420, 830 330, 830 262" marker-end="url(#ah-d)"/>
           </g>
 
@@ -1606,7 +1730,7 @@ footer{border-top:1px solid var(--rule);padding:26px 0 40px;font-size:12px;color
   </section>
 
   <!-- 八步流水线 -->
-  <section class="section">
+  <section class="section" id="sec-pipeline">
     <div class="sec-head">
       <span class="eyebrow">Pipeline</span>
       <h2>八步流水线细节</h2>
@@ -1616,7 +1740,7 @@ footer{border-top:1px solid var(--rule);padding:26px 0 40px;font-size:12px;color
   </section>
 
   <!-- 打分 + 分布 -->
-  <section class="section">
+  <section class="section" id="sec-scoring">
     <div class="sec-head">
       <span class="eyebrow">Scoring</span>
       <h2>重要性打分模型 · Macro Insight v1</h2>
@@ -1649,7 +1773,7 @@ footer{border-top:1px solid var(--rule);padding:26px 0 40px;font-size:12px;color
   </section>
 
   <!-- 去重 + 校验 -->
-  <section class="section">
+  <section class="section" id="sec-dedup">
     <div class="sec-head">
       <span class="eyebrow">Quality</span>
       <h2>去重与真实性校验成果</h2>
@@ -1695,7 +1819,7 @@ footer{border-top:1px solid var(--rule);padding:26px 0 40px;font-size:12px;color
   </section>
 
   <!-- 运行记录 -->
-  <section class="section">
+  <section class="section" id="sec-runs">
     <div class="sec-head">
       <span class="eyebrow">Operations</span>
       <h2>最近一次 Pipeline 运行 · 实时</h2>
@@ -1730,7 +1854,17 @@ footer{border-top:1px solid var(--rule);padding:26px 0 40px;font-size:12px;color
 <!-- ══════════════════ TAB 2 · 数据展示 ══════════════════ -->
 <div role="tabpanel" id="panel-2" aria-labelledby="tab-2" hidden>
 
-  <div class="sec-head" style="display:flex;align-items:flex-end;gap:24px;flex-wrap:wrap">
+  <!-- 吸顶页内锚点条：长 tab 里跳节用，不改变任何内容结构 -->
+  <div class="b9-anchorwrap">
+    <nav class="b9-anchorbar" aria-label="本页小节">
+      <button class="b9-anchor" type="button" data-goto="sec-view">视图</button>
+      <button class="b9-anchor" type="button" data-goto="sec-filter">筛选</button>
+      <button class="b9-anchor" type="button" data-goto="sec-list">列表</button>
+    </nav>
+  </div>
+
+
+  <div class="sec-head" id="sec-view" style="display:flex;align-items:flex-end;gap:24px;flex-wrap:wrap">
     <div style="flex:1;min-width:260px">
       <span class="eyebrow">Data</span>
       <h2>真实数据展示</h2>
@@ -1739,10 +1873,11 @@ footer{border-top:1px solid var(--rule);padding:26px 0 40px;font-size:12px;color
     <div class="switch" role="group" aria-label="视图切换">
       <button id="v-table" aria-pressed="true">表格视图</button>
       <button id="v-sim" aria-pressed="false">App 模拟器</button>
+      <button id="v-src" aria-pressed="false">信源统计</button>
     </div>
   </div>
 
-  <div class="filters">
+  <div class="filters" id="sec-filter">
     <div class="frow">
       <div class="field" style="flex:1 1 220px"><label for="f-run">观测时间 · 生产轮次</label>
         <select id="f-run"><option value="">全部轮次</option></select></div>
@@ -1774,7 +1909,7 @@ footer{border-top:1px solid var(--rule);padding:26px 0 40px;font-size:12px;color
 
   <!-- 表格视图 -->
   <div id="view-table">
-    <div class="tbl-wrap">
+    <div class="tbl-wrap" id="sec-list">
       <table>
         <thead><tr>
           <th class="c-rank">#</th><th class="c-score">重要性</th><th class="c-title">事件标题</th>
@@ -1847,12 +1982,68 @@ footer{border-top:1px solid var(--rule);padding:26px 0 40px;font-size:12px;color
       </div>
     </div>
   </div>
+
+  <!-- 信源统计：注册表 + 校验分层 + 库内产出量三方合一。
+       和事件筛选器互不影响，所以自带一套轻筛选，不复用上面的 .filters。 -->
+  <div id="view-src" hidden>
+    <div class="filters" style="margin-top:0">
+      <div class="frow">
+        <div class="field"><label for="sc-channel">接入方式</label>
+          <select id="sc-channel"><option value="">全部方式</option></select></div>
+        <div class="field"><label for="sc-tier">校验分层</label>
+          <select id="sc-tier"><option value="">全部分层</option></select></div>
+        <div class="field"><label for="sc-lang">语言</label>
+          <select id="sc-lang"><option value="">不限</option><option value="zh">中文</option><option value="en">英文</option></select></div>
+        <div class="field"><label for="sc-active">产出</label>
+          <select id="sc-active"><option value="">全部</option><option value="1">仅有产出</option><option value="0">仅零产出</option></select></div>
+        <div class="field" style="flex:1 1 200px"><label for="sc-kw">名称 / 网址关键词</label>
+          <input type="text" id="sc-kw" placeholder="如 coindesk、rsshub…"></div>
+        <div class="field"><label>&nbsp;</label><button class="btn" id="sc-reset">重置</button></div>
+      </div>
+    </div>
+
+    <div class="tbl-meta"><span id="scCount">—</span></div>
+    <div class="tbl-wrap">
+      <table class="tbl">
+        <thead><tr>
+          <th style="width:220px">信源</th>
+          <th style="width:130px">接入方式</th>
+          <th style="width:56px">语言</th>
+          <th style="width:78px">权威分</th>
+          <th style="width:130px">校验分层</th>
+          <th style="width:86px">事件数</th>
+          <th>网址 / 账号</th>
+        </tr></thead>
+        <tbody id="scBody"><tr><td colspan="7"><div class="state"><div class="ic">◌</div><div class="ti">正在读取信源目录…</div></div></td></tr></tbody>
+      </table>
+    </div>
+    <p style="font-size:11.5px;color:var(--ink-4);margin-top:12px">
+      「权威分」是 <code>crawler/sources.py</code> 里人工给的 1–5 接入优先级；
+      「校验分层」是真实性校验实际使用的机构档位（<code>verification.resolve_source</code> 同一口径）。
+      事件数按 <code>source_names</code> 统计，一条事件被多源报道时每个源各计一次。
+      注册表里配了但事件数为 0 的源，通常意味着抓取失效或该下线。
+    </p>
+  </div>
+
 </div>
 
 <!-- ══════════════════ TAB 3 · API 接入 ══════════════════ -->
 <div role="tabpanel" id="panel-3" aria-labelledby="tab-3" hidden>
 
-  <div class="sec-head">
+  <!-- 吸顶页内锚点条：长 tab 里跳节用，不改变任何内容结构 -->
+  <div class="b9-anchorwrap">
+    <nav class="b9-anchorbar" aria-label="本页小节">
+      <button class="b9-anchor" type="button" data-goto="sec-auth">鉴权</button>
+      <button class="b9-anchor" type="button" data-goto="sec-endpoints">端点</button>
+      <button class="b9-anchor" type="button" data-goto="sec-fields">字段表</button>
+      <button class="b9-anchor" type="button" data-goto="sec-sample">案例</button>
+      <button class="b9-anchor" type="button" data-goto="sec-examples">示例</button>
+      <button class="b9-anchor" type="button" data-goto="sec-notes">注意事项</button>
+    </nav>
+  </div>
+
+
+  <div class="sec-head" id="sec-auth">
     <span class="eyebrow">API</span>
     <h2>API 接入说明</h2>
     <p class="sub">HTTP / JSON，全部端点为 GET，幂等无副作用。响应统一为 <code>{"data": [...], "meta": {...}}</code>。</p>
@@ -1906,17 +2097,17 @@ footer{border-top:1px solid var(--rule);padding:26px 0 40px;font-size:12px;color
     </div>
   </div>
 
-  <section class="section">
+  <section class="section" id="sec-endpoints">
     <div class="sec-head"><span class="eyebrow">Endpoints</span><h2>端点清单</h2><p class="sub">点「试一下」即在本页发起真实请求并展示响应。</p></div>
     <div id="epList"></div>
   </section>
 
-  <section class="section">
+  <section class="section" id="sec-fields">
     <div class="sec-head"><span class="eyebrow">Schema</span><h2>字段格式表</h2><p class="sub"><code>/api/news</code> 返回的 <code>data[]</code> 元素。字段名 / 类型 / 含义。</p></div>
     <div class="tbl-wrap"><table class="dict"><thead><tr><th style="width:230px">字段</th><th style="width:120px">类型</th><th>含义</th></tr></thead><tbody id="dictBody"></tbody></table></div>
   </section>
 
-  <section class="section">
+  <section class="section" id="sec-sample">
     <div class="sec-head">
       <span class="eyebrow">Example</span><h2>案例数据</h2>
       <p class="sub">从线上实时拉取的一条真实事件，未做任何裁剪或美化。</p>
@@ -1925,7 +2116,7 @@ footer{border-top:1px solid var(--rule);padding:26px 0 40px;font-size:12px;color
     <pre class="code" id="sampleJson" style="max-height:520px;overflow:auto">加载中…</pre>
   </section>
 
-  <section class="section">
+  <section class="section" id="sec-examples">
     <div class="sec-head"><span class="eyebrow">Snippets</span><h2>接入示例</h2></div>
     <div class="grid g3">
       <div><div class="code-head"><span class="cl">cURL</span><button class="copy" data-copy="#c-curl">复制</button></div><pre class="code" id="c-curl"></pre></div>
@@ -1934,7 +2125,7 @@ footer{border-top:1px solid var(--rule);padding:26px 0 40px;font-size:12px;color
     </div>
   </section>
 
-  <section class="section">
+  <section class="section" id="sec-notes">
     <div class="sec-head"><span class="eyebrow">Notes</span><h2>接入注意事项</h2></div>
     <div class="grid g2">
       <div class="card">
@@ -2361,7 +2552,17 @@ footer{border-top:1px solid var(--rule);padding:26px 0 40px;font-size:12px;color
 
 <div role="tabpanel" id="panel-6" aria-labelledby="tab-6" hidden>
 
-  <div class="sec-head">
+  <!-- 吸顶页内锚点条：长 tab 里跳节用，不改变任何内容结构 -->
+  <div class="b9-anchorwrap">
+    <nav class="b9-anchorbar" aria-label="本页小节">
+      <button class="b9-anchor" type="button" data-goto="sec-history">筛选</button>
+      <button class="b9-anchor" type="button" data-goto="sec-records">记录</button>
+      <button class="b9-anchor" type="button" data-goto="sec-usage">统计</button>
+    </nav>
+  </div>
+
+
+  <div class="sec-head" id="sec-history">
     <span class="eyebrow">TOOL RESULT HISTORY</span>
     <h2>历史数据</h2>
     <p class="sub">评测工具（Tab 04）与策略实验室（Tab 05）里点了"保存结果"按钮的记录，按时间倒序展示。支持按工具类型筛选、点击展开完整结果、删除。</p>
@@ -2393,7 +2594,7 @@ footer{border-top:1px solid var(--rule);padding:26px 0 40px;font-size:12px;color
     <button class="btn sm" id="h-next" disabled>下一页 →</button>
   </div>
 
-  <div class="tbl-wrap">
+  <div class="tbl-wrap" id="sec-records">
     <table>
       <thead><tr>
         <th style="width:150px">时间</th><th style="width:220px">工具类型</th><th>备注</th><th style="width:110px">成本</th><th style="width:90px"></th>
@@ -2403,7 +2604,7 @@ footer{border-top:1px solid var(--rule);padding:26px 0 40px;font-size:12px;color
   </div>
   <p style="font-size:12px;color:var(--ink-4);margin-top:12px">点击任意行展开该条完整结果 JSON，再次点击收起。</p>
 
-  <div class="section" style="margin-top:36px">
+  <div class="section" id="sec-usage" style="margin-top:36px">
     <div class="sec-head">
       <span class="eyebrow">Usage</span>
       <h2 style="font-size:15px">近 7 天各工具调用次数</h2>
@@ -2575,7 +2776,7 @@ footer{border-top:1px solid var(--rule);padding:26px 0 40px;font-size:12px;color
 
         <!-- ── 01 Manus（浅色节点） ── -->
         <g>
-          <rect x="14" y="26" width="214" height="138" rx="24"
+          <rect x="14" y="26" width="214" height="150" rx="24"
                 fill="var(--surface)" stroke="var(--n300)" stroke-width="1"></rect>
           <text class="p7-flow-step" x="32" y="48" fill="var(--n500)">01</text>
           <circle cx="121" cy="60" r="20" fill="var(--n100)"></circle>
@@ -2594,83 +2795,55 @@ footer{border-top:1px solid var(--rule);padding:26px 0 40px;font-size:12px;color
             </g>
           </g>
           <text class="p7-flow-name" x="121" y="99" text-anchor="middle" fill="var(--ink)">Manus</text>
-          <text class="p7-flow-ver" x="121" y="113" text-anchor="middle" fill="var(--n600)">Manus 1.6</text>
-          <text class="p7-flow-role" x="121" y="131" text-anchor="middle" fill="var(--n700)">Demand Planning &amp; DevOps</text>
-          <text class="p7-flow-role" x="121" y="145" text-anchor="middle" fill="var(--n600)">cloud computer &amp; more</text>
+          <text class="p7-flow-ver" x="121" y="118" text-anchor="middle" fill="var(--n600)">Manus 1.6</text>
+          <text class="p7-flow-role" x="121" y="138" text-anchor="middle" fill="var(--n700)">Demand Planning &amp; DevOps</text>
+          <text class="p7-flow-role" x="121" y="155" text-anchor="middle" fill="var(--n600)">cloud computer &amp; more</text>
           <text class="p7-flow-stage" x="121" y="188" text-anchor="middle" fill="var(--n600)">需求 · 运维</text>
         </g>
 
         <!-- ── 02 Claude Code（深色节点） ── -->
         <g>
-          <rect x="276" y="26" width="214" height="138" rx="24" fill="var(--n900)"></rect>
+          <rect x="276" y="26" width="214" height="150" rx="24" fill="var(--n900)"></rect>
           <text class="p7-flow-step" x="294" y="48" fill="var(--n500)">02</text>
           <circle cx="383" cy="60" r="20" fill="var(--n800)"></circle>
-          <!-- Claude / Anthropic 标志性的放射状星芒：12 道楔形射线，长短交替做出星芒的节奏 -->
-          <g transform="translate(383 60)" fill="var(--a400)">
-            <path d="M0 -13.5 L2.4 -4.2 L0 0 L-2.4 -4.2 Z"></path>
-            <path d="M0 -9 L1.9 -3.2 L0 0 L-1.9 -3.2 Z" transform="rotate(30)"></path>
-            <path d="M0 -13.5 L2.4 -4.2 L0 0 L-2.4 -4.2 Z" transform="rotate(60)"></path>
-            <path d="M0 -9 L1.9 -3.2 L0 0 L-1.9 -3.2 Z" transform="rotate(90)"></path>
-            <path d="M0 -13.5 L2.4 -4.2 L0 0 L-2.4 -4.2 Z" transform="rotate(120)"></path>
-            <path d="M0 -9 L1.9 -3.2 L0 0 L-1.9 -3.2 Z" transform="rotate(150)"></path>
-            <path d="M0 -13.5 L2.4 -4.2 L0 0 L-2.4 -4.2 Z" transform="rotate(180)"></path>
-            <path d="M0 -9 L1.9 -3.2 L0 0 L-1.9 -3.2 Z" transform="rotate(210)"></path>
-            <path d="M0 -13.5 L2.4 -4.2 L0 0 L-2.4 -4.2 Z" transform="rotate(240)"></path>
-            <path d="M0 -9 L1.9 -3.2 L0 0 L-1.9 -3.2 Z" transform="rotate(270)"></path>
-            <path d="M0 -13.5 L2.4 -4.2 L0 0 L-2.4 -4.2 Z" transform="rotate(300)"></path>
-            <path d="M0 -9 L1.9 -3.2 L0 0 L-1.9 -3.2 Z" transform="rotate(330)"></path>
+          <!-- Claude 官方字形（simple-icons，CC0） -->
+          <g transform="translate(371.5 48.5) scale(0.958333)" fill="var(--a400)">
+            <path d="m4.7144 15.9555 4.7174-2.6471.079-.2307-.079-.1275h-.2307l-.7893-.0486-2.6956-.0729-2.3375-.0971-2.2646-.1214-.5707-.1215-.5343-.7042.0546-.3522.4797-.3218.686.0608 1.5179.1032 2.2767.1578 1.6514.0972 2.4468.255h.3886l.0546-.1579-.1336-.0971-.1032-.0972L6.973 9.8356l-2.55-1.6879-1.3356-.9714-.7225-.4918-.3643-.4614-.1578-1.0078.6557-.7225.8803.0607.2246.0607.8925.686 1.9064 1.4754 2.4893 1.8336.3643.3035.1457-.1032.0182-.0728-.164-.2733-1.3539-2.4467-1.445-2.4893-.6435-1.032-.17-.6194c-.0607-.255-.1032-.4674-.1032-.7285L6.287.1335 6.6997 0l.9957.1336.419.3642.6192 1.4147 1.0018 2.2282 1.5543 3.0296.4553.8985.2429.8318.091.255h.1579v-.1457l.1275-1.706.2368-2.0947.2307-2.6957.0789-.7589.3764-.9107.7468-.4918.5828.2793.4797.686-.0668.4433-.2853 1.8517-.5586 2.9021-.3643 1.9429h.2125l.2429-.2429.9835-1.3053 1.6514-2.0643.7286-.8196.85-.9046.5464-.4311h1.0321l.759 1.1293-.34 1.1657-1.0625 1.3478-.8804 1.1414-1.2628 1.7-.7893 1.36.0729.1093.1882-.0183 2.8535-.607 1.5421-.2794 1.8396-.3157.8318.3886.091.3946-.3278.8075-1.967.4857-2.3072.4614-3.4364.8136-.0425.0304.0486.0607 1.5482.1457.6618.0364h1.621l3.0175.2247.7892.522.4736.6376-.079.4857-1.2142.6193-1.6393-.3886-3.825-.9107-1.3113-.3279h-.1822v.1093l1.0929 1.0686 2.0035 1.8092 2.5075 2.3314.1275.5768-.3218.4554-.34-.0486-2.2039-1.6575-.85-.7468-1.9246-1.621h-.1275v.17l.4432.6496 2.3436 3.5214.1214 1.0807-.17.3521-.6071.2125-.6679-.1214-1.3721-1.9246L14.38 17.959l-1.1414-1.9428-.1397.079-.674 7.2552-.3156.3703-.7286.2793-.6071-.4614-.3218-.7468.3218-1.4753.3886-1.9246.3157-1.53.2853-1.9004.17-.6314-.0121-.0425-.1397.0182-1.4328 1.9672-2.1796 2.9446-1.7243 1.8456-.4128.164-.7164-.3704.0667-.6618.4008-.5889 2.386-3.0357 1.4389-1.882.929-1.0868-.0062-.1579h-.0546l-6.3385 4.1164-1.1293.1457-.4857-.4554.0608-.7467.2307-.2429 1.9064-1.3114Z"></path>
           </g>
           <text class="p7-flow-name" x="383" y="99" text-anchor="middle" fill="var(--paper)">Claude Code</text>
-          <text class="p7-flow-ver" x="383" y="113" text-anchor="middle" fill="var(--a300)">Opus / Fable 5</text>
-          <text class="p7-flow-role" x="383" y="131" text-anchor="middle" fill="var(--n300)">Engineering</text>
+          <text class="p7-flow-ver" x="383" y="118" text-anchor="middle" fill="var(--a300)">Opus / Fable 5</text>
+          <text class="p7-flow-role" x="383" y="138" text-anchor="middle" fill="var(--n300)">Engineering</text>
           <text class="p7-flow-stage" x="383" y="188" text-anchor="middle" fill="var(--n600)">工程实现</text>
         </g>
 
         <!-- ── 03 OpenAI（浅色节点） ── -->
         <g>
-          <rect x="538" y="26" width="214" height="138" rx="24"
+          <rect x="538" y="26" width="214" height="150" rx="24"
                 fill="var(--surface)" stroke="var(--n300)" stroke-width="1"></rect>
           <text class="p7-flow-step" x="556" y="48" fill="var(--n500)">03</text>
           <circle cx="645" cy="60" r="20" fill="var(--n100)"></circle>
-          <!-- OpenAI 的六瓣花结：用 3 个互成 60° 的细长椭圆叠出六瓣结环，中心留一个实心节点 -->
-          <g transform="translate(645 60)">
-            <g fill="none" stroke="var(--n800)" stroke-width="1.6">
-              <ellipse cx="0" cy="0" rx="6.6" ry="12.6"></ellipse>
-              <ellipse cx="0" cy="0" rx="6.6" ry="12.6" transform="rotate(60)"></ellipse>
-              <ellipse cx="0" cy="0" rx="6.6" ry="12.6" transform="rotate(120)"></ellipse>
-            </g>
-            <circle cx="0" cy="0" r="1.9" fill="var(--n800)"></circle>
+          <!-- OpenAI 官方字形（simple-icons，CC0） -->
+          <g transform="translate(633.5 48.5) scale(0.958333)" fill="var(--n800)">
+            <path d="M22.2819 9.8211a5.9847 5.9847 0 0 0-.5157-4.9108 6.0462 6.0462 0 0 0-6.5098-2.9A6.0651 6.0651 0 0 0 4.9807 4.1818a5.9847 5.9847 0 0 0-3.9977 2.9 6.0462 6.0462 0 0 0 .7427 7.0966 5.98 5.98 0 0 0 .511 4.9107 6.051 6.051 0 0 0 6.5146 2.9001A5.9847 5.9847 0 0 0 13.2599 24a6.0557 6.0557 0 0 0 5.7718-4.2058 5.9894 5.9894 0 0 0 3.9977-2.9001 6.0557 6.0557 0 0 0-.7475-7.0729zm-9.022 12.6081a4.4755 4.4755 0 0 1-2.8764-1.0408l.1419-.0804 4.7783-2.7582a.7948.7948 0 0 0 .3927-.6813v-6.7369l2.02 1.1686a.071.071 0 0 1 .038.052v5.5826a4.504 4.504 0 0 1-4.4945 4.4944zm-9.6607-4.1254a4.4708 4.4708 0 0 1-.5346-3.0137l.142.0852 4.783 2.7582a.7712.7712 0 0 0 .7806 0l5.8428-3.3685v2.3324a.0804.0804 0 0 1-.0332.0615L9.74 19.9502a4.4992 4.4992 0 0 1-6.1408-1.6464zM2.3408 7.8956a4.485 4.485 0 0 1 2.3655-1.9728V11.6a.7664.7664 0 0 0 .3879.6765l5.8144 3.3543-2.0201 1.1685a.0757.0757 0 0 1-.071 0l-4.8303-2.7865A4.504 4.504 0 0 1 2.3408 7.872zm16.5963 3.8558L13.1038 8.364 15.1192 7.2a.0757.0757 0 0 1 .071 0l4.8303 2.7913a4.4944 4.4944 0 0 1-.6765 8.1042v-5.6772a.79.79 0 0 0-.407-.667zm2.0107-3.0231l-.142-.0852-4.7735-2.7818a.7759.7759 0 0 0-.7854 0L9.409 9.2297V6.8974a.0662.0662 0 0 1 .0284-.0615l4.8303-2.7866a4.4992 4.4992 0 0 1 6.6802 4.66zM8.3065 12.863l-2.02-1.1638a.0804.0804 0 0 1-.038-.0567V6.0742a4.4992 4.4992 0 0 1 7.3757-3.4537l-.142.0805L8.704 5.459a.7948.7948 0 0 0-.3927.6813zm1.0976-2.3654l2.602-1.4998 2.6069 1.4998v2.9994l-2.5974 1.4997-2.6067-1.4997Z"></path>
           </g>
           <text class="p7-flow-name" x="645" y="99" text-anchor="middle" fill="var(--ink)">OpenAI</text>
-          <text class="p7-flow-ver" x="645" y="113" text-anchor="middle" fill="var(--n600)">GPT-5.4 / 5.4-nano</text>
-          <text class="p7-flow-role" x="645" y="131" text-anchor="middle" fill="var(--n700)">AI Processor API</text>
+          <text class="p7-flow-ver" x="645" y="118" text-anchor="middle" fill="var(--n600)">GPT-5.4 / 5.4-nano</text>
+          <text class="p7-flow-role" x="645" y="138" text-anchor="middle" fill="var(--n700)">AI Processor API</text>
           <text class="p7-flow-stage" x="645" y="188" text-anchor="middle" fill="var(--n600)">AI 处理</text>
         </g>
 
         <!-- ── 04 Claude Design（深色节点） ── -->
         <g>
-          <rect x="800" y="26" width="214" height="138" rx="24" fill="var(--n900)"></rect>
+          <rect x="800" y="26" width="214" height="150" rx="24" fill="var(--n900)"></rect>
           <text class="p7-flow-step" x="818" y="48" fill="var(--n500)">04</text>
           <circle cx="907" cy="60" r="20" fill="var(--n800)"></circle>
-          <!-- 与 Claude Code 同族的星芒，只换色阶（a200 vs a400）以示区分：
-               同在 n900 深底上，a700/a500 会糊掉，所以整体沿赤陶阶梯上移两档再拉开差值 -->
-          <g transform="translate(907 60)" fill="var(--a200)">
-            <path d="M0 -13.5 L2.4 -4.2 L0 0 L-2.4 -4.2 Z"></path>
-            <path d="M0 -9 L1.9 -3.2 L0 0 L-1.9 -3.2 Z" transform="rotate(30)"></path>
-            <path d="M0 -13.5 L2.4 -4.2 L0 0 L-2.4 -4.2 Z" transform="rotate(60)"></path>
-            <path d="M0 -9 L1.9 -3.2 L0 0 L-1.9 -3.2 Z" transform="rotate(90)"></path>
-            <path d="M0 -13.5 L2.4 -4.2 L0 0 L-2.4 -4.2 Z" transform="rotate(120)"></path>
-            <path d="M0 -9 L1.9 -3.2 L0 0 L-1.9 -3.2 Z" transform="rotate(150)"></path>
-            <path d="M0 -13.5 L2.4 -4.2 L0 0 L-2.4 -4.2 Z" transform="rotate(180)"></path>
-            <path d="M0 -9 L1.9 -3.2 L0 0 L-1.9 -3.2 Z" transform="rotate(210)"></path>
-            <path d="M0 -13.5 L2.4 -4.2 L0 0 L-2.4 -4.2 Z" transform="rotate(240)"></path>
-            <path d="M0 -9 L1.9 -3.2 L0 0 L-1.9 -3.2 Z" transform="rotate(270)"></path>
-            <path d="M0 -13.5 L2.4 -4.2 L0 0 L-2.4 -4.2 Z" transform="rotate(300)"></path>
-            <path d="M0 -9 L1.9 -3.2 L0 0 L-1.9 -3.2 Z" transform="rotate(330)"></path>
+          <!-- 同为 Claude 官方字形，只换色阶（a200 vs a400）以区分 Design / Code -->
+          <g transform="translate(895.5 48.5) scale(0.958333)" fill="var(--a200)">
+            <path d="m4.7144 15.9555 4.7174-2.6471.079-.2307-.079-.1275h-.2307l-.7893-.0486-2.6956-.0729-2.3375-.0971-2.2646-.1214-.5707-.1215-.5343-.7042.0546-.3522.4797-.3218.686.0608 1.5179.1032 2.2767.1578 1.6514.0972 2.4468.255h.3886l.0546-.1579-.1336-.0971-.1032-.0972L6.973 9.8356l-2.55-1.6879-1.3356-.9714-.7225-.4918-.3643-.4614-.1578-1.0078.6557-.7225.8803.0607.2246.0607.8925.686 1.9064 1.4754 2.4893 1.8336.3643.3035.1457-.1032.0182-.0728-.164-.2733-1.3539-2.4467-1.445-2.4893-.6435-1.032-.17-.6194c-.0607-.255-.1032-.4674-.1032-.7285L6.287.1335 6.6997 0l.9957.1336.419.3642.6192 1.4147 1.0018 2.2282 1.5543 3.0296.4553.8985.2429.8318.091.255h.1579v-.1457l.1275-1.706.2368-2.0947.2307-2.6957.0789-.7589.3764-.9107.7468-.4918.5828.2793.4797.686-.0668.4433-.2853 1.8517-.5586 2.9021-.3643 1.9429h.2125l.2429-.2429.9835-1.3053 1.6514-2.0643.7286-.8196.85-.9046.5464-.4311h1.0321l.759 1.1293-.34 1.1657-1.0625 1.3478-.8804 1.1414-1.2628 1.7-.7893 1.36.0729.1093.1882-.0183 2.8535-.607 1.5421-.2794 1.8396-.3157.8318.3886.091.3946-.3278.8075-1.967.4857-2.3072.4614-3.4364.8136-.0425.0304.0486.0607 1.5482.1457.6618.0364h1.621l3.0175.2247.7892.522.4736.6376-.079.4857-1.2142.6193-1.6393-.3886-3.825-.9107-1.3113-.3279h-.1822v.1093l1.0929 1.0686 2.0035 1.8092 2.5075 2.3314.1275.5768-.3218.4554-.34-.0486-2.2039-1.6575-.85-.7468-1.9246-1.621h-.1275v.17l.4432.6496 2.3436 3.5214.1214 1.0807-.17.3521-.6071.2125-.6679-.1214-1.3721-1.9246L14.38 17.959l-1.1414-1.9428-.1397.079-.674 7.2552-.3156.3703-.7286.2793-.6071-.4614-.3218-.7468.3218-1.4753.3886-1.9246.3157-1.53.2853-1.9004.17-.6314-.0121-.0425-.1397.0182-1.4328 1.9672-2.1796 2.9446-1.7243 1.8456-.4128.164-.7164-.3704.0667-.6618.4008-.5889 2.386-3.0357 1.4389-1.882.929-1.0868-.0062-.1579h-.0546l-6.3385 4.1164-1.1293.1457-.4857-.4554.0608-.7467.2307-.2429 1.9064-1.3114Z"></path>
           </g>
           <text class="p7-flow-name" x="907" y="99" text-anchor="middle" fill="var(--paper)">Claude Design</text>
-          <text class="p7-flow-ver" x="907" y="113" text-anchor="middle" fill="var(--a300)">Fable 5</text>
-          <text class="p7-flow-role" x="907" y="131" text-anchor="middle" fill="var(--n300)">Designer</text>
+          <text class="p7-flow-ver" x="907" y="118" text-anchor="middle" fill="var(--a300)">Fable 5</text>
+          <text class="p7-flow-role" x="907" y="138" text-anchor="middle" fill="var(--n300)">Designer</text>
           <text class="p7-flow-stage" x="907" y="188" text-anchor="middle" fill="var(--n600)">设计</text>
         </g>
       </svg>
@@ -2872,6 +3045,7 @@ function errState(msg, retry){
    ══════════════════════════════════════════════════════════════════════ */
 var loaded={1:false,2:false,3:false,5:false};
 function showTab(n){
+  initAnchorBars();
   $$(".tab[role=tab]").forEach(function(t){ t.setAttribute("aria-selected", t.id==="tab-"+n?"true":"false"); });
   // Tab 4（评测工具）没有远程数据要 loadXxx()：Duplicate Tester / LLM 评测室 / AB 对比
   // 三个子工具都是用户点按钮才发请求，不需要 tab 打开时预取，所以 loaded/dispatcher
@@ -3137,6 +3311,18 @@ function countOf(p){
   });
 }
 function loadFlow(){
+  // 调度横条的展开/收起。绑在 loadFlow 里（tab1 的加载入口）而不是全局 init，
+  // 保证元素一定已经在 DOM 里；重复进入 tab1 时用 dataset 挡住重复绑定。
+  var tg = $("#schedToggle");
+  if (tg && !tg.dataset.bound){
+    tg.dataset.bound = "1";
+    tg.addEventListener("click", function(){
+      var open = tg.getAttribute("aria-expanded") === "true";
+      tg.setAttribute("aria-expanded", open ? "false" : "true");
+      $("#schedPanel").hidden = open;
+    });
+  }
+
   $("#sectorChips").innerHTML=SECTORS.map(function(s){return '<span class="chip">'+esc(s)+'</span>';}).join("");
   $("#stepList").innerHTML=STEPS.map(function(s){
     return '<div class="step"><div class="no">'+s[0]+'</div><div class="nm">'+esc(s[1])+'</div>'+
@@ -3166,6 +3352,9 @@ function loadFlow(){
     for(var i=0;i<runs.length;i++){ if(runs[i].events_count>0){ r=runs[i]; break; } }
     if(!r) r=runs[0];
     if(!r) throw new Error("暂无运行记录");
+    // 同一份数据顺带喂给流程轴耗时和调度横条，不再多打两次请求
+    fillFlowAxis(runs);
+    fillSchedBar(runs);
     $("#runMeta").textContent="run #"+r.id+" · "+String(r.run_at||"").replace("T"," ").slice(0,19)+" · "+(r.status==="success"?"成功":r.status);
     var cells=[
       {l:"原始抓取",v:nf(r.raw_count),n:"多源合并后的原始条目"},
@@ -3187,6 +3376,7 @@ function loadFlow(){
   }).catch(function(e){
     $("#runMeta").textContent="加载失败"; $("#runStats").innerHTML="";
     $("#runStats").appendChild(errState(e.message));
+    $("#schedMeta").textContent="读取失败：" + e.message;
   });
 
   pool(TIERS.map(function(t){return function(){return countOf({event_tier:t.k});};}),3).then(function(v){
@@ -3254,6 +3444,122 @@ function loadVerification(){
                  .reduce(function(a,b){return a+b.v;},0);
     $("#k-verify").innerHTML=(pass/total*100).toFixed(1)+'<span class="u">%</span>';
   }).catch(function(e){ box.innerHTML=""; box.appendChild(errState("校验分布数据加载失败，请检查 API 连接 · "+e.message)); });
+}
+
+
+/* ── 吸顶页内锚点条 ─────────────────────────────────────────────────
+   点击滚到对应小节；高亮用 IntersectionObserver 而不是 scroll 监听，
+   避免给每一帧加活儿。scrollTo({behavior:"smooth"}) 在本环境不可靠
+   （设计交付说明里明确点过），所以直接赋 scrollTop。 */
+var ANCHOR_OFFSET = 72;
+function initAnchorBars(){
+  $$(".b9-anchorbar").forEach(function(bar){
+    if (bar.dataset.bound) return;
+    bar.dataset.bound = "1";
+    var btns = $$(".b9-anchor", bar);
+
+    bar.addEventListener("click", function(e){
+      var b = e.target.closest(".b9-anchor");
+      if (!b) return;
+      var target = document.getElementById(b.getAttribute("data-goto"));
+      if (!target) return;
+      var sc = document.scrollingElement || document.documentElement;
+      sc.scrollTop = Math.max(0, target.getBoundingClientRect().top + sc.scrollTop - ANCHOR_OFFSET);
+      btns.forEach(function(x){ x.setAttribute("aria-current", x === b ? "true" : "false"); });
+    });
+
+    if (!("IntersectionObserver" in window)) return;
+    var byId = {};
+    btns.forEach(function(b){ byId[b.getAttribute("data-goto")] = b; });
+    var io = new IntersectionObserver(function(entries){
+      entries.forEach(function(en){
+        if (!en.isIntersecting) return;
+        var b = byId[en.target.id];
+        if (!b) return;
+        btns.forEach(function(x){ x.setAttribute("aria-current", x === b ? "true" : "false"); });
+      });
+    }, {rootMargin: "-80px 0px -70% 0px", threshold: 0});
+    btns.forEach(function(b){
+      var t = document.getElementById(b.getAttribute("data-goto"));
+      if (t) io.observe(t);
+    });
+  });
+}
+
+/* ── 流程轴耗时 & 调度横条 ─────────────────────────────────────────────
+   两者都吃 /api/runs 的同一份返回。stage_timings 是 pipeline 自己记的秒数，
+   这里只做归并（按流程轴的五步分组）与格式化，不做任何估算。 */
+function fmtDur(sec){
+  sec = Math.round(sec || 0);
+  if (sec < 60) return "≈ " + sec + " 秒";
+  var m = Math.floor(sec / 60), s = sec % 60;
+  return "≈ " + m + " 分 " + (s < 10 ? "0" : "") + s + " 秒";
+}
+function parseTimings(run){
+  var t = run && run.stage_timings;
+  if (typeof t === "string"){ try { t = JSON.parse(t); } catch(e){ return null; } }
+  return (t && Object.keys(t).length) ? t : null;
+}
+function fillFlowAxis(runs){
+  var run = null, t = null;
+  for (var i = 0; i < runs.length; i++){ t = parseTimings(runs[i]); if (t){ run = runs[i]; break; } }
+  if (!t) return;                                   // 没有 stage_timings 就保留静态兜底值
+  var g = function(k){ return Number(t[k] || 0); };
+  var fetchS = g("fetch") + g("prefilter");
+  var llmS   = g("llm_enrich") + g("dedup_aggregate") + g("cross_run_merge");
+  var outS   = g("verification") + g("market_cap") + g("score_and_write");
+  var total  = fetchS + llmS + outS;
+  var pct    = total > 0 ? Math.round(llmS / total * 100) : 0;
+  var set = function(id, txt){ var e = document.getElementById(id); if (e) e.textContent = txt; };
+  set("flowTm2", fmtDur(fetchS));
+  set("flowTm3", fmtDur(llmS) + " · " + pct + "%");
+  set("flowTm4", fmtDur(outS));
+  var when = String(run.run_at || "").replace("T", " ").slice(0, 16);
+  var sum = $("#flowTimeSummary");
+  if (sum){
+    sum.innerHTML = '顶部流程轴上的数字是各阶段的<b>真实耗时</b>，取自最近一轮（<code>' +
+      esc(when) + '</code>）的 <code>stage_timings</code>，非估算。<b>单轮总计 ' +
+      esc(fmtDur(total).replace("≈ ", "")) + '</b>，其中 <b style="color:var(--a700)">LLM 结构化占 ' +
+      pct + '%</b> —— 抓取 ' + esc(fmtDur(fetchS).replace("≈ ", "")) + '，打分入库 ' +
+      esc(fmtDur(outS).replace("≈ ", "")) + '。要压缩单轮时长，唯一有意义的着力点是 LLM 结构化那一步。';
+  }
+}
+/* 下一轮调度时刻：cron 是 0 8,20 * * *（UTC+8）。浏览器可能在任意时区，
+   所以先把当前时刻换算到 UTC+8 再算，否则给海外同事看到的"下轮"是错的。 */
+function nextRunLabel(){
+  var utc8 = new Date(Date.now() + (new Date().getTimezoneOffset() * 60000) + 8 * 3600000);
+  var h = utc8.getHours();
+  var next = (h < 8) ? "08:00" : (h < 20 ? "20:00" : "次日 08:00");
+  return "下轮 " + next;
+}
+function fillSchedBar(runs){
+  var recent = runs.slice(0, 3);
+  if (!recent.length) return;
+  var top = recent[0];
+  var ok = function(r){ return String(r.status || "") === "success"; };
+  $("#schedMeta").textContent =
+    String(top.run_at || "").replace("T", " ").slice(0, 16) + " · " +
+    (ok(top) ? "成功" : (top.status || "未知")) + " · " +
+    nf(top.events_count || 0) + " 事件 · " +
+    (top.duration_seconds != null ? (top.duration_seconds / 60).toFixed(1) + " 分钟" : "—");
+  $("#schedDots").innerHTML = runs.slice(0, 8).reverse().map(function(r){
+    return '<i class="' + (ok(r) ? "" : "bad") + '" title="' +
+      esc(String(r.run_at || "").replace("T", " ").slice(0, 16)) + " · " + esc(r.status || "") + '"></i>';
+  }).join("");
+  $("#schedNext").textContent = nextRunLabel();
+  $("#schedList").innerHTML = recent.map(function(r){
+    var t = parseTimings(r);
+    var llm = t ? Math.round(Number(t.llm_enrich || 0)) : null;
+    return '<div class="sched-item">' +
+      '<span class="t">' + esc(String(r.run_at || "").replace("T", " ").slice(0, 16)) + '</span>' +
+      '<span class="tag ' + (ok(r) ? "ver" : "rumor") + '">' + esc(ok(r) ? "成功" : (r.status || "未知")) + '</span>' +
+      '<span class="n">' + nf(r.raw_count || 0) + ' 原始 → ' + nf(r.deduped_count || 0) +
+        ' 去重 → <b>' + nf(r.events_count || 0) + '</b> 事件' +
+        (llm !== null ? '　·　LLM ' + llm + ' 秒' : '') + '</span>' +
+      '<span class="d">' + (r.duration_seconds != null ? (r.duration_seconds / 60).toFixed(1) + ' 分' : '—') +
+        (r.estimated_cost_usd ? '　$' + Number(r.estimated_cost_usd).toFixed(2) : '') + '</span>' +
+      '</div>';
+  }).join("");
 }
 
 /* ══════════════════════════════════════════════════════════════════════
@@ -3520,11 +3826,82 @@ function renderPhone(){
 }
 function setView(v){
   state.view=v;
-  $("#v-table").setAttribute("aria-pressed", v==="table"?"true":"false");
-  $("#v-sim").setAttribute("aria-pressed", v==="sim"?"true":"false");
-  $("#view-table").hidden=(v!=="table");
-  $("#view-sim").hidden=(v!=="sim");
+  [["table","#v-table","#view-table"],["sim","#v-sim","#view-sim"],["src","#v-src","#view-src"]]
+    .forEach(function(x){
+      $(x[1]).setAttribute("aria-pressed", v===x[0]?"true":"false");
+      $(x[2]).hidden = (v!==x[0]);
+    });
+  // 上方那套事件筛选器只对表格/模拟器有意义，信源统计有自己的筛选
+  var f=$("#sec-filter"); if(f) f.hidden=(v==="src");
   if(v==="sim") renderPhone();
+  if(v==="src") loadSourceCatalog();
+}
+
+/* ── 信源统计 ─────────────────────────────────────────────────────────
+   一次拉全量（几百行），筛选全在前端做：数据不大，来回请求反而更慢，
+   也省得给一个纯展示的表再加一套服务端查询参数。 */
+var SRC_CATALOG = null;
+function loadSourceCatalog(){
+  if (SRC_CATALOG){ renderSourceCatalog(); return; }
+  apiGet("/api/source-catalog").then(function(d){
+    SRC_CATALOG = (d && d.data) || [];
+    var meta = (d && d.meta) || {};
+    var ch = $("#sc-channel"), tr = $("#sc-tier");
+    (meta.channels||[]).forEach(function(c){
+      var o=document.createElement("option"); o.value=c; o.textContent=c; ch.appendChild(o);
+    });
+    var TIER_ZH={official:"官方一手",top_media:"头部媒体",established:"有编辑部",
+                 secondary:"二线/聚合",unknown:"未知长尾",anonymous:"匿名账号"};
+    (meta.tiers||[]).forEach(function(t){
+      var o=document.createElement("option"); o.value=t; o.textContent=(TIER_ZH[t]||t)+" · "+t; tr.appendChild(o);
+    });
+    renderSourceCatalog();
+  }).catch(function(e){
+    $("#scBody").innerHTML='<tr><td colspan="7"></td></tr>';
+    $("#scBody").querySelector("td").appendChild(errState(e.message));
+  });
+}
+function renderSourceCatalog(){
+  var rows = SRC_CATALOG || [];
+  var ch=$("#sc-channel").value, tr=$("#sc-tier").value, lg=$("#sc-lang").value,
+      ac=$("#sc-active").value, kw=$("#sc-kw").value.trim().toLowerCase();
+  var out = rows.filter(function(r){
+    if (ch && r.channel!==ch) return false;
+    if (tr && r.tier!==tr) return false;
+    if (lg && (r.lang||"")!==lg) return false;
+    if (ac==="1" && !(r.event_count>0)) return false;
+    if (ac==="0" && r.event_count>0) return false;
+    if (kw && (String(r.name).toLowerCase().indexOf(kw)<0 &&
+               String(r.url||"").toLowerCase().indexOf(kw)<0)) return false;
+    return true;
+  });
+  var TIER_TAG={official:"ver",top_media:"ver",established:"neu",
+                secondary:"neu",unknown:"neu",anonymous:"neu"};
+  var TIER_ZH={official:"官方一手",top_media:"头部媒体",established:"有编辑部",
+               secondary:"二线/聚合",unknown:"未知长尾",anonymous:"匿名账号"};
+  var active = out.filter(function(r){return r.event_count>0;}).length;
+  $("#scCount").innerHTML = "共 <b>"+out.length+"</b> 个信源 · 其中有产出 <b>"+active+
+    "</b> · 合计贡献 <b>"+nf(out.reduce(function(a,b){return a+(b.event_count||0);},0))+"</b> 次报道";
+  if(!out.length){
+    $("#scBody").innerHTML='<tr><td colspan="7"><div class="state"><div class="ic">∅</div>'+
+      '<div class="ti">没有匹配的信源</div><div class="ds">放宽筛选条件试试</div></div></td></tr>';
+    return;
+  }
+  $("#scBody").innerHTML = out.map(function(r){
+    var u = r.url||"";
+    var link = u ? '<a href="'+esc(u)+'" target="_blank" rel="noopener" class="sc-url">'+esc(u)+'</a>'
+                 : '<span style="color:var(--ink-4)">—</span>';
+    return '<tr>'+
+      '<td><b>'+esc(r.name)+'</b>'+(r.note?'<div class="tm" style="margin-top:3px">'+esc(r.note)+'</div>':'')+'</td>'+
+      '<td><span class="tag neu">'+esc(r.channel)+'</span></td>'+
+      '<td>'+(r.lang?esc(r.lang):'—')+'</td>'+
+      '<td>'+(r.authority!=null?'<span class="mono">'+r.authority+' / 5</span>':'—')+'</td>'+
+      '<td><span class="tag '+(TIER_TAG[r.tier]||"neu")+'">'+esc(TIER_ZH[r.tier]||r.tier)+'</span>'+
+        '<div class="tm" style="margin-top:3px">权重 '+esc(String(r.tier_weight))+'</div></td>'+
+      '<td><span class="mono"'+(r.event_count?'':' style="color:var(--ink-4)"')+'>'+nf(r.event_count)+'</span></td>'+
+      '<td>'+link+'</td>'+
+      '</tr>';
+  }).join("");
 }
 
 function loadData(){
@@ -3569,6 +3946,17 @@ function loadData(){
   $("#p-next").addEventListener("click",function(){ state.offset+=state.limit; fetchRows(); });
   $("#v-table").addEventListener("click",function(){ setView("table"); });
   $("#v-sim").addEventListener("click",function(){ setView("sim"); });
+  $("#v-src").addEventListener("click",function(){ setView("src"); });
+  ["#sc-channel","#sc-tier","#sc-lang","#sc-active"].forEach(function(id){
+    $(id).addEventListener("change", renderSourceCatalog);
+  });
+  var skt; $("#sc-kw").addEventListener("input",function(){
+    clearTimeout(skt); skt=setTimeout(renderSourceCatalog,180);
+  });
+  $("#sc-reset").addEventListener("click",function(){
+    ["#sc-channel","#sc-tier","#sc-lang","#sc-active","#sc-kw"].forEach(function(id){ $(id).value=""; });
+    renderSourceCatalog();
+  });
   fetchRows();
 }
 

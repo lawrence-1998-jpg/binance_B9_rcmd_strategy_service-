@@ -21,6 +21,7 @@ from eval_tools import eval_bp
 from sector_insight import sector_insight_bp
 from history_tools import history_bp
 from enrich_bridge import enrich_bridge_bp
+from source_catalog import source_catalog_bp
 from crawler.timeutil import now_local
 
 logging.basicConfig(level=logging.INFO)
@@ -442,6 +443,7 @@ app.register_blueprint(eval_bp)
 app.register_blueprint(sector_insight_bp)
 app.register_blueprint(history_bp)
 app.register_blueprint(enrich_bridge_bp)
+app.register_blueprint(source_catalog_bp)
 
 
 if __name__ == "__main__":
