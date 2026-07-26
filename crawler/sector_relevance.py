@@ -1023,7 +1023,9 @@ def recommend_sector(sector: str, conn, hours: int = DEFAULT_CANDIDATE_HOURS,
                "empty_reason": f"未知板块 '{sector}'，不在 SECTOR_LABELS 内", "stats": {}}
 
     client = client or get_openai_client()
-    limit = max(0, min(limit, MAX_RECOMMEND))
+    # 下界 1 而非 0：limit=0 会白跑整套预筛+LLM 精判然后返回空（API 层已同样钳制，
+    # 这里是给直连本函数的调用方兜底，两处口径一致）
+    limit = max(1, min(limit, MAX_RECOMMEND))
 
     pool = fetch_candidates(conn, hours)
     if not pool:

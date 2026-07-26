@@ -292,7 +292,7 @@ C/D ≤80字）。gpt-5.4 对这个分档指令服从得很好——D 档新闻�
 
 ---
 
-## 8. HTTPS 网址的两条升级路径（需要你二选一，当前方案已可用）
+## 8. HTTPS 网址的两条升级路径 —— 已关闭（2026-07-26 Lawrence：「域名不改了 就现在这样挺好」，维持 quick tunnel 现状）
 
 现状：`https://currencies-granted-delight-lou.trycloudflare.com` 已上线（任何人
 可打开、证书有效），但**子域名是随机的，且隧道重启后会变**。你想要的

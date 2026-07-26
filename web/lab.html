@@ -967,10 +967,16 @@ function sourcesLine(names){
   return names.length > 2 ? head + " +" + (names.length-2) : head;
 }
 
+// 与 runCompare 的 compareSeq 同一套竞态防护：连续拖滑块会连发多个请求，
+// 晚返回的旧响应不能覆盖新响应（review 修 runCompare 时点名这里有同类问题）。
+var reweightSeq = 0;
+
 function runReweight(){
   var el = $("#singleResults");
+  var seq = ++reweightSeq;
   var body = Object.assign(baseParams(), { weights: panelSingle.rawWeights() });
   api("/api/tools/reweight", body).then(function(d){
+    if (seq !== reweightSeq) return;                      // 过期响应，丢弃
     lastReweightResult = d;
     $("#poolPill").textContent = "池大小 " + d.meta.pool_size;
     $("#singleMeta").textContent = "Top " + d.results.length + " · 基准 " + d.meta.social_baseline;
@@ -994,6 +1000,7 @@ function runReweight(){
       );
     }).join("") + '</div>';
   }).catch(function(err){
+    if (seq !== reweightSeq) return;                      // 旧请求的失败别覆盖新请求
     el.innerHTML = '<div class="err">加载失败：' + esc(err.message) + '</div>';
   });
 }

@@ -40,13 +40,16 @@ X_SEARCH_URL = "https://api.twitter.com/2/tweets/search/recent"
 # 下面这组常量是本模块唯一需要调的旋钮。调之前先跑 `python -m crawler.x_search`
 # （模块自带 dry-run，见文件末尾），它会打印各阶段的过滤水位。
 
-# 单条查询单页回取的推文数。API 允许 10-100。
+# 单条查询单页回取的推文数（默认值）。API 允许 10-100。
 #
-# 2026-07-26 从 100 降到 15：按条计费下，这个数字**直接等于花多少钱**。
-# 保留全部 21 组查询（覆盖面 = "一搜就能搜出来的新闻我们得有"，这是原始要求，
-# 不能砍），砍的是每组的深度。配合下面的轮转机制，避免固定顺序下靠后的查询
-# 永远吃不到预算。
-MAX_RESULTS_PER_QUERY = 15
+# 2026-07-26 两次调整：credit 烧穿事故后先降到 15（省钱档）；Lawrence 随后表态
+# "倒也不用这么省，保障效果"，改为**按类别分级**（平衡档）：
+#   - market/macro：25 条/页 —— 历史数据里 94% 的浪费集中在这两类（散人喊单
+#     基数最大、过滤后所剩无几），砍它们几乎不损失有效召回
+#   - 其余类别（security/risk/listing/whale/…）：75 条/页 —— 信噪比高，给足深度
+# 21 组查询依然全部保留（覆盖面是原始要求）。
+MAX_RESULTS_PER_QUERY = 75
+PAGE_SIZE_BY_CATEGORY = {"market": 25, "macro": 25}
 
 # 单轮请求硬上限。超过就停止发请求并告警——防止查询集被扩得太大或分页失控
 # 把配额吃穿，影响同一 token 上的 KOL 拉取。
@@ -59,10 +62,12 @@ MAX_PAGES_PER_QUERY = 1
 # ── 成本硬闸门（按「条」，与真实计费维度一致）──────────────────────
 X_COST_PER_POST_USD = 0.0021          # 实测值，见文件头部说明
 
-# 单轮最多买多少条推文。这是本模块**唯一需要调的成本旋钮**：
-#   150 条/轮 ≈ $0.32/轮 ≈ $0.63/天（2 轮）≈ $10 能撑约 16 天
-# 调大 = 召回更全但更贵，调小反之。改这个数字就够了，不用动别的。
-X_SEARCH_POST_BUDGET = 150
+# 单轮最多买多少条推文（硬上限护栏）。按上面的分级页大小，正常一轮约消耗
+# 1200 条（14 组高价值 × 75 + 噪音类 × 25），预算设 1500 留余量：
+#   ≈ $2.6/轮 ≈ $5.2/天（2 轮）+ KOL ≈ $0.7/天 → 全部 X 成本约 $6/天（$180/月）
+# 对比：旧广撒网 $15/天（94% 浪费），省钱档 $1.3/天（召回明显变薄）。
+# 要再调余量，改这个数字和 PAGE_SIZE_BY_CATEGORY 就够了。
+X_SEARCH_POST_BUDGET = 1500
 
 # 回看窗口，必须 >= cron 周期，否则两轮之间会有盲区。
 #
@@ -311,11 +316,12 @@ class _Budget:
 
 
 def _search_once(query: str, bearer: str, budget: _Budget,
-                 start_time: str, next_token: str | None = None) -> dict | None:
+                 start_time: str, next_token: str | None = None,
+                 page_size: int | None = None) -> dict | None:
     """发一次 recent search。429 走指数退避重试，其余错误直接放弃这条查询。"""
     # 按剩余预算动态收缩：预算快见底时不要再要满页，避免最后一次调用超支。
     # X API v2 的 max_results 下限是 10，低于它就不值得再发请求了。
-    want = min(MAX_RESULTS_PER_QUERY, budget.remaining_posts())
+    want = min(page_size or MAX_RESULTS_PER_QUERY, budget.remaining_posts())
     if want < 10:
         return None
     params = {
@@ -423,8 +429,10 @@ def fetch_x_search(known_tweet_ids: set[str] | None = None,
         group_raw = group_kept = 0
         next_token = None
 
+        page_size = PAGE_SIZE_BY_CATEGORY.get(category, MAX_RESULTS_PER_QUERY)
         for _ in range(MAX_PAGES_PER_QUERY):
-            data = _search_once(query, bearer, budget, start_time, next_token)
+            data = _search_once(query, bearer, budget, start_time, next_token,
+                                page_size=page_size)
             if not data:
                 break
             tweets = data.get("data") or []
