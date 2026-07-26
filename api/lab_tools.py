@@ -20,11 +20,13 @@
   - 打分逻辑 100% 复用 crawler/scoring.py 里的 compute_impact / compute_timeliness /
     compute_hotness / compute_authority / compute_quality，不重新实现任何因子算法，
     只是把权重从写死的常量变成请求参数。
-  - 相关性（Rel）因子：news_events 表里没有 sector_relevance 之类的字段（已用
-    `DESCRIBE news_events` 核实），这里用退化方案 —— 用户选择的板块若命中事件
-    的 sectors JSON 数组则记 1.0，否则 0.0（二元判断）。前端已明确标注这是
-    简化版，完整版 Sector Insight 相关性算法尚未上线，这是已知技术债务，不是
-    本模块要解决的范围。
+  - 相关性（Rel）因子：2026-07-26 起为**连续分**（此前是 sectors 命中与否的
+    二元判断）。优先读入库时 LLM 按 skill 口径打的 sector_relevance 明细
+    （0-1 连续、锚点强制、含低于发布阈值的候选），明细缺失的旧行按
+    sectors 命中 0.60 / 成分币白名单 0.55 / 标题关键词 0.40 分层退化。
+    查询时零 LLM 调用——实验室是拖滑块即时重算几百条的交互工具，跑不起
+    每次请求调 LLM 的完整版；完整版（硬门+Rel^1.5+体裁门+传导链+去重+
+    宁缺毋滥）在 /api/recommend/sector。
   - 全程只 SELECT，不写 news_events 或任何表。
   - 不依赖 api/server.py 的任何内部函数（get_db/require_api_key 等），完全自
     包含，避免和同时在改 server.py 的另一个 agent产生耦合冲突。
@@ -38,6 +40,7 @@ from functools import wraps
 from flask import Blueprint, request, jsonify, send_from_directory
 
 from crawler import scoring, storage
+from crawler.sector_relevance import SECTOR_ANCHORS
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 鉴权：与 api/server.py 里的 require_api_key 逻辑保持一致（同一个静态 token），
@@ -89,7 +92,7 @@ def lab_page():
 # ─────────────────────────────────────────────────────────────────────────────
 POOL_COLUMNS = """
     id, title_en, title_zh, date, time_event, time_get_data,
-    sectors, coins, news_type, event_tier,
+    sectors, sector_relevance, coins, news_type, event_tier,
     score_market_impact, score_timeliness, score_hotness, score_authority, score_quality,
     importance_score, is_rumor, source_names, source_count, social_interactions,
     verification_status
@@ -114,7 +117,7 @@ def fetch_pool(conn, days: int, limit: int) -> list[dict]:
     events = []
     for row in rows:
         d = dict(zip(cols, row))
-        for f in ("sectors", "coins", "source_names"):
+        for f in ("sectors", "sector_relevance", "coins", "source_names"):
             v = d.get(f)
             if isinstance(v, str):
                 try:
@@ -143,9 +146,11 @@ FACTOR_NAME = {"M": "影响面", "T": "时效性", "H": "热度", "A": "权威�
 DEFAULT_RAW_WEIGHTS = {"M": 0.35, "T": 0.20, "H": 0.15, "A": 0.15, "Q": 0.15, "Rel": 0.0}
 
 REL_NOTE = (
-    "当前为简化版相关性：选中板块命中事件 sectors 数组即记 1.0，否则记 0.0（二元判断）。"
-    "完整版 Sector Insight 相关性算法（语义相关度、多板块加权等）尚未上线，这是已知的产品待办项，"
-    "本工具如实标注，不假装存在一个精细的相关性模型。"
+    "相关性为连续分（2026-07-26 起）：优先取入库时 LLM 按 skill 口径打的连续相关度"
+    "（0-1，锚点强制，覆盖 86% 库存），旧行按 sectors 命中 0.60 / 成分币白名单 0.55 / "
+    "标题关键词 0.40 分层退化，查询时零 LLM 成本。注意实验室里 Rel 是可调权重因子（探索用），"
+    "生产 Sector Insight 用的是「硬门 Rel≥0.5 + Rel^1.5 外层乘子」——要看生产口径结果，"
+    "请调用 /api/recommend/sector。"
 )
 
 
@@ -174,6 +179,43 @@ def normalize_weights(raw: dict, use_rel: bool) -> dict:
     return {k: v / total for k, v in w.items()}
 
 
+def compute_relevance(event: dict, sector: str) -> float:
+    """连续相关性——skill v5.1 口径的查询时便宜近似（零 LLM 调用）。
+
+    分层取值（高优先级在前）：
+      1. 入库时 LLM 打的连续分：sector_relevance 明细里找目标板块。这就是
+         「真相关才打」量化的产物（0-1 连续、anchor 强制、低于 0.55 发布阈值的
+         候选也保留在明细里），86% 的库存事件有这层数据。
+      2. 明细缺失的旧行（内容标签上线前入库）但 sectors 命中 → 0.60：它通过过
+         当时的发布门，给保守中档，不冒充精确。
+      3. coins ∩ 板块成分币白名单（SECTOR_ANCHORS.tickers）→ 0.55：skill 里
+         "1 跳、成分资产涉入"档位的下缘。
+      4. 标题命中板块关键词 → 0.40：有语义迹象但按 skill 不足以过 0.5 硬门。
+      5. 其余 → 0.0。
+
+    注意本工具里 Rel 是**可调权重的内层因子**（探索用），与生产 Sector Insight
+    的"硬门 + Rel^1.5 外层乘子"用法刻意不同——实验室的意义就是让用户自由调配
+    权重看排序变化，硬门会让滑块失去意义。要看生产口径的结果，用
+    /api/recommend/sector 或评测工具的 AB 对比。
+    """
+    for tag in event.get("sector_relevance") or []:
+        if isinstance(tag, dict) and tag.get("sector") == sector:
+            try:
+                return max(0.0, min(1.0, float(tag.get("relevance", 0.0))))
+            except (TypeError, ValueError):
+                break
+    if sector in (event.get("sectors") or []):
+        return 0.60
+    anchors = SECTOR_ANCHORS.get(sector) or {}
+    coins = set(event.get("coins") or [])
+    if coins & set(anchors.get("tickers") or ()):
+        return 0.55
+    title = f"{event.get('title_en') or ''} {event.get('title_zh') or ''}".lower()
+    if any(kw in title for kw in (anchors.get("keywords") or [])):
+        return 0.40
+    return 0.0
+
+
 def compute_factors(event: dict, baseline: float, now: datetime, sector: str | None) -> dict:
     """五因子 + 可选 Rel，逐字段调用 scoring.py 的既有函数。"""
     factors = {
@@ -189,7 +231,7 @@ def compute_factors(event: dict, baseline: float, now: datetime, sector: str | N
         "Q": scoring.compute_quality(event),
     }
     if sector:
-        factors["Rel"] = 1.0 if sector in (event.get("sectors") or []) else 0.0
+        factors["Rel"] = compute_relevance(event, sector)
     else:
         factors["Rel"] = 0.0
     return factors

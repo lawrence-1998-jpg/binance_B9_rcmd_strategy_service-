@@ -515,9 +515,13 @@ footer{border-top:1px solid var(--rule);padding:26px 0;margin-top:20px}
         </div>
       </div>
       <div class="note amber" id="relNote" style="margin-top:14px;display:none">
-        <span class="lbl">相关性因子 · 技术债务说明</span>
-        当前为<b>简化版相关性</b>：选中板块命中事件 <code>sectors</code> 数组即记 1.0，否则记 0.0（二元判断）。
-        完整版 Sector Insight 相关性算法（语义相关度、多板块加权等）<b>尚未上线</b>，这是已知的产品待办项 —— 本工具如实标注，不假装存在一个精细的相关性模型。
+        <span class="lbl">相关性因子 · 打分口径</span>
+        Rel 为<b>连续分</b>（2026-07-26 起，替换了早期的 0/1 二元判断）：优先取<b>入库时
+        LLM 按 skill 口径打的连续相关度</b>（0–1，锚点强制，覆盖 86% 库存事件），无明细的
+        旧行按「<code>sectors</code> 命中 0.60 → 成分币白名单命中 0.55 → 标题关键词 0.40」
+        分层退化，查询时零 LLM 成本、即时响应。注意：实验室里 Rel 是<b>可调权重的内层因子</b>
+        （探索用）；生产 Sector Insight 用「硬门 Rel≥0.5 + Rel<sup>1.5</sup> 外层乘子」，
+        要看生产口径请调 <code>/api/recommend/sector</code>。
       </div>
     </div>
   </div>

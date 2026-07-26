@@ -435,6 +435,12 @@ tr.row.open .caret{transform:rotate(90deg);color:var(--gold-deep)}
 .d-h{font-size:10px;font-family:var(--mono);letter-spacing:.13em;text-transform:uppercase;color:var(--gold-deep);margin-bottom:9px;font-weight:600}
 .d-sec{margin-bottom:20px}
 .d-sec:last-child{margin-bottom:0}
+/* 详情里的内容理解标签 chip（情绪/市值/实体/板块相关度） */
+.dchip{
+  display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:100px;
+  font-size:11.5px;font-family:var(--mono);background:var(--surface-2);
+  color:var(--ink-2);border:1px solid var(--rule);white-space:nowrap;
+}
 .d-txt{font-size:13px;color:var(--ink-2);line-height:1.82;white-space:pre-wrap}
 .d-short{font-size:13.5px;color:var(--ink);line-height:1.72;padding:13px 15px;background:var(--surface);border:1px solid var(--rule);border-radius:10px}
 .kv{display:grid;grid-template-columns:96px 1fr;gap:6px 14px;font-size:12px}
@@ -2532,6 +2538,43 @@ function toggleDetail(tr,r){
       }).join("")+'</div>';
   }
 
+  /* 内容理解标签 + 市值标签（2026-07-26 补接。这些字段的 LLM/查表成本早就在
+     花，API 也一直在返回，但前端从未消费——审计发现的"花钱产出没上架"孤儿
+     数据，一并接进详情。） */
+  var tagsH="";
+  (function(){
+    var chips=[];
+    if(r.sentiment){
+      var sMap={bullish:["利多","var(--green)","var(--green-wash)"],
+                bearish:["利空","var(--red)","var(--red-wash)"],
+                neutral:["中性","var(--ink-3)","var(--surface-2)"]};
+      var sc=sMap[r.sentiment]||sMap.neutral;
+      chips.push('<span class="dchip" style="color:'+sc[1]+';background:'+sc[2]+'">'+sc[0]+
+        (r.sentiment_score!=null?' '+Number(r.sentiment_score).toFixed(2):'')+'</span>');
+    }
+    if(r.impact_horizon){
+      var hMap={immediate:"即时影响",short_term:"短期 1-7天",medium_term:"中期 1-4周",long_term:"长期 >1月"};
+      chips.push('<span class="dchip">'+ (hMap[r.impact_horizon]||esc(r.impact_horizon)) +'</span>');
+    }
+    if(r.primary_coin){
+      var cap=r.primary_coin_market_cap!=null?" $"+nf(Math.round(r.primary_coin_market_cap/1e6))+"M":"";
+      var ratio=r.primary_coin_btc_ratio!=null?" · "+(Number(r.primary_coin_btc_ratio)*100).toFixed(2)+"% of BTC":"";
+      var tier=r.coin_cap_tier?" · "+esc(r.coin_cap_tier):"";
+      chips.push('<span class="dchip" style="color:var(--gold-deep);background:var(--gold-wash)">'+
+        esc(r.primary_coin)+cap+ratio+tier+'</span>');
+    }
+    (r.entities||[]).slice(0,6).forEach(function(e){
+      if(e&&e.name) chips.push('<span class="dchip" style="color:var(--indigo);background:var(--indigo-wash)">'+esc(e.name)+'</span>');
+    });
+    (r.sector_relevance||[]).slice(0,4).forEach(function(t){
+      if(t&&t.sector) chips.push('<span class="dchip">'+esc(t.sector)+' '+Number(t.relevance||0).toFixed(2)+
+        (t.anchor?' <span style="opacity:.65">('+esc(t.anchor)+')</span>':'')+'</span>');
+    });
+    if(chips.length)
+      tagsH='<div class="d-sec"><div class="d-h">内容理解标签 · 情绪/市值/实体/板块相关度</div>'+
+        '<div style="display:flex;flex-wrap:wrap;gap:6px">'+chips.join("")+'</div></div>';
+  })();
+
   var lng=r.description_long_zh||r.description_long_en||"";
   var sht=r.description_short_zh||r.description_short_en||"(无摘要)";
   var html='<td colspan="7"><div class="detail-in"><div class="d-grid"><div>'+
@@ -2539,6 +2582,7 @@ function toggleDetail(tr,r){
     (lng?'<div class="d-sec"><div class="d-h">长摘要 · description_long_zh</div><div class="d-txt">'+esc(lng)+'</div></div>':"")+
     (r.title_en?'<div class="d-sec"><div class="d-h">英文标题 · title_en</div><div class="d-txt" style="color:var(--ink-3)">'+esc(r.title_en)+'</div></div>':"")+
     (r.is_rumor?'<div class="rumor-box"><b>⚠ 谣言标记</b> —— '+esc(r.rumor_reason||"可信度校验未通过，下游建议过滤或降权。")+'</div>':"")+
+    tagsH+
     '</div><div>'+
     '<div class="d-sec"><div class="d-h">五因子明细</div>'+fH+
       '<div class="mini-f" style="margin-top:10px;border-top:1px solid var(--rule);padding-top:10px">'+
