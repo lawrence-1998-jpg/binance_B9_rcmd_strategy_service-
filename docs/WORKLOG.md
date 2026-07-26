@@ -203,3 +203,25 @@ enrich bridge 架构一句话：Mac（工作机，不保证在线）闲时经 `/
 拉 staging 待处理条目，本地 `claude -p` 按 VM 下发的同一 prompt（prompt_hash
 闸门保证口径）结构化，回传 `llm_enrich_cache`；pipeline Step 4 命中即免费，
 未命中走 OpenAI 原路径。Mac 离线的唯一后果是"这轮没省到钱"。
+
+# 八、设计改版上线后的收尾（2026-07-26 深夜 ～ 2026-07-27）
+
+设计改版（顶部分组 tab + Organic 设计系统）落地后，Lawrence 逐项验收，
+本批次是验收过程中冒出来的修复与新需求，按时间顺序：
+
+| # | 事项 | 状态与证据 |
+|---|---|---|
+| 44 | 观测时间筛选改单选（按生产轮次） | ✅ 新增 `GET /api/run-nodes`：按 08:00/20:00 两个调度节点分桶；`/api/news` 加 `run_at` 半开区间参数 `[run_at, run_at+12h)`。QA 新增 4 条断言，其中「各轮 total 相加==全量」是分桶正确性的硬校验 |
+| 45 | Dev Bill 去掉 ×2、改回实测原始值 | ✅ 单轮 $14.17/天 $28.33/月 $850；同时纠正 Claude 一项按实际 Max 顶配 $250/月计（此前错按 $20/月订阅算，差一个量级） |
+| 46 | 全站隐私处理（demo 站不可反推雇主/个人） | ✅ 标题/meta/页脚去人名公司名 + `noindex`；页面自身 token 换成不含人名的 `b9-web-*`；仓库卡片一度改成纯展示（见 #52 又改回） |
+| 47 | App 模拟器去掉 Sector Insight 页签、流程轴并入耗时 | ✅ 板块过滤已在上方筛选器生效，两套口径并存会打架，故只留 Macro；耗时改由 `/api/runs.stage_timings` 实时算，不再写死 |
+| 48 | **故障排查**：换 web token 后 lab/eval/history/sector/enrich 五个 blueprint 全 401 | ✅ 根因：这五个 blueprint 各自复制一份鉴权表（技术债，README 有记），新 token 只加进了 `server.py`。五处补齐 |
+| 49 | **故障排查**：7/26 20:00 那轮在前端"消失" | ✅ 根因：那轮真的跑成功了（20:13 写完 418 条），但 `time_get_data` 仍用 `datetime.now(timezone.utc)` 盖戳，且 mysqld 到 20:38 才重启、之前 `CURRENT_TIMESTAMP` 也是 UTC——"改成 UTC+8"上一轮只切了系统/cron/MySQL，代码写入口径漏了。新增 `crawler/timeutil.py` 做唯一时间基准，全仓 30 处 `now()` 改点；migration 011 按边界（mysqld 重启时刻）平移存量数据，执行前已 mysqldump 备份 |
+| 50 | 补齐设计稿差异 1–4（用户明确"1-4要，5-8不要管"） | ✅ (1) 流程图 26 处硬编码色映射到 token；(2) 流程轴改深色步骤胶囊+删节点级耗时小字；(3) tab01 新增"最近调度监控横条"；(4) 01/02/03/06 四个长 tab 补吸顶锚点条（IntersectionObserver 高亮）。过程中我自己引入一个 bug（`initAnchorBars` 误用了另一脚本块的 `$all`，把 `showTab` 整个打断），浏览器实测揪出并修复 |
+| 51 | 新增「信源统计」子 tab | ✅ 新端点 `/api/source-catalog`：`sources.py` 注册表 + `verification.resolve_source` 真实校验口径（不另起判断）+ 库内产出量三方合一，380 个信源（注册64+长尾316），5 维筛选。刻意保留 35 个零产出注册源——"配了没用上"本身是信号 |
+| 52 | 布局回归：指标卡被空锚点挤到第二行、宽屏留白过大 | ✅ 根因是 #50 加锚点条时误往 `#statRow`（4列grid）插了个空 `<span>` 占位；`.wrap` 限宽 1320 在 1900 屏上两侧空 285px 没跟着"内容全宽"放开。改锚点直接指向容器本身；`.wrap` 分两档放宽到 1500/1680 |
+| 53 | 首屏改版：标题改单行 + 新增"业务价值"三条 + 联系人具名 + GitHub 链接恢复 | ✅ 标题单行靠独立 class 去掉 `max-width:19ch` 限制，字号按 1280/1900 两档实测留白定；业务价值三条圆角栏（对比 baseline 评估召回率/首发率、补召链路生产 API、运营监控）；`the maintainer`→`lawrence zhu`；仓库卡片改回可点链接（#46 一度改的纯展示撤回） |
+
+本批次没有新增"漏做需求"事故——但 #48/#49/#50(引入的bug)/#52 都是**改动引入的回归**，
+共同点：动一处共享状态（鉴权表、时间戳写入口径、grid 结构、全局辅助函数名）时，
+没有先扫一遍"还有谁依赖这个"。这条已写进 `PROJECT_RETROSPECTIVE.md` 的 checklist。

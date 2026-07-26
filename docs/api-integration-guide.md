@@ -1,6 +1,6 @@
 # B9 新闻数据 API — 下游接入文档
 
-> 最后更新：2026-07-26 ｜ 状态：**已上线，公网可用**（全部端点实测 200）
+> 最后更新：2026-07-27 ｜ 状态：**已上线，公网可用**（全部端点实测 200）
 
 ---
 
@@ -87,6 +87,7 @@ curl -s "http://34.138.247.158:8080/health"
 | `is_rumor` | string | — | `1`/`true` 只看谣言，`0`/`false` 排除谣言 |
 | `date_from` | date | — | `YYYY-MM-DD`，含当天 |
 | `date_to` | date | — | `YYYY-MM-DD`，含当天 |
+| `run_at` | datetime | — | 只取某一轮生产采集的事件，取值见 `GET /api/run-nodes` 返回的 `run_at`；半开区间 `[run_at, run_at+12h)` |
 
 响应：
 
@@ -128,6 +129,26 @@ curl -s "http://34.138.247.158:8080/health"
 返回最近 20 轮的水位数据（raw / deduped / enriched / events / 耗时 / 状态）。**运维监控用**，下游业务一般不需要。
 
 健康判据：`enriched_count == deduped_count`（零丢失铁律）且 `status == "success"`。
+
+### 7. `GET /api/run-nodes` — 生产轮次节点
+
+| 参数 | 说明 |
+|---|---|
+| `limit` | 默认 20，上限 60 |
+
+按每天 08:00 / 20:00（UTC+8）两个调度节点给事件分桶，返回每个节点的 `run_at`
+（`YYYY-MM-DD HH:MM:SS`）与该轮 `event_count`。这里的 `run_at` 直接喂给
+`GET /api/news` 的 `run_at` 参数使用。
+
+### 8. `GET /api/source-catalog` — 信源目录
+
+无参数，一次返回全部信源（约 380 个：注册表 ~64 个 + 搜索召回长尾 ~316 个）。
+每条包含：`name`（信源名）、`channel`（接入方式：RSS 直连/自建 RSSHub/HTML 解析/
+X KOL 时间线/X 全网搜索/搜索引擎）、`lang`、`authority`（人工权威分 1–5，
+仅注册信源有值）、`tier`（校验分层：official/top_media/established/secondary/
+unknown/anonymous，与真实性校验同一套口径）、`tier_weight`、`event_count`
+（该信源真实产出的事件数，0 表示配了但没用上）、`url`。**运维/选品用**，
+下游业务一般不需要。
 
 ---
 
