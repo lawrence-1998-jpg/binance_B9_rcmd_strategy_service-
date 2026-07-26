@@ -1055,7 +1055,7 @@ footer{border-top:1px solid var(--rule);padding:26px 0 40px;font-size:12px;color
           <rect x="382" y="208" width="140" height="4" rx="2" fill="#F0B90B"/>
           <text class="nt" x="452" y="240" text-anchor="middle">爬虫</text>
           <text class="nd" x="452" y="258" text-anchor="middle">并发抓取 · 7 天时间窗</text>
-          <text class="nd" x="452" y="273" text-anchor="middle">每天 2 轮 · UTC 0 / 12</text>
+          <text class="nd" x="452" y="273" text-anchor="middle">每天 2 轮 · 08:00 / 20:00</text>
           <rect x="404" y="282" width="96" height="17" rx="5" fill="#FDF6E1" stroke="#EBD9A0"/>
           <text class="nb" x="452" y="294" text-anchor="middle">~1200 条 / 轮</text>
           <text class="tm" x="452" y="313" text-anchor="middle">≈ 4 分 05 秒</text>
@@ -1288,7 +1288,7 @@ footer{border-top:1px solid var(--rule);padding:26px 0 40px;font-size:12px;color
         <div class="eyebrow">部署</div>
         <dl class="kv" style="grid-template-columns:76px 1fr">
           <dt>主机</dt><dd>GCP VM · 34.138.247.158</dd>
-          <dt>调度</dt><dd>cron · UTC 00:00 / 12:00</dd>
+          <dt>调度</dt><dd>cron · 每天 08:00 / 20:00（UTC+8）</dd>
           <dt>服务</dt><dd>systemd · crypto-news-api</dd>
           <dt>存储</dt><dd>MySQL 8 · crypto_news</dd>
         </dl>
@@ -1529,7 +1529,7 @@ footer{border-top:1px solid var(--rule);padding:26px 0 40px;font-size:12px;color
       <div class="card">
         <div class="eyebrow">数据更新节奏</div>
         <p style="font-size:13px;color:var(--ink-2);line-height:1.8">
-          Pipeline 每天 UTC 00:00 / 12:00 各跑一轮，单轮耗时约 15–20 分钟。
+          Pipeline 每天 08:00 / 20:00（UTC+8）各跑一轮，单轮耗时约 15–20 分钟。
           建议下游按 <code>time_get_data</code> 增量拉取，或直接 <code>sort=date</code> 取最新。
         </p>
         <div class="note" style="margin-top:14px">
@@ -2234,7 +2234,7 @@ function loadHealth(){
     $("#healthDot").className="dot "+(ok?"ok":"bad");
     $("#healthTx").textContent=ok?("SERVICE ONLINE · "+nf(d.news_count)+" events"):"SERVICE ERROR";
     $("#k-total").innerHTML=nf(d.news_count)+'<span class="u">条</span>';
-    $("#footMeta").textContent="API "+API+" · 快照 "+String(d.time||"").slice(0,19).replace("T"," ")+" UTC";
+    $("#footMeta").textContent="API "+API+" · 快照 "+String(d.time||"").slice(0,19).replace("T"," ")+"（UTC+8）";
     return d;
   }).catch(function(e){
     $("#healthDot").className="dot bad";

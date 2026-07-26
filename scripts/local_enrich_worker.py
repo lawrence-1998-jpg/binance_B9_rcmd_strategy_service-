@@ -37,8 +37,12 @@ import urllib.request
 # ── 配置 ─────────────────────────────────────────────────────────────
 API_BASE = os.environ.get("B9_API_BASE", "http://34.138.247.158:8080")
 API_TOKEN = os.environ.get("B9_API_TOKEN", "***REMOVED***")
-BATCH_SIZE = int(os.environ.get("B9_BATCH", "40"))
-CONCURRENCY = int(os.environ.get("B9_CONCURRENCY", "4"))
+# 2026-07-26 提速（40→100、4→6、唤醒间隔 30→15 分钟，见 plist）：OpenAI credit
+# 只剩 $40，Lawrence 要求"尽量使用 claude 本机来跑"。Mac 在线的每一小时都要
+# 尽可能多清 staging 积压，让 12h 一次的 pipeline 到点时命中率最大化。
+# 单次唤醒 100 条 × 并发 6 约 4-5 分钟跑完，对日常使用无感。
+BATCH_SIZE = int(os.environ.get("B9_BATCH", "100"))
+CONCURRENCY = int(os.environ.get("B9_CONCURRENCY", "6"))
 CLAUDE_MODEL = os.environ.get("B9_CLAUDE_MODEL", "sonnet")
 CLAUDE_TIMEOUT_S = 240
 LOCK_FILE = "/tmp/b9-enrich-worker.lock"
