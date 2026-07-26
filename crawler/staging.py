@@ -35,6 +35,11 @@ def _url_hash(url: str) -> str:
     return hashlib.sha256((url or "").strip().rstrip("/").encode()).hexdigest()
 
 
+# 公开别名：enrich bridge（本地 Claude 预处理缓存）用同一把尺子算 key，
+# 保证 staging 表、缓存表、pipeline 三方对同一 url 算出同一个 hash。
+url_hash = _url_hash
+
+
 def stage_items(items: list[dict], conn) -> dict:
     """把抓到的条目写入存档表，按 url 去重（重复 url 只更新 fetched_at）。
 
@@ -79,13 +84,20 @@ def stage_items(items: list[dict], conn) -> dict:
     return {"new": new_count, "duplicate": duplicate_count}
 
 
-def consume_staged_items(conn, max_age_days: int = 7) -> list[dict]:
-    """取出全部未消费的存档条目，标记为已消费，返回可直接送入 pipeline 的
-    item 列表（字段与 crawler/main.py 里其它 fetch_* 函数一致）。
+def fetch_staged_items(conn, max_age_days: int = 7) -> list[dict]:
+    """只读取（不标记）未消费的存档条目，返回可直接送入 pipeline 的 item 列表。
 
-    `max_age_days` 兜底：正常情况下 fetch_cheap_sources 内部的新鲜度过滤已经
-    挡掉陈旧内容，这里是防万一存档表堆积（比如主 pipeline 挂了几天没跑）时，
-    不要把过老的内容也当"新鲜存货"送进 LLM。
+    2026-07-26 review 修复（HIGH）：旧版 consume_staged_items 在 SELECT 之后
+    立即标记 consumed_at 并 commit，而 pipeline 真正写库要到十几分钟之后的
+    Step 8——中间任何一步（实时抓 X 的网络异常、LLM 全面故障、进程被杀）失败，
+    整批条目就永久丢失：没有任何代码会把 consumed_at 置回 NULL，且 stage_items
+    的 ON DUPLICATE 只刷新 fetched_at，同 URL 再被高频 cron 抓到也不会复活。
+    现在拆成 fetch（这里）+ mark_staged_consumed（写库成功后由 pipeline 调用）：
+    中途崩溃 → 什么都没标记 → 下一轮原样重取。代价是"写库成功但标记前崩溃"
+    会重付一次 LLM 费用（写库有指纹幂等键，数据不会重）——用小概率的钱换
+    数据不丢，值得。
+
+    `max_age_days` 兜底：防存档表堆积时把过老内容当"新鲜存货"送进 LLM。
     """
     cursor = conn.cursor(dictionary=True)
     cursor.execute(
@@ -103,7 +115,22 @@ def consume_staged_items(conn, max_age_days: int = 7) -> list[dict]:
         logger.info("Staging: no unconsumed items")
         return []
 
-    ids = [r["id"] for r in rows]
+    items = [{
+        "_staging_id": r["id"],   # 供 mark_staged_consumed 回标；下游不消费此键
+        "source": r["source"], "title": r["title"], "url": r["url"],
+        "summary": r["summary"] or "", "published_at": r["published_at"] or "",
+        "lang": r["lang"] or "en", "authority": r["authority"] or 3,
+        "type": r["type"] or "rss",
+    } for r in rows]
+    logger.info(f"Staging: fetched {len(items)} unconsumed items (not yet marked)")
+    return items
+
+
+def mark_staged_consumed(conn, staged_items: list[dict]) -> None:
+    """写库成功后统一标记本轮取走的存档条目。只在 pipeline 的 Step 9 之后调用。"""
+    ids = [it["_staging_id"] for it in staged_items if it.get("_staging_id")]
+    if not ids:
+        return
     cursor = conn.cursor()
     placeholders = ",".join(["%s"] * len(ids))
     cursor.execute(
@@ -112,15 +139,7 @@ def consume_staged_items(conn, max_age_days: int = 7) -> list[dict]:
     )
     conn.commit()
     cursor.close()
-
-    items = [{
-        "source": r["source"], "title": r["title"], "url": r["url"],
-        "summary": r["summary"] or "", "published_at": r["published_at"] or "",
-        "lang": r["lang"] or "en", "authority": r["authority"] or 3,
-        "type": r["type"] or "rss",
-    } for r in rows]
-    logger.info(f"Staging: consumed {len(items)} items")
-    return items
+    logger.info(f"Staging: marked {len(ids)} items consumed (post-write)")
 
 
 def staging_stats(conn) -> dict:

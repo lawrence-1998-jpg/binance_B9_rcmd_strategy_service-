@@ -42,6 +42,8 @@
   --slate:#5A6472;
   --slate-wash:#EEF0F2;
 
+  --sidenav-w:238px;
+
   --r:10px; --r-lg:16px;
   --shadow-sm:0 1px 2px rgba(18,20,26,.05);
   --shadow:0 1px 3px rgba(18,20,26,.06), 0 12px 28px -18px rgba(18,20,26,.22);
@@ -56,6 +58,7 @@ body{
   margin:0;background:var(--paper);color:var(--ink);font-family:var(--sans);
   font-size:14.5px;line-height:1.62;-webkit-font-smoothing:antialiased;
   text-rendering:optimizeLegibility;overflow-x:hidden;
+  padding-left:var(--sidenav-w);   /* 给固定侧边导航栏让位，窄屏在媒体查询里归零 */
 }
 h1,h2,h3,h4{margin:0;font-weight:600;line-height:1.22;letter-spacing:-.018em}
 p{margin:0}
@@ -84,8 +87,12 @@ code,pre,.mono{font-family:var(--mono)}
 
 /* ── Header ─────────────────────────────────────────────────────────── */
 header{
-  position:sticky;top:0;z-index:60;background:rgba(251,250,247,.88);
-  backdrop-filter:saturate(180%) blur(16px);-webkit-backdrop-filter:saturate(180%) blur(16px);
+  /* 不用 backdrop-filter 毛玻璃：header 里的状态灯 `.dot.ok` 挂着无限循环的
+     pulse 动画，动画元素在 backdrop-filter 容器内会逼浏览器每帧重算一次
+     16px 高斯模糊，表现为背景持续闪烁（2026-07-26 在 /lab 上实测到的真实问题，
+     两个页面同一套结构，一并修掉）。何况 header 底色 #FBFAF7 与页面底色本来
+     就是同一个色，毛玻璃看不出效果，改成不透明纯色观感几乎不变。 */
+  position:sticky;top:0;z-index:60;background:var(--paper);
   border-bottom:1px solid var(--rule);
 }
 .hbar{display:flex;align-items:center;gap:18px;padding:14px 0 12px;flex-wrap:wrap}
@@ -105,30 +112,98 @@ header{
 .dot.bad{background:var(--red);box-shadow:0 0 0 3px rgba(180,36,60,.14)}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
 
-/* ── Nav (5 entries) ────────────────────────────────────────────────── */
-nav.tabs{display:flex;gap:0;overflow-x:auto;scrollbar-width:none;align-items:stretch}
-nav.tabs::-webkit-scrollbar{display:none}
-.tab{
-  position:relative;background:none;border:0;padding:11px 0 14px;margin-right:30px;
-  color:var(--ink-3);font-size:13.5px;font-weight:520;white-space:nowrap;
-  display:inline-flex;align-items:center;gap:8px;transition:color .16s;text-decoration:none;
+/* ── 侧边导航 ───────────────────────────────────────────────────────────
+   `nav.tabs` 及其 .tab 按钮的 id / role / aria-controls / aria-selected 全部
+   保持不变，只是从顶部横排改成左侧竖排 —— showTab()、键盘 1-5 快捷键、
+   hash 路由那套 JS 因此一行都不用改，仍然靠 `.tab[role=tab]` 选中。 */
+.sidenav{
+  position:fixed;left:0;top:0;bottom:0;width:var(--sidenav-w);z-index:80;
+  background:var(--surface);border-right:1px solid var(--rule);
+  display:flex;flex-direction:column;overflow-y:auto;overscroll-behavior:contain;
+  /* 图层提升：整屏高的 position:fixed 元素如果不单独成层，页面每滚动一帧
+     都要连带重绘它，在部分机器上表现为画面闪烁/撕裂。translateZ(0) 把它
+     交给合成器独立处理，滚动时不再触发重绘。contain 进一步告诉浏览器
+     侧栏内部的布局/绘制不会影响外部，缩小失效范围。 */
+  transform:translateZ(0);
+  contain:layout paint;
 }
-.tab .idx{font-family:var(--mono);font-size:10px;color:var(--ink-4);letter-spacing:.06em}
-.tab:hover{color:var(--ink);text-decoration:none}
-.tab[aria-selected="true"]{color:var(--ink);font-weight:600}
+.sn-brand{
+  display:flex;align-items:center;gap:11px;padding:17px 16px 15px;
+  border-bottom:1px solid var(--rule-2);flex:none;
+}
+.sn-brand .mark{width:28px;height:28px;flex:none}
+.sn-brand .n{font-size:13px;font-weight:650;letter-spacing:-.025em;line-height:1.32}
+.sn-brand .n b{color:var(--gold-deep);font-weight:650}
+.sn-brand .s{font-size:9px;color:var(--ink-4);letter-spacing:.08em;font-family:var(--mono);margin-top:3px}
+
+nav.tabs{display:flex;flex-direction:column;gap:1px;padding:8px 10px 16px;flex:1 1 auto}
+/* 分组标题：把导航分成「对外交付的数据服务」和「内部用的策略工作台」两层语义 */
+.sn-group{
+  padding:14px 14px 6px;font-family:var(--mono);font-size:9px;font-weight:700;
+  letter-spacing:.11em;color:var(--ink-4);
+}
+.tab{
+  position:relative;background:none;border:0;width:100%;text-align:left;
+  padding:9px 12px 9px 14px;border-radius:8px;
+  color:var(--ink-3);font-size:13.5px;font-weight:520;
+  display:flex;align-items:center;gap:9px;text-decoration:none;
+  transition:background .15s,color .15s;
+}
+.tab .idx{font-family:var(--mono);font-size:10px;color:var(--ink-4);letter-spacing:.06em;flex:none}
+.tab:hover{color:var(--ink);background:var(--surface-2);text-decoration:none}
+.tab[aria-selected="true"]{color:var(--ink);font-weight:600;background:var(--gold-wash)}
 .tab[aria-selected="true"] .idx{color:var(--gold-deep)}
 .tab::after{
-  content:"";position:absolute;left:0;right:0;bottom:-1px;height:2px;border-radius:2px;
-  background:var(--gold);transform:scaleX(0);transform-origin:left;
-  transition:transform .22s cubic-bezier(.4,0,.2,1);
+  content:"";position:absolute;left:0;top:7px;bottom:7px;width:3px;border-radius:0 3px 3px 0;
+  background:var(--gold);transform:scaleY(0);
+  transition:transform .2s cubic-bezier(.4,0,.2,1);
 }
-.tab[aria-selected="true"]::after{transform:scaleX(1)}
+.tab[aria-selected="true"]::after{transform:scaleY(1)}
 .tab.ext{color:var(--ink-4)}
-.tab.ext .arw{font-size:10px;opacity:.7}
+.tab.ext .arw{font-size:10px;opacity:.7;margin-left:auto}
 .tab.ext:hover{color:var(--ink-2)}
-.navsep{width:1px;background:var(--rule);margin:12px 30px 14px 0;flex:none}
+.navsep{height:1px;width:auto;background:var(--rule-2);margin:9px 12px;flex:none}
+
+/* 二级导航：评测工具的三个子工具。点了直接转发给已有的 #stab-N 按钮，
+   不复制一份子 tab 切换逻辑，避免两处状态各走各的。 */
+.sn-sub{display:none;flex-direction:column;gap:1px;margin:1px 0 3px}
+.sn-sub.show{display:flex}
+.sn-subitem{
+  position:relative;background:none;border:0;width:100%;text-align:left;
+  padding:6px 12px 6px 36px;border-radius:7px;
+  color:var(--ink-4);font-size:12.5px;transition:background .15s,color .15s;
+}
+.sn-subitem::before{
+  content:"";position:absolute;left:24px;top:50%;width:4px;height:4px;margin-top:-2px;
+  border-radius:50%;background:var(--rule);transition:background .15s;
+}
+.sn-subitem:hover{color:var(--ink-2);background:var(--surface-2)}
+.sn-subitem[aria-current="true"]{color:var(--ink-2);font-weight:560}
+.sn-subitem[aria-current="true"]::before{background:var(--gold)}
+
+/* 汉堡按钮 + 遮罩：只在窄屏出现 */
+.navtoggle{
+  display:none;background:var(--surface);border:1px solid var(--rule);border-radius:9px;
+  width:34px;height:34px;align-items:center;justify-content:center;
+  color:var(--ink-2);box-shadow:var(--shadow-sm);flex:none;
+}
+.navtoggle:hover{color:var(--ink);background:var(--surface-2)}
+.sn-backdrop{position:fixed;inset:0;z-index:79;background:rgba(18,20,26,.34);display:none}
+.sn-backdrop.show{display:block}
+.hbrand{display:none}
 
 main{padding:38px 0 90px}
+
+@media (max-width:1080px){
+  body{padding-left:0}
+  .sidenav{
+    transform:translateX(-100%);box-shadow:var(--shadow-lg);
+    transition:transform .24s cubic-bezier(.4,0,.2,1);
+  }
+  .sidenav.open{transform:none}
+  .navtoggle{display:inline-flex}
+  .hbrand{display:block}
+}
 [role=tabpanel][hidden]{display:none}
 [role=tabpanel]{animation:fade .32s cubic-bezier(.2,.8,.2,1)}
 @keyframes fade{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
@@ -319,6 +394,7 @@ select:focus,input:focus{outline:none;border-color:var(--indigo);box-shadow:0 0 
 .fchip button:hover{opacity:1}
 
 /* ── Table ──────────────────────────────────────────────────────────── */
+.empty-state{padding:40px 20px;text-align:center;color:var(--ink-3);font-size:13px}
 .tbl-wrap{
   background:var(--surface);border:1px solid var(--rule);border-radius:var(--r-lg);
   overflow-x:auto;box-shadow:var(--shadow-sm);
@@ -541,39 +617,269 @@ footer{border-top:1px solid var(--rule);padding:26px 0 40px;font-size:12px;color
   body{background:#fff}
   .filters,.switch{display:none}
 }
+
+/* ══════════════════════════════════════════════════════════════════════
+   Tab 04 · 评测工具（原 web/eval.html 独立页面，2026-07-26 合并为同页 tab）
+   ══════════════════════════════════════════════════════════════════════
+   下面全部规则都以 #panel-4 为前缀限定作用域，颜色/圆角/阴影变量也重命名为
+   --ev-* 前缀（而不是复用同名的 :root 变量）——eval.html 原来是独立页面，自己
+   的 :root 里定义了同名但取值不同的 --gold/--shadow 等变量，直接合并进同一个
+   <style> 会互相覆盖，污染 01/02/03 tab 的视觉。用 #panel-4 选择器前缀 + --ev-*
+   变量前缀双重隔离，两边样式互不干扰，也不需要改动 HTML 里已经写好的 class 名。
+   ══════════════════════════════════════════════════════════════════════ */
+#panel-4{
+  --ev-bg:#F7F8FA; --ev-bg-1:#FFFFFF; --ev-bg-2:#F1F3F5; --ev-bg-3:#EAECEF;
+  --ev-line:#E6E8EB; --ev-line-soft:#EFF1F3;
+  --ev-tx:#1E2329; --ev-tx-2:#5E6673; --ev-tx-3:#848E9C; --ev-tx-4:#B7BDC6;
+  --ev-gold:#B8860B; --ev-gold-bright:#F0B90B; --ev-gold-dim:rgba(240,185,11,.12); --ev-gold-line:rgba(184,134,11,.30);
+  --ev-green:#0A9A63; --ev-green-dim:rgba(10,154,99,.10);
+  --ev-red:#D6304A; --ev-red-dim:rgba(214,48,74,.09);
+  --ev-blue:#2F6FE0; --ev-blue-dim:rgba(47,111,224,.09);
+  --ev-amber:#B9660A; --ev-amber-dim:rgba(185,102,10,.10);
+  --ev-r:10px; --ev-r-lg:14px;
+  --ev-shadow:0 1px 2px rgba(16,24,40,.04), 0 4px 16px -6px rgba(16,24,40,.10);
+  --ev-shadow-lg:0 4px 8px rgba(16,24,40,.04), 0 16px 40px -12px rgba(16,24,40,.16);
+  background:var(--ev-bg);color:var(--ev-tx);font-size:14px;line-height:1.6;
+  border-radius:var(--r-lg);padding:20px 20px 4px;margin:0 0 40px;
+}
+#panel-4 h1,#panel-4 h2,#panel-4 h3,#panel-4 h4{margin:0;font-weight:650;letter-spacing:-.01em;line-height:1.3;color:var(--ev-tx)}
+#panel-4 a{color:var(--ev-gold);text-decoration:none}
+#panel-4 a:hover{color:var(--ev-gold-bright);text-decoration:underline}
+
+#panel-4 nav.subtabs{display:flex;gap:2px;overflow-x:auto;scrollbar-width:none;padding-top:2px;border-bottom:1px solid var(--ev-line);margin-bottom:20px}
+#panel-4 nav.subtabs::-webkit-scrollbar{display:none}
+#panel-4 .stab{
+  position:relative;background:none;border:0;padding:11px 4px 12px;margin-right:30px;
+  color:var(--ev-tx-3);font-size:13.5px;font-weight:600;white-space:nowrap;letter-spacing:.01em;
+  transition:color .16s;display:flex;align-items:center;gap:8px;
+}
+#panel-4 .stab:last-child{margin-right:0}
+#panel-4 .stab .idx{font-family:var(--mono);font-size:10.5px;color:var(--ev-tx-4)}
+#panel-4 .stab:hover{color:var(--ev-tx-2)}
+#panel-4 .stab[aria-selected="true"]{color:var(--ev-tx)}
+#panel-4 .stab[aria-selected="true"] .idx{color:var(--ev-gold)}
+#panel-4 .stab::after{
+  content:"";position:absolute;left:0;right:0;bottom:-1px;height:2px;border-radius:2px;
+  background:var(--ev-gold);transform:scaleX(0);transition:transform .2s cubic-bezier(.4,0,.2,1);
+}
+#panel-4 .stab[aria-selected="true"]::after{transform:scaleX(1)}
+
+#panel-4 .panel{display:none}
+#panel-4 .panel.active{display:block}
+#panel-4 .section{margin:0 0 28px}
+#panel-4 .section-head{margin-bottom:16px}
+#panel-4 .section-head h2{font-size:18px}
+#panel-4 .section-head .sub{font-size:12.5px;color:var(--ev-tx-3);margin-top:4px}
+#panel-4 .eyebrow{font-size:10.5px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--ev-gold);font-family:var(--mono)}
+
+#panel-4 .card{background:var(--ev-bg-1);border:1px solid var(--ev-line);border-radius:var(--ev-r-lg);padding:20px;box-shadow:var(--ev-shadow)}
+#panel-4 .card + .card{margin-top:16px}
+
+#panel-4 .dropzone{border:2px dashed var(--ev-line);border-radius:var(--ev-r-lg);padding:36px 20px;text-align:center;background:var(--ev-bg-2);cursor:pointer;transition:all .15s}
+#panel-4 .dropzone:hover,#panel-4 .dropzone.dragover{border-color:var(--ev-gold);background:var(--ev-gold-dim)}
+#panel-4 .dropzone .ic{font-size:30px;margin-bottom:10px;opacity:.7}
+#panel-4 .dropzone .t1{font-size:14px;font-weight:600;color:var(--ev-tx)}
+#panel-4 .dropzone .t2{font-size:12px;color:var(--ev-tx-3);margin-top:5px}
+#panel-4 .dropzone input[type=file]{display:none}
+
+#panel-4 .thumbgrid{display:flex;flex-wrap:wrap;gap:10px;margin-top:16px}
+#panel-4 .thumb{position:relative;width:88px;height:88px;border-radius:8px;overflow:hidden;border:1px solid var(--ev-line);background:var(--ev-bg-2);flex:none}
+#panel-4 .thumb img{width:100%;height:100%;object-fit:cover;display:block}
+#panel-4 .thumb .rm{position:absolute;top:3px;right:3px;width:20px;height:20px;border-radius:50%;background:rgba(30,35,41,.65);color:#fff;border:0;font-size:12px;line-height:1;display:flex;align-items:center;justify-content:center}
+#panel-4 .thumb .idxlabel{position:absolute;bottom:0;left:0;right:0;background:rgba(30,35,41,.65);color:#fff;font-size:9.5px;font-family:var(--mono);text-align:center;padding:2px 0}
+
+#panel-4 .upload-meta{display:flex;align-items:center;justify-content:space-between;margin-top:12px;flex-wrap:wrap;gap:10px}
+#panel-4 .count-pill{font-family:var(--mono);font-size:11.5px;color:var(--ev-tx-2);padding:4px 10px;border-radius:100px;background:var(--ev-bg-2);border:1px solid var(--ev-line)}
+#panel-4 .count-pill.warn{color:var(--ev-red);border-color:rgba(214,48,74,.3);background:var(--ev-red-dim)}
+
+#panel-4 .btn{display:inline-flex;align-items:center;gap:7px;padding:10px 20px;border-radius:9px;border:1px solid var(--ev-line);background:var(--ev-bg-1);color:var(--ev-tx);font-size:13px;font-weight:600;transition:all .15s}
+#panel-4 .btn:hover:not(:disabled){border-color:var(--ev-gold-line);background:var(--ev-gold-dim)}
+#panel-4 .btn:disabled{opacity:.45;cursor:not-allowed}
+#panel-4 .btn.primary{background:var(--ev-gold-bright);border-color:var(--ev-gold-bright);color:#1E2329}
+#panel-4 .btn.primary:hover:not(:disabled){background:#FFC91C;border-color:#FFC91C}
+#panel-4 .btn.small{padding:6px 12px;font-size:12px}
+
+#panel-4 .progress-wrap{margin-top:16px;display:none}
+#panel-4 .progress-wrap.active{display:block}
+#panel-4 .progress-bar{height:6px;border-radius:4px;background:var(--ev-bg-3);overflow:hidden}
+#panel-4 .progress-bar .fill{height:100%;background:linear-gradient(90deg,var(--ev-gold-bright),var(--ev-gold));width:0%;transition:width .3s ease;border-radius:4px}
+#panel-4 .progress-tx{font-size:12px;color:var(--ev-tx-3);margin-top:8px;font-family:var(--mono)}
+
+#panel-4 .kpi-row{display:flex;gap:12px;flex-wrap:wrap;margin:20px 0}
+#panel-4 .kpi{flex:1;min-width:120px;background:var(--ev-bg-2);border:1px solid var(--ev-line);border-radius:var(--ev-r);padding:14px 16px}
+#panel-4 .kpi .l{font-size:10.5px;color:var(--ev-tx-3);text-transform:uppercase;letter-spacing:.06em;font-family:var(--mono)}
+#panel-4 .kpi .v{font-size:22px;font-weight:650;font-family:var(--mono);margin-top:4px;color:var(--ev-tx)}
+#panel-4 .kpi .v.gold{color:var(--ev-gold)}
+
+#panel-4 .table-actions{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:10px}
+#panel-4 .table-scroll{overflow-x:auto;border:1px solid var(--ev-line);border-radius:var(--ev-r)}
+#panel-4 table.restbl{width:100%;border-collapse:collapse;font-size:12.5px;min-width:720px}
+#panel-4 table.restbl th{text-align:left;padding:9px 12px;background:var(--ev-bg-2);color:var(--ev-tx-3);font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;font-family:var(--mono);border-bottom:1px solid var(--ev-line);white-space:nowrap;position:sticky;top:0}
+#panel-4 table.restbl td{padding:9px 12px;border-bottom:1px solid var(--ev-line-soft);vertical-align:top}
+#panel-4 table.restbl tr:last-child td{border-bottom:0}
+#panel-4 table.restbl td.title-cell{max-width:420px}
+#panel-4 .grp-badge{display:inline-flex;align-items:center;justify-content:center;min-width:22px;height:20px;padding:0 6px;border-radius:6px;font-family:var(--mono);font-size:10.5px;font-weight:700}
+#panel-4 .grp-badge.single{background:var(--ev-bg-3);color:var(--ev-tx-3)}
+#panel-4 .sim-val{font-family:var(--mono);font-size:11.5px;color:var(--ev-tx-2)}
+#panel-4 .src-tag{font-size:11px;color:var(--ev-tx-3)}
+
+#panel-4 .legend{display:flex;gap:8px;flex-wrap:wrap;font-size:11px;color:var(--ev-tx-3);align-items:center}
+#panel-4 .legend .sw{width:11px;height:11px;border-radius:3px;display:inline-block;margin-right:4px;vertical-align:-1.5px}
+
+#panel-4 .empty-state{padding:40px 20px;text-align:center;color:var(--ev-tx-3)}
+#panel-4 .empty-state .ic{font-size:26px;margin-bottom:10px;opacity:.5}
+#panel-4 .err-box{background:var(--ev-red-dim);border:1px solid rgba(214,48,74,.25);color:var(--ev-red);border-radius:var(--ev-r);padding:12px 14px;font-size:12.5px;margin-top:14px}
+
+#panel-4 .save-bar{display:flex;align-items:center;justify-content:flex-end;gap:8px;margin-top:16px;flex-wrap:wrap}
+#panel-4 .save-bar input[type=text]{border:1px solid var(--ev-line);border-radius:8px;padding:8px 11px;font-size:12.5px;color:var(--ev-tx);background:var(--ev-bg-1);min-width:200px}
+#panel-4 .save-bar input[type=text]:focus{outline:none;border-color:var(--ev-gold);box-shadow:0 0 0 3px var(--ev-gold-dim)}
+#panel-4 .save-bar .btn.saved{background:var(--ev-green);border-color:var(--ev-green);color:#fff}
+#panel-4 .ref-metrics{display:flex;gap:10px;flex-wrap:wrap;margin:10px 0 4px}
+#panel-4 .ref-badge{display:inline-flex;flex-direction:column;gap:2px;padding:7px 12px;border-radius:9px;background:var(--ev-bg-2);border:1px solid var(--ev-line);font-size:11px;color:var(--ev-tx-3)}
+#panel-4 .ref-badge b{font-family:var(--mono);font-size:14px;color:var(--ev-tx);font-weight:700}
+#panel-4 .ref-badge .approx{color:var(--ev-amber)}
+
+#panel-4 .mode-toggle{display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap}
+#panel-4 .mode-btn{padding:7px 16px;border-radius:8px;border:1px solid var(--ev-line);background:var(--ev-bg-1);font-size:12.5px;font-weight:600;color:var(--ev-tx-3)}
+#panel-4 .mode-btn[aria-selected="true"]{background:var(--ev-tx);color:#fff;border-color:var(--ev-tx)}
+#panel-4 textarea.news-input{width:100%;min-height:120px;border:1px solid var(--ev-line);border-radius:var(--ev-r);padding:14px;font-family:var(--sans);font-size:13.5px;color:var(--ev-tx);background:var(--ev-bg-1);resize:vertical}
+#panel-4 textarea.news-input:focus{outline:none;border-color:var(--ev-gold);box-shadow:0 0 0 3px var(--ev-gold-dim)}
+#panel-4 .sample-row{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+#panel-4 .eval-actions{display:flex;align-items:center;gap:12px;margin-top:16px;flex-wrap:wrap}
+
+#panel-4 .persona-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;margin-top:20px}
+#panel-4 .persona-card{background:var(--ev-bg-1);border:1px solid var(--ev-line);border-radius:var(--ev-r-lg);padding:18px;box-shadow:var(--ev-shadow);display:flex;flex-direction:column;gap:12px}
+#panel-4 .pc-head{display:flex;align-items:center;gap:10px}
+#panel-4 .pc-emoji{font-size:26px;line-height:1;flex:none}
+#panel-4 .pc-name{font-size:14.5px;font-weight:700;color:var(--ev-tx)}
+#panel-4 .pc-tagline{font-size:11px;color:var(--ev-tx-3);margin-top:1px}
+#panel-4 .pc-score-row{display:flex;align-items:center;gap:10px}
+#panel-4 .score-track{flex:1;height:8px;border-radius:4px;background:var(--ev-bg-3);overflow:hidden}
+#panel-4 .score-fill{height:100%;border-radius:4px;transition:width .4s ease}
+#panel-4 .score-num{font-family:var(--mono);font-size:15px;font-weight:700;white-space:nowrap}
+#panel-4 .pc-badge{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;padding:4px 9px;border-radius:100px;width:fit-content}
+#panel-4 .pc-badge.yes{background:var(--ev-green-dim);color:var(--ev-green)}
+#panel-4 .pc-badge.no{background:var(--ev-red-dim);color:var(--ev-red)}
+#panel-4 .pc-block .l{font-size:10px;color:var(--ev-tx-3);text-transform:uppercase;letter-spacing:.06em;font-family:var(--mono);margin-bottom:4px}
+#panel-4 .pc-block .t{font-size:12.5px;color:var(--ev-tx-2);line-height:1.55}
+#panel-4 .pc-block{border-top:1px solid var(--ev-line-soft);padding-top:10px}
+#panel-4 .news-preview{background:var(--ev-bg-2);border:1px solid var(--ev-line);border-radius:var(--ev-r);padding:14px 16px;font-size:12.5px;color:var(--ev-tx-2);line-height:1.6;margin-bottom:18px;white-space:pre-wrap;max-height:160px;overflow-y:auto}
+
+#panel-4 .spinner{width:14px;height:14px;border-radius:50%;border:2px solid rgba(30,35,41,.15);border-top-color:var(--ev-tx);animation:ev-spin .7s linear infinite;flex:none}
+@keyframes ev-spin{to{transform:rotate(360deg)}}
+
+#panel-4 .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--ev-tx);color:#fff;padding:10px 18px;border-radius:9px;font-size:12.5px;opacity:0;pointer-events:none;transition:all .25s ease;z-index:200;box-shadow:var(--ev-shadow-lg)}
+#panel-4 .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+/* ── AB 对比（子 Tab 03）专用 ─────────────────────────────────────────── */
+#panel-4 .ab-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+#panel-4 .ab-group-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+#panel-4 .ab-group-tag{font-family:var(--mono);font-size:11px;font-weight:700;padding:3px 9px;border-radius:6px;background:var(--ev-gold-dim);color:var(--ev-gold)}
+#panel-4 .ab-group-tag.b{background:var(--ev-blue-dim);color:var(--ev-blue)}
+#panel-4 .ab-mode-panel{margin-top:12px}
+#panel-4 .ab-fill-row{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:10px}
+#panel-4 .ab-fill-field{display:flex;flex-direction:column;gap:5px;min-width:110px}
+#panel-4 .ab-fill-field label{font-size:10.5px;color:var(--ev-tx-3);font-family:var(--mono);letter-spacing:.05em;text-transform:uppercase}
+#panel-4 .ab-fill-field select,#panel-4 .ab-fill-field input{border:1px solid var(--ev-line);border-radius:8px;padding:7px 10px;font-size:12.5px;font-family:inherit;background:var(--ev-bg-1);color:var(--ev-tx);min-width:0}
+#panel-4 .ab-status-line{font-size:12px;color:var(--ev-tx-3);margin-top:8px;line-height:1.6}
+#panel-4 .gsb-bar{display:flex;height:24px;border-radius:6px;overflow:hidden;border:1px solid var(--ev-line);margin-top:10px}
+#panel-4 .gsb-bar span{display:flex;align-items:center;justify-content:center;font-size:10.5px;font-weight:700;color:#fff;font-family:var(--mono);white-space:nowrap;overflow:hidden}
+#panel-4 .gsb-bar .g{background:var(--ev-green)}
+#panel-4 .gsb-bar .s{background:var(--ev-tx-4)}
+#panel-4 .gsb-bar .b{background:var(--ev-red)}
+#panel-4 .verdict-pill{display:inline-flex;align-items:center;font-size:11px;font-weight:700;padding:2px 9px;border-radius:100px;white-space:nowrap}
+#panel-4 .verdict-pill.good{background:var(--ev-green-dim);color:var(--ev-green)}
+#panel-4 .verdict-pill.same{background:var(--ev-bg-3);color:var(--ev-tx-2)}
+#panel-4 .verdict-pill.bad{background:var(--ev-red-dim);color:var(--ev-red)}
+#panel-4 .ab-conclusion{background:var(--ev-gold-dim);border:1px solid var(--ev-gold-line);border-radius:var(--ev-r);padding:14px 16px;font-size:13px;line-height:1.75;color:var(--ev-tx-2);margin-top:14px}
+#panel-4 .ab-conclusion b{color:var(--ev-tx)}
+@media(max-width:900px){#panel-4 .ab-grid{grid-template-columns:1fr}}
+@media(max-width:640px){#panel-4 .kpi-row{flex-direction:column}}
+
+/* ── Tell me more · 反馈悬浮模块（全站，独立于任何 tab 的样式作用域）───── */
+.fab{
+  position:fixed;right:22px;bottom:22px;z-index:120;display:inline-flex;align-items:center;gap:8px;
+  padding:12px 18px;border-radius:100px;background:var(--ink);color:#fff;border:0;
+  font-size:13px;font-weight:600;box-shadow:var(--shadow-lg);transition:transform .15s,background .15s;
+}
+.fab:hover{background:#000;transform:translateY(-1px)}
+.fab-ic{font-size:15px}
+.feedback-panel{
+  position:fixed;right:22px;bottom:78px;z-index:121;width:300px;max-width:calc(100vw - 44px);
+  background:var(--surface);border:1px solid var(--rule);border-radius:var(--r-lg);box-shadow:var(--shadow-lg);
+  padding:18px;display:none;flex-direction:column;
+}
+.feedback-panel.open{display:flex}
+.fp-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:4px}
+.fp-head strong{font-size:14.5px}
+.fp-close{background:none;border:0;font-size:19px;line-height:1;color:var(--ink-3);padding:2px 4px}
+.fp-close:hover{color:var(--ink)}
+.fp-sub{font-size:12px;color:var(--ink-3);line-height:1.6;margin-bottom:12px}
+.fp-label{font-size:11px;font-weight:600;color:var(--ink-2);margin-bottom:5px;display:block}
+.feedback-panel select{width:100%;margin-bottom:12px}
+.feedback-panel textarea{
+  width:100%;min-height:88px;border:1px solid var(--rule);border-radius:9px;padding:10px 12px;
+  font-family:var(--sans);font-size:13px;color:var(--ink);resize:vertical;background:var(--surface);
+}
+.feedback-panel textarea:focus{outline:none;border-color:var(--indigo);box-shadow:0 0 0 3px rgba(58,74,143,.10)}
+@media(max-width:480px){.fab{right:16px;bottom:16px}.feedback-panel{right:16px;bottom:74px}}
 </style>
 </head>
 <body>
 
+<aside class="sidenav" id="sidenav">
+  <div class="sn-brand">
+    <svg class="mark" viewBox="0 0 64 64" aria-hidden="true">
+      <g fill="#F0B90B">
+        <rect x="26.4" y="4"    width="11.2" height="11.2" rx="1.6" transform="rotate(45 32 9.6)"/>
+        <rect x="4"    y="26.4" width="11.2" height="11.2" rx="1.6" transform="rotate(45 9.6 32)"/>
+        <rect x="48.8" y="26.4" width="11.2" height="11.2" rx="1.6" transform="rotate(45 54.4 32)"/>
+        <rect x="26.4" y="48.8" width="11.2" height="11.2" rx="1.6" transform="rotate(45 32 54.4)"/>
+        <rect x="25.6" y="25.6" width="12.8" height="12.8" rx="1.8" transform="rotate(45 32 32)"/>
+      </g>
+    </svg>
+    <div>
+      <div class="n">Lawrence <b>Crypto News</b></div>
+      <div class="s">B9 · NEWS DATA SERVICE</div>
+    </div>
+  </div>
+
+  <nav class="tabs" role="tablist" aria-label="主导航">
+    <div class="sn-group">新闻策略数据服务</div>
+    <button class="tab" role="tab" id="tab-1" aria-controls="panel-1" aria-selected="true"><span class="idx">01</span>生成流程</button>
+    <button class="tab" role="tab" id="tab-2" aria-controls="panel-2" aria-selected="false"><span class="idx">02</span>数据展示</button>
+    <button class="tab" role="tab" id="tab-3" aria-controls="panel-3" aria-selected="false"><span class="idx">03</span>API 接入</button>
+
+    <div class="sn-group">策略产品工作态</div>
+    <button class="tab" role="tab" id="tab-4" aria-controls="panel-4" aria-selected="false"><span class="idx">04</span>评测工具</button>
+    <div class="sn-sub" id="snSub4">
+      <button class="sn-subitem" data-sub="1" aria-current="true">Duplicate Tester</button>
+      <button class="sn-subitem" data-sub="2" aria-current="false">LLM 评测室</button>
+      <button class="sn-subitem" data-sub="3" aria-current="false">AB 对比</button>
+    </div>
+    <a class="tab ext" href="/lab"><span class="idx">05</span>策略实验室 <span class="arw">↗</span></a>
+
+    <span class="navsep" aria-hidden="true"></span>
+    <button class="tab" role="tab" id="tab-5" aria-controls="panel-5" aria-selected="false"><span class="idx">06</span>历史数据</button>
+  </nav>
+</aside>
+<div class="sn-backdrop" id="snBackdrop" hidden></div>
+
 <header>
   <div class="wrap">
     <div class="hbar">
-      <div class="brand">
-        <svg class="mark" viewBox="0 0 64 64" aria-hidden="true">
-          <g fill="#F0B90B">
-            <rect x="26.4" y="4"    width="11.2" height="11.2" rx="1.6" transform="rotate(45 32 9.6)"/>
-            <rect x="4"    y="26.4" width="11.2" height="11.2" rx="1.6" transform="rotate(45 9.6 32)"/>
-            <rect x="48.8" y="26.4" width="11.2" height="11.2" rx="1.6" transform="rotate(45 54.4 32)"/>
-            <rect x="26.4" y="48.8" width="11.2" height="11.2" rx="1.6" transform="rotate(45 32 54.4)"/>
-            <rect x="25.6" y="25.6" width="12.8" height="12.8" rx="1.8" transform="rotate(45 32 32)"/>
-          </g>
+      <button class="navtoggle" id="navToggle" aria-label="打开导航" aria-expanded="false" aria-controls="sidenav">
+        <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor"
+             stroke-width="1.6" stroke-linecap="round" aria-hidden="true">
+          <path d="M1.5 3.5h12M1.5 7.5h12M1.5 11.5h12"/>
         </svg>
-        <div>
-          <div class="n">Lawrence <b>Crypto News</b> Crawler</div>
-          <div class="s">B9 RECOMMENDATION · NEWS DATA SERVICE</div>
-        </div>
+      </button>
+      <div class="brand hbrand">
+        <div class="n">Lawrence <b>Crypto News</b> Crawler</div>
       </div>
       <div class="hspacer"></div>
       <div class="pill"><span class="dot" id="healthDot"></span><span id="healthTx">连接中…</span></div>
     </div>
-    <nav class="tabs" role="tablist" aria-label="主导航">
-      <button class="tab" role="tab" id="tab-1" aria-controls="panel-1" aria-selected="true"><span class="idx">01</span>生成流程</button>
-      <button class="tab" role="tab" id="tab-2" aria-controls="panel-2" aria-selected="false"><span class="idx">02</span>数据展示</button>
-      <button class="tab" role="tab" id="tab-3" aria-controls="panel-3" aria-selected="false"><span class="idx">03</span>API 接入</button>
-      <span class="navsep" aria-hidden="true"></span>
-      <a class="tab ext" href="/eval"><span class="idx">04</span>评测工具 <span class="arw">↗</span></a>
-      <a class="tab ext" href="/lab"><span class="idx">05</span>策略实验室 <span class="arw">↗</span></a>
-    </nav>
   </div>
 </header>
 
@@ -608,6 +914,13 @@ footer{border-top:1px solid var(--rule);padding:26px 0 40px;font-size:12px;color
         左侧为数据源及其接入方式（区分「走第三方 API」与「走 RSS / HTML / 搜索等非 API 逻辑」）；
         中段为抓取与理解；右侧分两条输出分支 —— 分支 1 不打分直出结构化事件，分支 2 追加五因子排序分。
         底部虚线标出两个 AI 模型在各阶段的分工与协同。
+      </p>
+      <p class="sub" style="margin-top:8px">
+        图中灰色小字是各环节的<b>真实耗时</b>（取自 2026-07-26 00:19 那一轮的
+        <code>stage_timings</code>，非估算）。<b>单轮总计约 19 分钟</b>，其中
+        <b style="color:var(--red)">LLM 结构化一项就占 78%</b>（899 秒）—— 抓取约 4 分钟，
+        其余所有环节（粗去重、语义聚类、跨轮归并、真实性校验、市值标签、打分入库）加起来不到 6 秒。
+        要压缩单轮时长，唯一有意义的着力点是 LLM 结构化那一步。
       </p>
     </div>
 
@@ -645,6 +958,10 @@ footer{border-top:1px solid var(--rule);padding:26px 0 40px;font-size:12px;color
             .brd{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;font-size:9.5px;fill:#6B7280}
             .sub{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;font-size:10.5px;fill:#3B414D;font-weight:600}
             .subd{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:9px;fill:#6B7280}
+            /* 耗时标注。数字取自 2026-07-26 00:19 那一轮的真实 stage_timings，
+               不是估算；`.tmH` 是耗时大头（LLM 结构化）用的高亮色。 */
+            .tm{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:8.5px;fill:#9AA1AE;font-weight:700;letter-spacing:.04em}
+            .tmH{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:8.5px;fill:#B4243C;font-weight:700;letter-spacing:.04em}
           </style>
 
           <!-- ─── 列标题 ─── -->
@@ -741,13 +1058,17 @@ footer{border-top:1px solid var(--rule);padding:26px 0 40px;font-size:12px;color
           <text class="nd" x="452" y="273" text-anchor="middle">每天 2 轮 · UTC 0 / 12</text>
           <rect x="404" y="282" width="96" height="17" rx="5" fill="#FDF6E1" stroke="#EBD9A0"/>
           <text class="nb" x="452" y="294" text-anchor="middle">~1200 条 / 轮</text>
+          <text class="tm" x="452" y="313" text-anchor="middle">≈ 4 分 05 秒</text>
 
-          <!-- 爬虫 → 聚类，中间挂粗去重 -->
+          <!-- 爬虫 → 聚类，中间挂粗去重。
+               粗去重挂在爬虫正上方而不是两个框中间：中间只有 50px 空隙（爬虫右边
+               522、聚类左边 572），放不下这个标签，早先版本压在了聚类框上面。 -->
           <path d="M522 258 L570 258" fill="none" stroke="#9AA1AE" stroke-width="1.6" marker-end="url(#ah)"/>
-          <rect x="516" y="176" width="112" height="30" rx="8" fill="#F6F5F1" stroke="#E4E3DD" stroke-dasharray="3 2.5"/>
-          <text class="subd" x="572" y="189" text-anchor="middle" fill="#3B414D">粗去重</text>
-          <text class="subd" x="572" y="200" text-anchor="middle">标题归一 · TF-IDF</text>
-          <path d="M572 206 L572 250" fill="none" stroke="#C6C5BF" stroke-width="1.2" stroke-dasharray="3 3"/>
+          <rect x="396" y="166" width="112" height="30" rx="8" fill="#F6F5F1" stroke="#E4E3DD" stroke-dasharray="3 2.5"/>
+          <text class="subd" x="452" y="179" text-anchor="middle" fill="#3B414D">粗去重</text>
+          <text class="subd" x="452" y="190" text-anchor="middle">标题归一 · TF-IDF</text>
+          <text class="tm" x="516" y="181">&lt;1 秒</text>
+          <path d="M452 196 L452 208" fill="none" stroke="#C6C5BF" stroke-width="1.2" stroke-dasharray="3 3"/>
 
           <!-- ─── 聚类 & 理解 ─── -->
           <rect x="572" y="120" width="290" height="280" rx="15" fill="#FFFFFF" stroke="#3A4A8F" stroke-width="1.4" opacity=".98"/>
@@ -759,23 +1080,27 @@ footer{border-top:1px solid var(--rule);padding:26px 0 40px;font-size:12px;color
           <rect x="590" y="180" width="254" height="46" rx="9" fill="#FAF9F5" stroke="#E4E3DD"/>
           <text class="sub" x="604" y="199">① LLM 结构化</text>
           <text class="subd" x="604" y="214">双语标题 / 长短摘要 / 板块 / 币种 / 三元组</text>
+          <text class="tmH" x="818" y="193" text-anchor="end">≈ 15 分 · 占全程 78%</text>
           <circle cx="828" cy="203" r="4.5" fill="#8B93E0"/>
 
           <!-- 子步骤 2 -->
           <rect x="590" y="232" width="254" height="46" rx="9" fill="#FAF9F5" stroke="#E4E3DD"/>
           <text class="sub" x="604" y="251">② 语义聚合去重</text>
           <text class="subd" x="604" y="266">256 维向量 · cosine ≥ 0.82 并簇</text>
+          <text class="tm" x="818" y="245" text-anchor="end">≈ 2 秒</text>
           <circle cx="828" cy="255" r="4.5" fill="#3A4A8F"/>
 
           <!-- 子步骤 3 -->
           <rect x="590" y="284" width="254" height="46" rx="9" fill="#FAF9F5" stroke="#E4E3DD"/>
           <text class="sub" x="604" y="303">③ 跨轮归并</text>
           <text class="subd" x="604" y="318">写库前比对历史指纹，命中则合并信源</text>
+          <text class="tm" x="830" y="297" text-anchor="end">&lt;1 秒</text>
 
           <!-- 子步骤 4 -->
           <rect x="590" y="336" width="254" height="46" rx="9" fill="#FAF9F5" stroke="#E4E3DD"/>
           <text class="sub" x="604" y="355">④ 真实性校验</text>
           <text class="subd" x="604" y="370">独立信源交叉 → VERIFIED / PROBABLE / …</text>
+          <text class="tm" x="818" y="349" text-anchor="end">&lt;1 秒 · 零 LLM 成本</text>
           <circle cx="828" cy="359" r="4.5" fill="#8B93E0"/>
 
           <!-- ─── 分叉 ─── -->
@@ -797,6 +1122,7 @@ footer{border-top:1px solid var(--rule);padding:26px 0 40px;font-size:12px;color
           <text class="nt" x="1036" y="358" text-anchor="middle">排序分</text>
           <text class="nd" x="1036" y="375" text-anchor="middle">五因子加权 → 0–1 综合分</text>
           <text class="nd" x="1036" y="390" text-anchor="middle">映射 S / A / B / C / D 五级</text>
+          <text class="tm" x="1036" y="406" text-anchor="middle">打分 + 入库 ≈ 2 秒</text>
           <circle cx="1108" cy="352" r="4.5" fill="#8B93E0"/>
           <path d="M1120 372 C1146 372, 1146 300, 1172 300 L1172 262"
                 fill="none" stroke="#3A4A8F" stroke-width="2" marker-end="url(#ah-i)"/>
@@ -1215,6 +1541,271 @@ footer{border-top:1px solid var(--rule);padding:26px 0 40px;font-size:12px;color
   </section>
 </div>
 
+<!-- ══════════════════ TAB 4 · 评测工具（原独立页面 web/eval.html，2026-07-26 合并） ══════════════════ -->
+<div role="tabpanel" id="panel-4" aria-labelledby="tab-4" hidden>
+
+  <div class="sec-head">
+    <span class="eyebrow">EVALUATION TOOLKIT</span>
+    <h2>评测工具</h2>
+    <p class="sub">Duplicate Tester 去重检测、LLM 评测室多 persona 评测、AB 对比排序质量分析 —— 原 <code>/eval</code> 独立页面，现合并为同页 tab。</p>
+  </div>
+
+  <nav class="subtabs" role="tablist" aria-label="评测工具子导航">
+    <button class="stab" role="tab" id="stab-1" aria-controls="spanel-1" aria-selected="true"><span class="idx">01</span>Duplicate Tester</button>
+    <button class="stab" role="tab" id="stab-2" aria-controls="spanel-2" aria-selected="false"><span class="idx">02</span>LLM 评测室</button>
+    <button class="stab" role="tab" id="stab-3" aria-controls="spanel-3" aria-selected="false"><span class="idx">03</span>AB 对比</button>
+  </nav>
+
+  <!-- ══════════════════════════ 子 Tab 1: Duplicate Tester ══════════════════════════ -->
+  <section class="panel active" id="spanel-1" role="tabpanel" aria-labelledby="stab-1">
+    <div class="section">
+      <div class="section-head">
+        <span class="eyebrow">DUPLICATE TESTER</span>
+        <h2>新闻去重检测</h2>
+        <div class="sub">上传新闻列表截图（App 信息流截图，一张图可包含多条新闻），自动提取标题并检测跨图 / 图内重复新闻。单次最多 20 张图片。</div>
+      </div>
+
+      <div class="card">
+        <div class="dropzone" id="dropzone">
+          <div class="ic">🖼️</div>
+          <div class="t1">点击选择图片，或将截图拖拽到此处</div>
+          <div class="t2">支持 PNG / JPG / WebP / GIF，单张最大 8MB，单次最多 20 张</div>
+          <input type="file" id="fileInput" accept="image/png,image/jpeg,image/jpg,image/webp,image/gif" multiple>
+        </div>
+        <div class="upload-meta">
+          <span class="count-pill" id="countPill">未选择图片</span>
+          <button class="btn small" id="clearBtn" style="display:none">清空</button>
+        </div>
+        <div class="thumbgrid" id="thumbGrid"></div>
+
+        <div class="eval-actions">
+          <button class="btn primary" id="runDedupBtn" disabled>开始检测</button>
+          <span id="dedupSpinnerWrap" style="display:none" class="pc-score-row"><span class="spinner"></span><span class="progress-tx" id="dedupSpinnerTx">处理中…</span></span>
+        </div>
+        <div class="progress-wrap" id="dedupProgressWrap">
+          <div class="progress-bar"><div class="fill" id="dedupProgressFill"></div></div>
+          <div class="progress-tx" id="dedupProgressTx"></div>
+        </div>
+        <div id="dedupError"></div>
+      </div>
+
+      <div id="dedupResults"></div>
+    </div>
+  </section>
+
+  <!-- ══════════════════════════ 子 Tab 2: LLM 评测室 ══════════════════════════ -->
+  <section class="panel" id="spanel-2" role="tabpanel" aria-labelledby="stab-2">
+    <div class="section">
+      <div class="section-head">
+        <span class="eyebrow">LLM 评测室</span>
+        <h2>多 Persona 新闻评测</h2>
+        <div class="sub">粘贴新闻文本或上传新闻截图，5 个不同画像的币圈用户会分别给出打分、定性评估、是否看得懂、优化建议 —— 用于判断一条新闻对不同受众的实际体验。</div>
+      </div>
+
+      <div class="card">
+        <div class="mode-toggle" role="tablist" aria-label="输入方式">
+          <button class="mode-btn" id="modeText" aria-selected="true">粘贴文本</button>
+          <button class="mode-btn" id="modeImage" aria-selected="false">上传截图</button>
+          <button class="mode-btn" id="modeEventId" aria-selected="false">库内事件（event_id）</button>
+        </div>
+
+        <div id="textInputWrap">
+          <textarea class="news-input" id="newsTextInput" placeholder="粘贴新闻标题 + 正文/摘要……"></textarea>
+          <div class="sample-row">
+            <button class="btn small" id="sampleA">填入示例：机构 ETF 资金流（高信息密度）</button>
+            <button class="btn small" id="sampleB">填入示例：匿名喊单帖（低质量营销）</button>
+          </div>
+        </div>
+        <div id="imageInputWrap" style="display:none">
+          <div class="dropzone" id="dropzoneEval">
+            <div class="ic">📰</div>
+            <div class="t1">点击选择新闻截图，或拖拽到此处</div>
+            <div class="t2">会先用视觉模型提取标题+正文文本，再交给 5 个 persona 评测</div>
+            <input type="file" id="fileInputEval" accept="image/png,image/jpeg,image/jpg,image/webp,image/gif">
+          </div>
+          <div id="evalThumbWrap" style="margin-top:12px"></div>
+        </div>
+        <div id="eventIdInputWrap" style="display:none">
+          <div class="frow" style="align-items:center">
+            <div class="field" style="flex:1 1 260px">
+              <label for="eventIdInput">news_events.id</label>
+              <input type="text" id="eventIdInput" placeholder="粘贴事件 id，如 a1b2c3d4e5f6...">
+            </div>
+            <div class="field"><label style="opacity:0">随机</label><button class="btn small" id="randomEventIdBtn" type="button">随机抽一条最近事件</button></div>
+          </div>
+          <p class="hint" style="font-size:11.5px;color:var(--ev-tx-3);margin-top:6px">
+            只有这种输入方式能算出下方的 Momentum / Novelty 参考指标 —— 它们依赖 news_events 库里已经落库的互动量、事件主体、embedding，纯文本/截图没有这些字段。
+          </p>
+        </div>
+
+        <div class="eval-actions">
+          <button class="btn primary" id="runEvalBtn">开始评测</button>
+          <span id="evalSpinnerWrap" style="display:none" class="pc-score-row"><span class="spinner"></span><span class="progress-tx">5 个 persona 并发评测中…</span></span>
+        </div>
+        <div id="evalError"></div>
+      </div>
+
+      <div id="evalResults"></div>
+    </div>
+  </section>
+
+  <!-- ══════════════════════════ 子 Tab 3: AB 对比（新增） ══════════════════════════ -->
+  <section class="panel" id="spanel-3" role="tabpanel" aria-labelledby="stab-3">
+    <div class="section">
+      <div class="section-head">
+        <span class="eyebrow">AB 对比</span>
+        <h2>排序结果 A/B 对比</h2>
+        <div class="sub">
+          A、B 两组各自上传截图/粘贴文字，或一键从生产库按板块/日期填充；给出重合度、质量对比、
+          GSB（Good/Same/Bad）逐条判定与总体结论，自动表格化。每组最多 30 条 —— 常见用法：
+          「生产排序」vs「策略实验室调整后排序」，或「某天结果」vs「另一天结果」。
+        </div>
+      </div>
+
+      <div class="ab-grid">
+        <div class="card" id="abCardA">
+          <div class="ab-group-head"><span class="ab-group-tag">A 组</span><span class="count-pill" id="abACountPill">未填充</span></div>
+          <div class="mode-toggle" role="tablist" aria-label="A 组输入方式">
+            <button class="mode-btn ab-mode-btn" data-group="a" data-mode="db" aria-selected="true">数据库一键填充</button>
+            <button class="mode-btn ab-mode-btn" data-group="a" data-mode="text" aria-selected="false">粘贴文本</button>
+            <button class="mode-btn ab-mode-btn" data-group="a" data-mode="image" aria-selected="false">上传截图</button>
+          </div>
+
+          <div class="ab-mode-panel" data-group="a" data-mode="db">
+            <div class="ab-fill-row">
+              <div class="ab-fill-field"><label>板块</label><select id="abASector"><option value="">整体（全部板块）</option></select></div>
+              <div class="ab-fill-field"><label>排序</label><select id="abASort"><option value="importance">按重要性</option><option value="date">按时间</option></select></div>
+              <div class="ab-fill-field"><label>条数（≤30）</label><input type="text" id="abALimit" value="20"></div>
+            </div>
+            <div class="ab-fill-row">
+              <div class="ab-fill-field"><label>起始日期(可选)</label><input type="date" id="abADateFrom"></div>
+              <div class="ab-fill-field"><label>结束日期(可选)</label><input type="date" id="abADateTo"></div>
+            </div>
+            <button class="btn small" id="abAFillBtn">拉取数据库数据（预览）</button>
+            <div class="ab-status-line" id="abAFillStatus">运行对比时会用上面这些条件重新从数据库取数，这里点击只是预览筛选结果是否符合预期。</div>
+          </div>
+
+          <div class="ab-mode-panel" data-group="a" data-mode="text" style="display:none">
+            <textarea class="news-input" id="abAText" placeholder="粘贴新闻列表：每条一个标题（可换行接摘要），条与条之间用空行分隔；也可以每行一条纯标题。"></textarea>
+          </div>
+
+          <div class="ab-mode-panel" data-group="a" data-mode="image" style="display:none">
+            <div class="dropzone" id="abADropzone">
+              <div class="ic">🖼️</div>
+              <div class="t1">点击选择图片，或拖拽到此处</div>
+              <div class="t2">最多 10 张，会先用视觉模型提取标题</div>
+              <input type="file" id="abAFileInput" accept="image/png,image/jpeg,image/jpg,image/webp,image/gif" multiple>
+            </div>
+            <div class="thumbgrid" id="abAThumbGrid"></div>
+          </div>
+        </div>
+
+        <div class="card" id="abCardB">
+          <div class="ab-group-head"><span class="ab-group-tag b">B 组</span><span class="count-pill" id="abBCountPill">未填充</span></div>
+          <div class="mode-toggle" role="tablist" aria-label="B 组输入方式">
+            <button class="mode-btn ab-mode-btn" data-group="b" data-mode="db" aria-selected="true">数据库一键填充</button>
+            <button class="mode-btn ab-mode-btn" data-group="b" data-mode="text" aria-selected="false">粘贴文本</button>
+            <button class="mode-btn ab-mode-btn" data-group="b" data-mode="image" aria-selected="false">上传截图</button>
+          </div>
+
+          <div class="ab-mode-panel" data-group="b" data-mode="db">
+            <div class="ab-fill-row">
+              <div class="ab-fill-field"><label>板块</label><select id="abBSector"><option value="">整体（全部板块）</option></select></div>
+              <div class="ab-fill-field"><label>排序</label><select id="abBSort"><option value="importance">按重要性</option><option value="date">按时间</option></select></div>
+              <div class="ab-fill-field"><label>条数（≤30）</label><input type="text" id="abBLimit" value="20"></div>
+            </div>
+            <div class="ab-fill-row">
+              <div class="ab-fill-field"><label>起始日期(可选)</label><input type="date" id="abBDateFrom"></div>
+              <div class="ab-fill-field"><label>结束日期(可选)</label><input type="date" id="abBDateTo"></div>
+            </div>
+            <button class="btn small" id="abBFillBtn">拉取数据库数据（预览）</button>
+            <div class="ab-status-line" id="abBFillStatus">运行对比时会用上面这些条件重新从数据库取数，这里点击只是预览筛选结果是否符合预期。</div>
+          </div>
+
+          <div class="ab-mode-panel" data-group="b" data-mode="text" style="display:none">
+            <textarea class="news-input" id="abBText" placeholder="粘贴新闻列表：每条一个标题（可换行接摘要），条与条之间用空行分隔；也可以每行一条纯标题。"></textarea>
+          </div>
+
+          <div class="ab-mode-panel" data-group="b" data-mode="image" style="display:none">
+            <div class="dropzone" id="abBDropzone">
+              <div class="ic">🖼️</div>
+              <div class="t1">点击选择图片，或拖拽到此处</div>
+              <div class="t2">最多 10 张，会先用视觉模型提取标题</div>
+              <input type="file" id="abBFileInput" accept="image/png,image/jpeg,image/jpg,image/webp,image/gif" multiple>
+            </div>
+            <div class="thumbgrid" id="abBThumbGrid"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="eval-actions" style="margin-top:16px">
+        <button class="btn primary" id="abRunBtn">运行 AB 对比</button>
+        <span id="abSpinnerWrap" style="display:none" class="pc-score-row"><span class="spinner"></span><span class="progress-tx">对比中（embedding + 质量评估 + GSB 判定）…</span></span>
+      </div>
+      <div id="abError"></div>
+      <div id="abResults"></div>
+    </div>
+  </section>
+
+  <div class="toast" id="toast"></div>
+</div>
+
+<!-- ══════════════════ TAB 6 · 历史数据 ══════════════════ -->
+<div role="tabpanel" id="panel-5" aria-labelledby="tab-5" hidden>
+
+  <div class="sec-head">
+    <span class="eyebrow">TOOL RESULT HISTORY</span>
+    <h2>历史数据</h2>
+    <p class="sub">评测工具（Tab 04）与策略实验室（Tab 05）里点了"保存结果"按钮的记录，按时间倒序展示。支持按工具类型筛选、点击展开完整结果、删除。</p>
+  </div>
+
+  <div class="filters">
+    <div class="frow">
+      <div class="field"><label for="h-tool">工具类型</label>
+        <select id="h-tool">
+          <option value="">全部工具</option>
+          <option value="duplicate_tester">Duplicate Tester · 去重检测</option>
+          <option value="llm_eval">LLM 评测室</option>
+          <option value="ab_compare">AB 对比（评测工具）</option>
+          <option value="lab_weight">策略实验室 · 单版本权重调节</option>
+          <option value="lab_ab_compare">策略实验室 · 两版本权重对比</option>
+        </select>
+      </div>
+      <div class="field"><label for="h-limit">每页条数</label>
+        <select id="h-limit"><option value="20" selected>20</option><option value="50">50</option><option value="100">100</option></select>
+      </div>
+      <div class="field"><label style="opacity:0">刷新</label><button class="btn primary" id="h-refresh">刷新</button></div>
+    </div>
+  </div>
+
+  <div class="meta-line">
+    <span>共 <b id="h-total">—</b> 条记录</span>
+    <span class="mspacer"></span>
+    <button class="btn sm" id="h-prev" disabled>← 上一页</button>
+    <button class="btn sm" id="h-next" disabled>下一页 →</button>
+  </div>
+
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr>
+        <th style="width:150px">时间</th><th style="width:220px">工具类型</th><th>备注</th><th style="width:110px">成本</th><th style="width:90px"></th>
+      </tr></thead>
+      <tbody id="h-tbody"></tbody>
+    </table>
+  </div>
+  <p style="font-size:12px;color:var(--ink-4);margin-top:12px">点击任意行展开该条完整结果 JSON，再次点击收起。</p>
+
+  <div class="section" style="margin-top:36px">
+    <div class="sec-head">
+      <span class="eyebrow">Usage</span>
+      <h2 style="font-size:15px">近 7 天各工具调用次数</h2>
+      <p class="sub">按埋点事件（tool_run）计数的近似统计，非精确审计口径，仅供大致了解各工具使用热度。</p>
+    </div>
+    <div id="h-summary" class="mono" style="font-size:12.5px;color:var(--ink-3);line-height:2">加载中…</div>
+  </div>
+
+</div>
+
 </main>
 
 <footer>
@@ -1223,6 +1814,28 @@ footer{border-top:1px solid var(--rule);padding:26px 0 40px;font-size:12px;color
     <span class="mono" id="footMeta">—</span>
   </div>
 </footer>
+
+<!-- ══════════════════ Tell me more · 反馈悬浮模块（全站，不分 tab） ══════════════════ -->
+<button class="fab" id="fabFeedback" type="button" aria-haspopup="dialog" aria-expanded="false">
+  <span class="fab-ic">💬</span> Tell me more
+</button>
+<div class="feedback-panel" id="feedbackPanel" role="dialog" aria-label="反馈">
+  <div class="fp-head">
+    <strong>Tell me more</strong>
+    <button class="fp-close" id="feedbackClose" type="button" aria-label="关闭">×</button>
+  </div>
+  <p class="fp-sub">工具用得顺不顺手、想要什么新功能、发现哪条结果不对劲 —— 都可以在这里说一句。</p>
+  <label class="fp-label" for="feedbackCategory">类别</label>
+  <select id="feedbackCategory">
+    <option value="工具反馈">工具反馈</option>
+    <option value="需求">需求</option>
+    <option value="bad case">报 bad case</option>
+  </select>
+  <label class="fp-label" for="feedbackContent">内容</label>
+  <textarea id="feedbackContent" placeholder="具体说说……（bad case 建议附上事件标题或链接）"></textarea>
+  <button class="btn primary" id="feedbackSubmit" style="width:100%;justify-content:center;margin-top:10px">提交</button>
+  <div id="feedbackMsg" style="font-size:12px;color:var(--ink-3);margin-top:8px;min-height:16px"></div>
+</div>
 
 <script>
 "use strict";
@@ -1307,6 +1920,21 @@ function liveUrl(path, params){
   var p=Object.assign({},params||{}); p.token=activeToken();
   return API+path+"?"+qs(p);
 }
+/* ══════════════════════════════════════════════════════════════════════
+   埋点：轻量、fire-and-forget，失败静默吞掉，绝不影响页面正常使用。
+   调用时机：页面首次加载（page_view）、showTab() 切换主 tab（tab_switch）、
+   评测/策略工具点"运行"类按钮（tool_run，meta 带 tool 名）。
+   ══════════════════════════════════════════════════════════════════════ */
+function track(eventType, meta){
+  try{
+    fetch(liveUrl("/api/analytics/track", {}), {
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({event_type:eventType, page:(location.hash||"#tab1").replace("#",""), meta:meta||{}})
+    }).catch(function(){});
+  }catch(e){ /* 埋点这一层出任何问题都不应该影响页面本身 */ }
+}
+
 function apiGet(path, params, timeoutMs){
   var url=liveUrl(path,params);
   var ctl=("AbortController" in window)?new AbortController():null;
@@ -1352,12 +1980,19 @@ function errState(msg, retry){
 /* ══════════════════════════════════════════════════════════════════════
    Tabs
    ══════════════════════════════════════════════════════════════════════ */
-var loaded={1:false,2:false,3:false};
+var loaded={1:false,2:false,3:false,5:false};
 function showTab(n){
   $$(".tab[role=tab]").forEach(function(t){ t.setAttribute("aria-selected", t.id==="tab-"+n?"true":"false"); });
-  [1,2,3].forEach(function(i){ $("#panel-"+i).hidden=(i!==n); });
+  // Tab 4（评测工具）没有远程数据要 loadXxx()：Duplicate Tester / LLM 评测室 / AB 对比
+  // 三个子工具都是用户点按钮才发请求，不需要 tab 打开时预取，所以 loaded/dispatcher
+  // 不含 4；这里的 [1,2,3,4,5] 只是控制 hidden 属性，与是否需要预取无关。
+  // Tab 5 内部 id 沿用 panel-5，展示的 idx 是「06」（05 是外链的策略实验室）。
+  [1,2,3,4,5].forEach(function(i){ $("#panel-"+i).hidden=(i!==n); });
   if(location.hash!=="#tab"+n) history.replaceState(null,"","#tab"+n);
-  if(!loaded[n]){ loaded[n]=true; ({1:loadFlow,2:loadData,3:loadApi})[n](); }
+  var loader=({1:loadFlow,2:loadData,3:loadApi,5:(typeof loadHistory==="function"?loadHistory:null)})[n];
+  if(loader&&!loaded[n]){ loaded[n]=true; loader(); }
+  track("tab_switch",{tab:n});
+  syncSideSub();
   window.scrollTo({top:0,behavior:"smooth"});
 }
 $$(".tab[role=tab]").forEach(function(t){
@@ -1365,8 +2000,223 @@ $$(".tab[role=tab]").forEach(function(t){
 });
 document.addEventListener("keydown",function(e){
   if(/^(INPUT|SELECT|TEXTAREA)$/.test(e.target.tagName)) return;
-  if(e.key>="1"&&e.key<="3"&&!e.metaKey&&!e.ctrlKey&&!e.altKey) showTab(Number(e.key));
+  if(e.key>="1"&&e.key<="5"&&!e.metaKey&&!e.ctrlKey&&!e.altKey) showTab(Number(e.key));
 });
+
+/* ══════════════════════════════════════════════════════════════════════
+   侧边导航：二级子项联动 + 窄屏抽屉
+   主导航项本身不需要额外 JS —— 它们仍是原来那批 .tab[role=tab] 按钮，
+   只是被搬进了侧边栏，上面的 showTab / 键盘快捷键照常生效。
+   ══════════════════════════════════════════════════════════════════════ */
+
+/* 「评测工具」展开时才显示它的三个子工具；用函数声明以便 showTab 提前调用。 */
+function syncSideSub(){
+  var sub=document.getElementById("snSub4"), t4=document.getElementById("tab-4");
+  if(sub&&t4) sub.classList.toggle("show", t4.getAttribute("aria-selected")==="true");
+}
+function markSideSub(n){
+  $$(".sn-subitem").forEach(function(b){
+    b.setAttribute("aria-current", b.dataset.sub===String(n)?"true":"false");
+  });
+}
+function setNav(open){
+  var nav=$("#sidenav"), bd=$("#snBackdrop"), tg=$("#navToggle");
+  if(!nav) return;
+  nav.classList.toggle("open",open);
+  if(bd){ bd.classList.toggle("show",open); bd.hidden=!open; }
+  if(tg) tg.setAttribute("aria-expanded",open?"true":"false");
+}
+/* 只在窄屏收起——宽屏侧边栏是常驻的，点导航不该让它消失 */
+function closeNavIfDrawer(){
+  if(window.matchMedia("(max-width:1080px)").matches) setNav(false);
+}
+
+$$(".sn-subitem").forEach(function(btn){
+  btn.addEventListener("click",function(){
+    showTab(4);
+    // 转发给面板内已有的子 tab 按钮，不复制一份切换逻辑，避免两处状态各走各的
+    var target=document.getElementById("stab-"+btn.dataset.sub);
+    if(target) target.click();
+    markSideSub(btn.dataset.sub);
+    closeNavIfDrawer();
+  });
+});
+/* 反向同步：用户直接点面板里的子 tab 时，侧边栏高亮跟着走 */
+["1","2","3"].forEach(function(i){
+  var s=document.getElementById("stab-"+i);
+  if(s) s.addEventListener("click",function(){ markSideSub(i); });
+});
+
+$("#navToggle").addEventListener("click",function(){
+  setNav(!$("#sidenav").classList.contains("open"));
+});
+$("#snBackdrop").addEventListener("click",function(){ setNav(false); });
+document.addEventListener("keydown",function(e){ if(e.key==="Escape") setNav(false); });
+$$(".tab").forEach(function(t){ t.addEventListener("click",closeNavIfDrawer); });
+syncSideSub();
+
+/* ══════════════════════════════════════════════════════════════════════
+   通用带鉴权的写请求（POST/DELETE）—— 供历史数据 tab 与「保存结果」按钮共用。
+   与 apiGet 的分工：apiGet 只做 GET + 超时 + 统一错误信息；这里补上 POST/DELETE，
+   同样走 activeToken() 鉴权，同样把非 2xx 转成带 error 信息的异常。
+   ══════════════════════════════════════════════════════════════════════ */
+function apiCall(method, path, body){
+  return fetch(liveUrl(path, {}), {
+    method: method,
+    headers: {"Content-Type":"application/json"},
+    body: body!==undefined ? JSON.stringify(body) : undefined
+  }).then(function(r){
+    return r.json().catch(function(){ return {}; }).then(function(j){
+      if(!r.ok) throw new Error(j.error || ("HTTP "+r.status));
+      return j;
+    });
+  });
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   TAB 6 · 历史数据
+   ══════════════════════════════════════════════════════════════════════ */
+var TOOL_LABELS_ZH = {
+  duplicate_tester: "Duplicate Tester · 去重检测",
+  llm_eval: "LLM 评测室",
+  ab_compare: "AB 对比（评测工具）",
+  lab_weight: "策略实验室 · 单版本权重调节",
+  lab_ab_compare: "策略实验室 · 两版本权重对比"
+};
+var historyState = {tool:"", limit:20, offset:0};
+var historyDetailCache = {};
+
+function loadHistory(){
+  $("#h-refresh").addEventListener("click",function(){ historyState.offset=0; fetchHistoryPage(); });
+  $("#h-tool").addEventListener("change",function(){ historyState.tool=$("#h-tool").value; historyState.offset=0; fetchHistoryPage(); });
+  $("#h-limit").addEventListener("change",function(){ historyState.limit=Number($("#h-limit").value)||20; historyState.offset=0; fetchHistoryPage(); });
+  $("#h-prev").addEventListener("click",function(){ historyState.offset=Math.max(0,historyState.offset-historyState.limit); fetchHistoryPage(); });
+  $("#h-next").addEventListener("click",function(){ historyState.offset+=historyState.limit; fetchHistoryPage(); });
+  fetchHistoryPage();
+  loadHistorySummary();
+}
+
+function fetchHistoryPage(){
+  var tbody=$("#h-tbody");
+  tbody.innerHTML='<tr><td colspan="5"><div class="empty-state">加载中…</div></td></tr>';
+  var params={limit:historyState.limit, offset:historyState.offset};
+  if(historyState.tool) params.tool=historyState.tool;
+  apiGet("/api/history/list", params).then(function(d){
+    var total=(d.meta&&d.meta.total)||0;
+    $("#h-total").textContent=nf(total);
+    $("#h-prev").disabled=historyState.offset<=0;
+    $("#h-next").disabled=(historyState.offset+historyState.limit)>=total;
+    renderHistoryTable(d.data||[]);
+  }).catch(function(e){
+    tbody.innerHTML='<tr><td colspan="5"><div class="empty-state">加载失败：'+esc(e.message)+'</div></td></tr>';
+  });
+}
+
+function renderHistoryTable(rows){
+  var tbody=$("#h-tbody");
+  if(!rows.length){ tbody.innerHTML='<tr><td colspan="5"><div class="empty-state">暂无记录 —— 在评测工具 / 策略实验室里点「保存结果」即可在这里看到</div></td></tr>'; return; }
+  tbody.innerHTML="";
+  rows.forEach(function(r){
+    var tr=document.createElement("tr");
+    tr.className="row";
+    var t=fmtTime(r.created_at);
+    tr.innerHTML =
+      '<td>'+esc(t.d)+' <span style="color:var(--ink-4)">'+esc(t.t)+'</span></td>'+
+      '<td>'+esc(r.tool_label_zh||TOOL_LABELS_ZH[r.tool]||r.tool)+'</td>'+
+      '<td>'+esc(r.label||"—")+'</td>'+
+      '<td class="mono">$'+Number(r.cost_usd||0).toFixed(4)+'</td>'+
+      '<td><button type="button" class="btn sm h-del" data-id="'+r.id+'">删除</button></td>';
+    tbody.appendChild(tr);
+    tr.addEventListener("click",function(e){
+      if(e.target.closest(".h-del")) return;
+      toggleHistoryDetail(tr, r.id);
+    });
+  });
+  $$(".h-del", tbody).forEach(function(b){
+    b.addEventListener("click",function(e){
+      e.stopPropagation();
+      var id=Number(b.getAttribute("data-id"));
+      if(!confirm("确认删除这条历史记录？不可恢复。")) return;
+      apiCall("DELETE","/api/history/"+id).then(function(){
+        delete historyDetailCache[id];
+        fetchHistoryPage();
+      }).catch(function(e){ alert("删除失败："+e.message); });
+    });
+  });
+}
+
+function toggleHistoryDetail(tr, id){
+  var existing=tr.nextElementSibling;
+  if(existing && existing.classList.contains("h-detail-row")){
+    existing.remove();
+    tr.classList.remove("open");
+    return;
+  }
+  $$(".row.open", $("#h-tbody")).forEach(function(openTr){
+    var d=openTr.nextElementSibling;
+    if(d && d.classList.contains("h-detail-row")) d.remove();
+    openTr.classList.remove("open");
+  });
+  tr.classList.add("open");
+  var detailTr=document.createElement("tr");
+  detailTr.className="h-detail-row";
+  var td=document.createElement("td");
+  td.colSpan=5;
+  td.innerHTML='<div class="empty-state">加载中…</div>';
+  detailTr.appendChild(td);
+  tr.parentNode.insertBefore(detailTr, tr.nextSibling);
+
+  var cached=historyDetailCache[id];
+  var p=cached?Promise.resolve(cached):apiGet("/api/history/"+id, {});
+  p.then(function(d){
+    historyDetailCache[id]=d;
+    td.innerHTML='<pre class="code" style="max-height:420px;overflow:auto;white-space:pre-wrap;margin:6px 0">'+esc(JSON.stringify(d.payload,null,2))+'</pre>';
+  }).catch(function(e){
+    td.innerHTML='<div class="empty-state">加载失败：'+esc(e.message)+'</div>';
+  });
+}
+
+function loadHistorySummary(){
+  var el=$("#h-summary");
+  apiGet("/api/analytics/summary", {days:7}).then(function(d){
+    if(!d.data || !d.data.length){ el.textContent="近 7 天暂无工具调用埋点数据。"; return; }
+    el.innerHTML=d.data.map(function(x){
+      return esc(x.tool_label_zh||x.tool)+' <b style="color:var(--ink)">'+x.count+'</b> 次';
+    }).join('　·　');
+  }).catch(function(){ el.textContent="加载失败（不影响其它功能）。"; });
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   Tell me more · 反馈悬浮模块（全站，不属于任何一个 tab，挂在 body 最外层）
+   ══════════════════════════════════════════════════════════════════════ */
+(function(){
+  var fab=document.getElementById("fabFeedback");
+  var panel=document.getElementById("feedbackPanel");
+  var closeBtn=document.getElementById("feedbackClose");
+  var submitBtn=document.getElementById("feedbackSubmit");
+  var msgEl=document.getElementById("feedbackMsg");
+  function openPanel(){ panel.classList.add("open"); fab.setAttribute("aria-expanded","true"); }
+  function closePanel(){ panel.classList.remove("open"); fab.setAttribute("aria-expanded","false"); }
+  fab.addEventListener("click",function(){ panel.classList.contains("open") ? closePanel() : openPanel(); });
+  closeBtn.addEventListener("click", closePanel);
+  submitBtn.addEventListener("click",function(){
+    var category=document.getElementById("feedbackCategory").value;
+    var content=document.getElementById("feedbackContent").value.trim();
+    if(!content){ msgEl.textContent="请先填写反馈内容。"; msgEl.style.color="var(--red)"; return; }
+    submitBtn.disabled=true;
+    apiCall("POST","/api/feedback",{
+      category:category, content:content,
+      page_context:(location.hash||"#tab1").replace("#","")
+    }).then(function(){
+      msgEl.textContent="已提交，感谢反馈！"; msgEl.style.color="var(--green)";
+      document.getElementById("feedbackContent").value="";
+      track("feedback_submit",{category:category});
+      setTimeout(closePanel,1400);
+    }).catch(function(e){
+      msgEl.textContent="提交失败："+e.message; msgEl.style.color="var(--red)";
+    }).finally(function(){ submitBtn.disabled=false; });
+  });
+})();
 
 /* ── health ───────────────────────────────────────────────────────── */
 function loadHealth(){
@@ -2019,8 +2869,689 @@ function loadApi(){
    ══════════════════════════════════════════════════════════════════════ */
 (function(){
   loadHealth().catch(function(){});          // 顶栏指示灯常驻，与当前 tab 无关
-  var m=String(location.hash||"").match(/^#tab([123])$/);
+  track("page_view",{referrer:document.referrer||null});
+  var m=String(location.hash||"").match(/^#tab([12345])$/);
   showTab(m?Number(m[1]):1);
+})();
+</script>
+
+<script>
+/* ══════════════════════════════════════════════════════════════════════
+   Tab 04 · 评测工具 —— 原 web/eval.html 独立页面的脚本，2026-07-26 合并进本页。
+   整体包在自己的 IIFE 里（沿用 eval.html 原来的写法），变量名不会泄漏到上面
+   主脚本的全局作用域，也就不需要为了合并而给任何一边的函数/变量改名。
+   ══════════════════════════════════════════════════════════════════════ */
+(function(){
+"use strict";
+
+/* 评测接口的鉴权。这三个工具每次调用都会真实产生 OpenAI 费用，2026-07-26 给
+   `api/eval_tools.py` 补上了 require_api_key（此前完全没有鉴权，谁都能白嫖调用），
+   前端这边必须相应带上 token，否则一律 401。
+   复用主脚本的 activeToken()（用户在 Tab3 填了自己的 secret 就用它，否则用页面
+   自带的 DEMO_TOKEN），typeof 判断只是防御性写法，避免脚本块加载顺序意外时整个
+   评测面板直接抛错。 */
+function toolUrl(path){
+  const t = (typeof activeToken === 'function') ? activeToken() : '';
+  return t ? path + '?token=' + encodeURIComponent(t) : path;
+}
+
+// ── 通用：01/02/03 三个子 tab 切换 ──────────────────────────────────
+const stabs = [document.getElementById('stab-1'), document.getElementById('stab-2'), document.getElementById('stab-3')];
+const spanels = [document.getElementById('spanel-1'), document.getElementById('spanel-2'), document.getElementById('spanel-3')];
+stabs.forEach((btn, i) => {
+  btn.addEventListener('click', () => {
+    stabs.forEach((b, j) => b.setAttribute('aria-selected', j === i ? 'true' : 'false'));
+    spanels.forEach((p, j) => p.classList.toggle('active', j === i));
+  });
+});
+
+function toast(msg){
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 2200);
+}
+
+function escapeHtml(s){
+  return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+// ══════════════════════════════════════════════════════════════════
+// 「保存结果」通用组件 —— Duplicate Tester / LLM 评测室 / AB 对比三个子工具
+// 共用同一套：一个备注输入框 + 一个保存按钮，点击把已经拿到手的响应 JSON
+// 原样 POST 给 /api/history/save（不重新调用一次原工具接口）。
+// ══════════════════════════════════════════════════════════════════
+function saveBarHtml(idPrefix){
+  return `<div class="save-bar">
+    <input type="text" id="${idPrefix}SaveLabel" placeholder="备注（可选，例如「7/26 一批新闻测试」）">
+    <button class="btn small" id="${idPrefix}SaveBtn" type="button">💾 保存结果</button>
+  </div>`;
+}
+function wireSaveButton(idPrefix, tool, body){
+  const btn = document.getElementById(idPrefix + 'SaveBtn');
+  const labelInput = document.getElementById(idPrefix + 'SaveLabel');
+  if (!btn) return;
+  const original = btn.textContent;
+  btn.addEventListener('click', () => {
+    btn.disabled = true;
+    btn.textContent = '保存中…';
+    apiCall('POST', '/api/history/save', {
+      tool: tool,
+      label: (labelInput && labelInput.value || '').trim(),
+      payload: body,
+      cost_usd: body && typeof body.cost_usd === 'number' ? body.cost_usd : 0,
+    }).then(() => {
+      btn.classList.add('saved');
+      btn.textContent = '已保存 ✓';
+      toast('结果已保存，可在「06 历史数据」里查看');
+      setTimeout(() => { btn.classList.remove('saved'); btn.textContent = original; btn.disabled = false; }, 1800);
+    }).catch(e => {
+      btn.textContent = '保存失败';
+      toast('保存失败：' + e.message);
+      setTimeout(() => { btn.textContent = original; btn.disabled = false; }, 1800);
+    });
+  });
+}
+
+// ══════════════════════════════════════════════════════════════════
+// Duplicate Tester
+// ══════════════════════════════════════════════════════════════════
+const MAX_IMAGES = 20;
+let selectedFiles = []; // File objects
+
+const dropzone = document.getElementById('dropzone');
+const fileInput = document.getElementById('fileInput');
+const thumbGrid = document.getElementById('thumbGrid');
+const countPill = document.getElementById('countPill');
+const clearBtn = document.getElementById('clearBtn');
+const runDedupBtn = document.getElementById('runDedupBtn');
+
+dropzone.addEventListener('click', () => fileInput.click());
+dropzone.addEventListener('dragover', e => { e.preventDefault(); dropzone.classList.add('dragover'); });
+dropzone.addEventListener('dragleave', () => dropzone.classList.remove('dragover'));
+dropzone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropzone.classList.remove('dragover');
+  addFiles(Array.from(e.dataTransfer.files));
+});
+fileInput.addEventListener('change', () => { addFiles(Array.from(fileInput.files)); fileInput.value = ''; });
+
+function addFiles(files){
+  const imgFiles = files.filter(f => /^image\//.test(f.type));
+  selectedFiles = selectedFiles.concat(imgFiles);
+  renderThumbs();
+}
+
+function removeFile(idx){
+  selectedFiles.splice(idx, 1);
+  renderThumbs();
+}
+
+function renderThumbs(){
+  thumbGrid.innerHTML = '';
+  selectedFiles.forEach((f, idx) => {
+    const div = document.createElement('div');
+    div.className = 'thumb';
+    const img = document.createElement('img');
+    img.src = URL.createObjectURL(f);
+    const rm = document.createElement('button');
+    rm.className = 'rm'; rm.textContent = '×';
+    rm.onclick = () => removeFile(idx);
+    const lbl = document.createElement('div');
+    lbl.className = 'idxlabel'; lbl.textContent = 'img' + idx;
+    div.appendChild(img); div.appendChild(rm); div.appendChild(lbl);
+    thumbGrid.appendChild(div);
+  });
+  const n = selectedFiles.length;
+  if (n === 0){
+    countPill.textContent = '未选择图片';
+    countPill.classList.remove('warn');
+    clearBtn.style.display = 'none';
+  } else {
+    countPill.textContent = `已选择 ${n} / ${MAX_IMAGES} 张`;
+    countPill.classList.toggle('warn', n > MAX_IMAGES);
+    clearBtn.style.display = 'inline-flex';
+  }
+  runDedupBtn.disabled = (n === 0 || n > MAX_IMAGES);
+}
+
+clearBtn.addEventListener('click', () => { selectedFiles = []; renderThumbs(); document.getElementById('dedupResults').innerHTML=''; });
+
+const GROUP_COLORS = [
+  {bg:'#FFF6D9', fg:'#8A6300'}, {bg:'#E3F0FF', fg:'#1E4FA3'}, {bg:'#E5F8EE', fg:'#0A7A4E'},
+  {bg:'#FDE9EC', fg:'#B01A3B'}, {bg:'#F1E9FB', fg:'#6B3FA0'}, {bg:'#FFEEE0', fg:'#B0530A'},
+  {bg:'#E0F7F5', fg:'#0A7A72'}, {bg:'#F4E9F1', fg:'#9C3E80'},
+];
+
+runDedupBtn.addEventListener('click', async () => {
+  const n = selectedFiles.length;
+  if (n === 0 || n > MAX_IMAGES) return;
+  track('tool_run', {tool: 'duplicate_tester', images: n});
+  runDedupBtn.disabled = true;
+  document.getElementById('dedupSpinnerWrap').style.display = 'inline-flex';
+  document.getElementById('dedupSpinnerTx').textContent = `正在识别 ${n} 张图片并检测重复（视觉模型 + embedding）…`;
+  document.getElementById('dedupError').innerHTML = '';
+  document.getElementById('dedupResults').innerHTML = '';
+
+  const fd = new FormData();
+  selectedFiles.forEach(f => fd.append('images', f, f.name));
+
+  try{
+    const resp = await fetch(toolUrl('/api/tools/dedup-test'), {method:'POST', body: fd});
+    const body = await resp.json();
+    if (!resp.ok){
+      document.getElementById('dedupError').innerHTML = `<div class="err-box">${escapeHtml(body.error || ('请求失败：HTTP ' + resp.status))}</div>`;
+      return;
+    }
+    renderDedupResults(body);
+  }catch(e){
+    document.getElementById('dedupError').innerHTML = `<div class="err-box">网络错误：${escapeHtml(e.message)}</div>`;
+  }finally{
+    runDedupBtn.disabled = false;
+    document.getElementById('dedupSpinnerWrap').style.display = 'none';
+  }
+});
+
+let lastTsv = '';
+
+function renderDedupResults(body){
+  const wrap = document.getElementById('dedupResults');
+  const rows = [];
+  body.groups.forEach(g => {
+    g.items.forEach(it => rows.push({group_id: g.group_id, size: g.size, is_dup: g.is_duplicate_group, ...it}));
+  });
+  lastTsv = body.table_csv || '';
+
+  let html = '';
+  html += `<div class="kpi-row">
+    <div class="kpi"><div class="l">图片数</div><div class="v">${body.images_processed}</div></div>
+    <div class="kpi"><div class="l">提取标题数</div><div class="v">${body.total_headlines_extracted}</div></div>
+    <div class="kpi"><div class="l">重复组数</div><div class="v gold">${body.duplicate_group_count}</div></div>
+    <div class="kpi"><div class="l">本次成本</div><div class="v">$${body.cost_usd.toFixed(4)}</div></div>
+  </div>`;
+
+  if (Object.keys(body.image_errors || {}).length){
+    html += `<div class="err-box">部分图片处理失败：${escapeHtml(JSON.stringify(body.image_errors))}</div>`;
+  }
+
+  html += `<div class="table-actions">
+    <div class="legend"><span class="sw" style="background:${GROUP_COLORS[0].bg};border:1px solid ${GROUP_COLORS[0].fg}"></span>彩色 = 重复组　<span class="sw" style="background:var(--ev-bg-3)"></span>灰色 = 无重复</div>
+    <button class="btn small" id="copyTsvBtn">📋 复制表格（TSV，可直接粘贴 Excel）</button>
+  </div>`;
+
+  html += `<div class="table-scroll"><table class="restbl"><thead><tr>
+    <th>组</th><th>图片</th><th>来源</th><th>提取标题</th><th>组内相似度</th><th>是否重复</th>
+  </tr></thead><tbody>`;
+
+  if (rows.length === 0){
+    html += `<tr><td colspan="6"><div class="empty-state"><div class="ic">🔍</div>未提取到任何标题</div></td></tr>`;
+  } else {
+    rows.forEach(r => {
+      const color = r.is_dup ? GROUP_COLORS[(r.group_id - 1) % GROUP_COLORS.length] : null;
+      const badgeStyle = color ? `background:${color.bg};color:${color.fg}` : '';
+      const rowStyle = color ? `background:${color.bg}22` : '';
+      html += `<tr style="${rowStyle}">
+        <td><span class="grp-badge ${color ? '' : 'single'}" style="${badgeStyle}">${r.group_id}</span></td>
+        <td class="src-tag">img${r.image_index}<br><span style="opacity:.7">${escapeHtml(r.image_name)}</span></td>
+        <td class="src-tag">${escapeHtml(r.source || '—')}</td>
+        <td class="title-cell">${escapeHtml(r.title)}</td>
+        <td class="sim-val">${r.similarity_to_group.toFixed(3)}</td>
+        <td>${r.is_dup ? '是（' + r.size + ' 条）' : '否'}</td>
+      </tr>`;
+    });
+  }
+  html += `</tbody></table></div>`;
+  html += saveBarHtml('dedup');
+
+  wrap.innerHTML = html;
+  document.getElementById('copyTsvBtn').addEventListener('click', () => copyToClipboard(lastTsv));
+  wireSaveButton('dedup', 'duplicate_tester', body);
+}
+
+function copyToClipboard(text){
+  if (navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(text).then(() => toast('已复制到剪贴板，可直接粘贴到 Excel')).catch(() => fallbackCopy(text));
+  } else {
+    fallbackCopy(text);
+  }
+}
+function fallbackCopy(text){
+  const ta = document.createElement('textarea');
+  ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+  document.body.appendChild(ta); ta.select();
+  try { document.execCommand('copy'); toast('已复制到剪贴板'); } catch(e){ toast('复制失败，请手动选择表格文本'); }
+  document.body.removeChild(ta);
+}
+
+// ══════════════════════════════════════════════════════════════════
+// LLM 评测室
+// ══════════════════════════════════════════════════════════════════
+const modeText = document.getElementById('modeText');
+const modeImage = document.getElementById('modeImage');
+const modeEventId = document.getElementById('modeEventId');
+const textInputWrap = document.getElementById('textInputWrap');
+const imageInputWrap = document.getElementById('imageInputWrap');
+const eventIdInputWrap = document.getElementById('eventIdInputWrap');
+let evalMode = 'text';
+let evalImageFile = null;
+
+function setEvalMode(mode){
+  evalMode = mode;
+  modeText.setAttribute('aria-selected', mode === 'text' ? 'true' : 'false');
+  modeImage.setAttribute('aria-selected', mode === 'image' ? 'true' : 'false');
+  modeEventId.setAttribute('aria-selected', mode === 'id' ? 'true' : 'false');
+  textInputWrap.style.display = mode === 'text' ? '' : 'none';
+  imageInputWrap.style.display = mode === 'image' ? '' : 'none';
+  eventIdInputWrap.style.display = mode === 'id' ? '' : 'none';
+}
+modeText.addEventListener('click', () => setEvalMode('text'));
+modeImage.addEventListener('click', () => setEvalMode('image'));
+modeEventId.addEventListener('click', () => setEvalMode('id'));
+
+// 便利按钮：随手抓一条最近事件的 id 填进输入框，省得用户自己去 Tab 02 复制。
+// 复用主脚本（01/02/03 共用）里已经封装好的 apiGet，同一套鉴权/超时/错误处理。
+document.getElementById('randomEventIdBtn').addEventListener('click', () => {
+  const btn = document.getElementById('randomEventIdBtn');
+  const original = btn.textContent;
+  btn.disabled = true; btn.textContent = '抽取中…';
+  apiGet('/api/news', {limit: 20, sort: 'date'}).then(d => {
+    const rows = (d && d.data) || [];
+    if (!rows.length){ toast('事件库暂无数据'); return; }
+    const pick = rows[Math.floor(Math.random() * rows.length)];
+    document.getElementById('eventIdInput').value = pick.id;
+    toast('已填入：' + (pick.title_zh || pick.title_en || pick.id).slice(0, 30));
+  }).catch(e => toast('抽取失败：' + e.message))
+    .finally(() => { btn.disabled = false; btn.textContent = original; });
+});
+
+const dropzoneEval = document.getElementById('dropzoneEval');
+const fileInputEval = document.getElementById('fileInputEval');
+dropzoneEval.addEventListener('click', () => fileInputEval.click());
+dropzoneEval.addEventListener('dragover', e => { e.preventDefault(); dropzoneEval.classList.add('dragover'); });
+dropzoneEval.addEventListener('dragleave', () => dropzoneEval.classList.remove('dragover'));
+dropzoneEval.addEventListener('drop', e => {
+  e.preventDefault(); dropzoneEval.classList.remove('dragover');
+  if (e.dataTransfer.files[0]) setEvalImage(e.dataTransfer.files[0]);
+});
+fileInputEval.addEventListener('change', () => { if (fileInputEval.files[0]) setEvalImage(fileInputEval.files[0]); });
+
+function setEvalImage(f){
+  evalImageFile = f;
+  const wrap = document.getElementById('evalThumbWrap');
+  wrap.innerHTML = '';
+  const div = document.createElement('div');
+  div.className = 'thumb'; div.style.width = '140px'; div.style.height = '140px';
+  const img = document.createElement('img'); img.src = URL.createObjectURL(f);
+  const rm = document.createElement('button'); rm.className = 'rm'; rm.textContent = '×';
+  rm.onclick = () => { evalImageFile = null; wrap.innerHTML = ''; };
+  div.appendChild(img); div.appendChild(rm);
+  wrap.appendChild(div);
+}
+
+const SAMPLE_A = `美国比特币以太坊现货ETF净流出3.11亿美元
+据 SoSoValue 数据，美东时间7月24日，美国比特币现货ETF单日总净流出2.40亿美元，以太坊现货ETF总净流出7061.79万美元，两类产品合计净流出约3.1062亿美元。其中，比特币ETF方面，贝莱德IBIT净流出2.12亿美元居首，富达FBTC净流出2791.16万美元，显示主流基金产品均出现明显赎回。
+现货ETF资金流一向被视为观察美国机构资金风险偏好的核心指标。此次BTC与ETH ETF同步转为净流出，且单日规模超过3亿美元，说明短线机构需求有所降温，也可能对BTC、ETH现货价格形成情绪压制。`;
+const SAMPLE_B = `匿名 Telegram 频道称某头部交易所明早10点将上线meme新币 $FROG，目标100倍，错过不再有！`;
+
+document.getElementById('sampleA').addEventListener('click', () => { document.getElementById('newsTextInput').value = SAMPLE_A; });
+document.getElementById('sampleB').addEventListener('click', () => { document.getElementById('newsTextInput').value = SAMPLE_B; });
+
+const SCORE_COLOR = s => s >= 7 ? 'var(--ev-green)' : (s >= 4 ? 'var(--ev-amber)' : 'var(--ev-red)');
+
+document.getElementById('runEvalBtn').addEventListener('click', async () => {
+  const fd = new FormData();
+  if (evalMode === 'text'){
+    const txt = document.getElementById('newsTextInput').value.trim();
+    if (!txt){ toast('请先粘贴新闻文本'); return; }
+    fd.append('text', txt);
+  } else if (evalMode === 'image'){
+    if (!evalImageFile){ toast('请先上传新闻截图'); return; }
+    fd.append('image', evalImageFile, evalImageFile.name);
+  } else {
+    const eid = document.getElementById('eventIdInput').value.trim();
+    if (!eid){ toast('请先填入或随机抽取一个 event_id'); return; }
+    fd.append('event_id', eid);
+  }
+  track('tool_run', {tool: 'llm_eval', mode: evalMode});
+
+  const btn = document.getElementById('runEvalBtn');
+  btn.disabled = true;
+  document.getElementById('evalSpinnerWrap').style.display = 'inline-flex';
+  document.getElementById('evalError').innerHTML = '';
+  document.getElementById('evalResults').innerHTML = '';
+
+  try{
+    const resp = await fetch(toolUrl('/api/tools/persona-eval'), {method:'POST', body: fd});
+    const body = await resp.json();
+    if (!resp.ok){
+      document.getElementById('evalError').innerHTML = `<div class="err-box">${escapeHtml(body.error || ('请求失败：HTTP ' + resp.status))}</div>`;
+      return;
+    }
+    renderEvalResults(body);
+  }catch(e){
+    document.getElementById('evalError').innerHTML = `<div class="err-box">网络错误：${escapeHtml(e.message)}</div>`;
+  }finally{
+    btn.disabled = false;
+    document.getElementById('evalSpinnerWrap').style.display = 'none';
+  }
+});
+
+function renderReferenceMetrics(rm){
+  if (!rm) return '';
+  if (!rm.available){
+    return `<div class="ref-metrics"><div class="ref-badge" style="max-width:520px">
+      <span>Momentum / Novelty 参考指标</span>
+      <span style="font-weight:500;color:var(--ev-tx-3)">未计算：${escapeHtml(rm.reason || '')}</span>
+    </div></div>`;
+  }
+  const m = rm.momentum, n = rm.novelty;
+  let html = '<div class="ref-metrics">';
+  if (m){
+    html += `<div class="ref-badge">
+      <span>Momentum 动量${m.is_approximation ? ' <span class="approx">(近似值)</span>' : ''}</span>
+      <b>${m.value.toFixed(2)}</b>
+      <span>互动 ${m.social_interactions} / ${m.hours_since_published != null ? m.hours_since_published.toFixed(1) + 'h' : '—'}</span>
+    </div>`;
+  }
+  if (n){
+    html += n.value == null
+      ? `<div class="ref-badge"><span>Novelty 新鲜感</span><b>—</b><span>${escapeHtml(n.note || '')}</span></div>`
+      : `<div class="ref-badge">
+          <span>Novelty 新鲜感（近 ${n.lookback_days} 天）</span>
+          <b>${n.value.toFixed(2)}</b>
+          <span>对比 ${n.similar_history_count} 条同主体历史事件，最大相似度 ${n.max_similarity_to_history.toFixed(2)}</span>
+        </div>`;
+  }
+  html += '</div>';
+  return html;
+}
+
+function renderEvalResults(body){
+  const wrap = document.getElementById('evalResults');
+  let html = `<div class="news-preview">${escapeHtml(body.news_text)}</div>`;
+  html += `<div class="kpi-row" style="margin-bottom:4px">
+    <div class="kpi"><div class="l">评测 Persona 数</div><div class="v">${body.personas.length}</div></div>
+    <div class="kpi"><div class="l">本次成本</div><div class="v">$${body.cost_usd.toFixed(4)}</div></div>
+    <div class="kpi"><div class="l">模型</div><div class="v" style="font-size:14px">${escapeHtml(body.model)}</div></div>
+  </div>`;
+  html += renderReferenceMetrics(body.reference_metrics);
+  html += `<div class="persona-grid">`;
+  body.personas.forEach(p => {
+    const color = SCORE_COLOR(p.score);
+    html += `<div class="persona-card">
+      <div class="pc-head">
+        <div class="pc-emoji">${p.emoji}</div>
+        <div>
+          <div class="pc-name">${escapeHtml(p.name)}</div>
+          <div class="pc-tagline">${escapeHtml(p.tagline)}</div>
+        </div>
+      </div>
+      <div class="pc-score-row">
+        <div class="score-track"><div class="score-fill" style="width:${p.score*10}%;background:${color}"></div></div>
+        <div class="score-num" style="color:${color}">${p.score}/10</div>
+      </div>
+      <span class="pc-badge ${p.is_understandable ? 'yes' : 'no'}">${p.is_understandable ? '✓ 看得懂' : '✗ 看不懂'}</span>
+      <div class="pc-block">
+        <div class="l">定性评估</div>
+        <div class="t">${escapeHtml(p.qualitative_assessment)}</div>
+      </div>
+      <div class="pc-block">
+        <div class="l">看懂/看不懂原因</div>
+        <div class="t">${escapeHtml(p.understandable_reason)}</div>
+      </div>
+      <div class="pc-block">
+        <div class="l">优化建议</div>
+        <div class="t">${escapeHtml(p.improvement_suggestion)}</div>
+      </div>
+    </div>`;
+  });
+  html += `</div>`;
+  if ((body.persona_errors || []).length){
+    html += `<div class="err-box">部分 persona 评测失败：${escapeHtml(JSON.stringify(body.persona_errors))}</div>`;
+  }
+  html += saveBarHtml('eval');
+  wrap.innerHTML = html;
+  wireSaveButton('eval', 'llm_eval', body);
+}
+
+// ══════════════════════════════════════════════════════════════════
+// AB 对比（新增）
+// ══════════════════════════════════════════════════════════════════
+const AB_MAX_ITEMS = 30;
+const abState = {
+  a: { mode: 'db', files: [] },
+  b: { mode: 'db', files: [] },
+};
+
+// 板块下拉复用主脚本（Tab 01/02/03 共用的 <script> 块）里已经定义的全局 SECTORS
+// 数组，而不是在这里重抄一份——两处脚本按顺序解析执行，主脚本的 var SECTORS
+// 早于本 IIFE 运行前就已经挂到 window 上，直接读即可，天然保持同步。
+(function populateAbSectors(){
+  const sectors = (typeof SECTORS !== 'undefined' && Array.isArray(SECTORS)) ? SECTORS : [];
+  ['abASector', 'abBSector'].forEach(id => {
+    const sel = document.getElementById(id);
+    sectors.forEach(s => {
+      const opt = document.createElement('option');
+      opt.value = s; opt.textContent = s;
+      sel.appendChild(opt);
+    });
+  });
+})();
+
+document.querySelectorAll('.ab-mode-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const group = btn.getAttribute('data-group');
+    const mode = btn.getAttribute('data-mode');
+    abState[group].mode = mode;
+    document.querySelectorAll(`.ab-mode-btn[data-group="${group}"]`).forEach(b => {
+      b.setAttribute('aria-selected', b === btn ? 'true' : 'false');
+    });
+    document.querySelectorAll(`.ab-mode-panel[data-group="${group}"]`).forEach(p => {
+      p.style.display = (p.getAttribute('data-mode') === mode) ? '' : 'none';
+    });
+  });
+});
+
+function wireAbDropzone(group){
+  const GROUP = group.toUpperCase();
+  const dz = document.getElementById('ab' + GROUP + 'Dropzone');
+  const input = document.getElementById('ab' + GROUP + 'FileInput');
+
+  function renderThumbs(){
+    const g = document.getElementById('ab' + GROUP + 'ThumbGrid');
+    g.innerHTML = '';
+    abState[group].files.forEach((f, idx) => {
+      const div = document.createElement('div'); div.className = 'thumb';
+      const img = document.createElement('img'); img.src = URL.createObjectURL(f);
+      const rm = document.createElement('button'); rm.className = 'rm'; rm.textContent = '×';
+      rm.onclick = () => { abState[group].files.splice(idx, 1); renderThumbs(); };
+      div.appendChild(img); div.appendChild(rm);
+      g.appendChild(div);
+    });
+  }
+  function addFiles(files){
+    const imgFiles = files.filter(f => /^image\//.test(f.type));
+    abState[group].files = abState[group].files.concat(imgFiles);
+    renderThumbs();
+  }
+
+  dz.addEventListener('click', () => input.click());
+  dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('dragover'); });
+  dz.addEventListener('dragleave', () => dz.classList.remove('dragover'));
+  dz.addEventListener('drop', e => { e.preventDefault(); dz.classList.remove('dragover'); addFiles(Array.from(e.dataTransfer.files)); });
+  input.addEventListener('change', () => { addFiles(Array.from(input.files)); input.value = ''; });
+}
+wireAbDropzone('a');
+wireAbDropzone('b');
+
+function updateAbCountPill(group, text){
+  document.getElementById('ab' + group.toUpperCase() + 'CountPill').textContent = text;
+}
+
+function fillAbFromDb(group){
+  const GROUP = group.toUpperCase();
+  const statusEl = document.getElementById('ab' + GROUP + 'FillStatus');
+  const sector = document.getElementById('ab' + GROUP + 'Sector').value;
+  const sort = document.getElementById('ab' + GROUP + 'Sort').value;
+  const limitRaw = document.getElementById('ab' + GROUP + 'Limit').value;
+  const limit = Math.max(1, Math.min(Number(limitRaw) || 20, AB_MAX_ITEMS));
+  const dateFrom = document.getElementById('ab' + GROUP + 'DateFrom').value;
+  const dateTo = document.getElementById('ab' + GROUP + 'DateTo').value;
+  const params = { sector, sort, limit };
+  if (dateFrom) params.date_from = dateFrom;
+  if (dateTo) params.date_to = dateTo;
+
+  statusEl.textContent = '拉取中…';
+  // 复用主脚本（01/02/03 共用）里已经封装好的 apiGet，走同一套鉴权 token/超时/
+  // 错误处理逻辑——这里只是预览，真正对比时后端会用同样的筛选条件独立重新查库。
+  apiGet('/api/news', params).then(d => {
+    const rows = (d && d.data) || [];
+    const label = sector || '整体';
+    const sortLabel = sort === 'date' ? '按时间' : '按重要性';
+    const titles = rows.slice(0, 3).map(r => r.title_zh || r.title_en || '').filter(Boolean);
+    statusEl.innerHTML = `已拉取 <b>${rows.length}</b> 条（${escapeHtml(label)} · ${sortLabel}）`
+      + (titles.length ? '<br>预览：' + titles.map(t => escapeHtml(t.slice(0, 28))).join('；') + (rows.length > 3 ? ' …' : '') : '');
+    updateAbCountPill(group, rows.length + ' 条（预览）');
+  }).catch(e => {
+    statusEl.textContent = '拉取失败：' + e.message;
+  });
+}
+document.getElementById('abAFillBtn').addEventListener('click', () => fillAbFromDb('a'));
+document.getElementById('abBFillBtn').addEventListener('click', () => fillAbFromDb('b'));
+
+function buildAbFormDataForGroup(fd, group){
+  const GROUP = group.toUpperCase();
+  const mode = abState[group].mode;
+  fd.append('group_' + group + '_mode', mode);
+  if (mode === 'db'){
+    fd.append('group_' + group + '_sector', document.getElementById('ab' + GROUP + 'Sector').value);
+    fd.append('group_' + group + '_sort', document.getElementById('ab' + GROUP + 'Sort').value);
+    fd.append('group_' + group + '_limit', document.getElementById('ab' + GROUP + 'Limit').value || '20');
+    const df = document.getElementById('ab' + GROUP + 'DateFrom').value;
+    const dt = document.getElementById('ab' + GROUP + 'DateTo').value;
+    if (df) fd.append('group_' + group + '_date_from', df);
+    if (dt) fd.append('group_' + group + '_date_to', dt);
+  } else if (mode === 'text'){
+    fd.append('group_' + group + '_text', document.getElementById('ab' + GROUP + 'Text').value || '');
+  } else if (mode === 'image'){
+    abState[group].files.forEach(f => fd.append('group_' + group + '_images', f, f.name));
+  }
+}
+
+function verdictPill(v){
+  const label = v === 'good' ? 'A更好' : (v === 'bad' ? 'A更差' : '差不多');
+  return `<span class="verdict-pill ${v}">${label}</span>`;
+}
+
+let lastAbTsv = '';
+
+function renderAbResults(body){
+  lastAbTsv = body.table_csv || '';
+  const wrap = document.getElementById('abResults');
+  const qa = body.quality.group_a, qb = body.quality.group_b;
+  const ov = body.overlap;
+  const gsb = body.gsb;
+
+  let html = '';
+  html += `<div class="kpi-row">
+    <div class="kpi"><div class="l">A 组条数</div><div class="v">${body.group_a.count}</div></div>
+    <div class="kpi"><div class="l">B 组条数</div><div class="v">${body.group_b.count}</div></div>
+    <div class="kpi"><div class="l">重合事件数</div><div class="v gold">${ov.matched_count}</div></div>
+    <div class="kpi"><div class="l">本次成本</div><div class="v">$${body.cost_usd.toFixed(4)}</div></div>
+  </div>`;
+
+  if ((body.warnings || []).length){
+    html += `<div class="err-box">部分输入处理有警告：${escapeHtml(JSON.stringify(body.warnings))}</div>`;
+  }
+
+  html += `<div class="section-head" style="margin-top:22px"><span class="eyebrow">重合度</span><h2 style="font-size:15px">A/B 两组的事件重合情况（cosine ≥ ${ov.cosine_threshold_used}，复用 crawler.dedup.COSINE_THRESHOLD 标定值）</h2></div>`;
+  html += `<div class="kpi-row">
+    <div class="kpi"><div class="l">A 组重合率</div><div class="v">${(ov.overlap_rate_a*100).toFixed(1)}%</div></div>
+    <div class="kpi"><div class="l">B 组重合率</div><div class="v">${(ov.overlap_rate_b*100).toFixed(1)}%</div></div>
+    <div class="kpi"><div class="l">Jaccard 相似度</div><div class="v">${(ov.jaccard*100).toFixed(1)}%</div></div>
+    <div class="kpi"><div class="l">A独有 / B独有</div><div class="v" style="font-size:16px">${ov.a_only_count} / ${ov.b_only_count}</div></div>
+  </div>`;
+
+  const srcLabel = m => m === 'db' ? '数据库真实字段' : 'LLM 估计';
+  html += `<div class="section-head" style="margin-top:22px"><span class="eyebrow">质量对比</span><h2 style="font-size:15px">平均重要性 / 可信度 / 谣言占比（A：${srcLabel(body.quality.source.group_a)}　B：${srcLabel(body.quality.source.group_b)}）</h2></div>`;
+  function qRow(label, a, b, isPct){
+    const av = a == null ? '—' : (isPct ? (a*100).toFixed(1)+'%' : a.toFixed(3));
+    const bv = b == null ? '—' : (isPct ? (b*100).toFixed(1)+'%' : b.toFixed(3));
+    const d = (a != null && b != null) ? (a - b) : null;
+    const dv = d == null ? '—' : ((d >= 0 ? '+' : '') + (isPct ? (d*100).toFixed(1)+'%' : d.toFixed(3)));
+    return `<tr><td>${label}</td><td class="sim-val">${av}</td><td class="sim-val">${bv}</td><td class="sim-val">${dv}</td></tr>`;
+  }
+  html += `<div class="table-scroll"><table class="restbl"><thead><tr><th>指标</th><th>A 组</th><th>B 组</th><th>差值 (A-B)</th></tr></thead><tbody>`
+    + qRow('平均重要性 importance_score', qa.avg_importance_score, qb.avg_importance_score, false)
+    + qRow('平均可信度 credibility_score', qa.avg_credibility_score, qb.avg_credibility_score, false)
+    + qRow('谣言占比 rumor_rate', qa.rumor_rate, qb.rumor_rate, true)
+    + `</tbody></table></div>`;
+
+  const gc = gsb.counts, gr = gsb.rates;
+  html += `<div class="section-head" style="margin-top:22px"><span class="eyebrow">GSB 对比</span><h2 style="font-size:15px">每条 A 组内容 vs 其在 B 组里最相似的对应内容（Good / Same / Bad）</h2></div>`;
+  html += `<div class="gsb-bar">
+    <span class="g" style="width:${gr.good*100}%">${gc.good ? 'Good ' + gc.good : ''}</span>
+    <span class="s" style="width:${gr.same*100}%">${gc.same ? 'Same ' + gc.same : ''}</span>
+    <span class="b" style="width:${gr.bad*100}%">${gc.bad ? 'Bad ' + gc.bad : ''}</span>
+  </div>`;
+  html += `<div class="ab-conclusion"><b>总体结论：</b>${escapeHtml(gsb.overall_conclusion || '—')}<br><b>A 组优势：</b>${escapeHtml(gsb.a_strengths || '—')}　<b>B 组优势：</b>${escapeHtml(gsb.b_strengths || '—')}</div>`;
+
+  html += `<div class="table-actions" style="margin-top:14px">
+    <div class="legend"><span class="sw" style="background:var(--ev-green)"></span>Good（A更好）　<span class="sw" style="background:var(--ev-tx-4)"></span>Same　<span class="sw" style="background:var(--ev-red)"></span>Bad（A更差）</div>
+    <button class="btn small" id="abCopyTsvBtn">📋 复制对比表格（TSV，可直接粘贴 Excel）</button>
+  </div>`;
+
+  html += `<div class="table-scroll"><table class="restbl"><thead><tr>
+    <th>A#</th><th>A 标题</th><th>B#（最相似）</th><th>B 标题</th><th>相似度</th><th>是否重合</th><th>GSB</th><th>理由</th>
+  </tr></thead><tbody>`;
+  gsb.pairs.forEach(p => {
+    html += `<tr>
+      <td class="src-tag">${p.a_index}</td>
+      <td class="title-cell">${escapeHtml(p.a_title)}</td>
+      <td class="src-tag">${p.b_index}</td>
+      <td class="title-cell">${escapeHtml(p.b_title)}</td>
+      <td class="sim-val">${p.similarity.toFixed(3)}</td>
+      <td>${p.is_overlap ? '是' : '否'}</td>
+      <td>${verdictPill(p.verdict)}</td>
+      <td class="title-cell">${escapeHtml(p.reason)}</td>
+    </tr>`;
+  });
+  html += `</tbody></table></div>`;
+  html += saveBarHtml('ab');
+
+  wrap.innerHTML = html;
+  document.getElementById('abCopyTsvBtn').addEventListener('click', () => copyToClipboard(lastAbTsv));
+  wireSaveButton('ab', 'ab_compare', body);
+}
+
+document.getElementById('abRunBtn').addEventListener('click', async () => {
+  const fd = new FormData();
+  buildAbFormDataForGroup(fd, 'a');
+  buildAbFormDataForGroup(fd, 'b');
+  track('tool_run', {tool: 'ab_compare'});
+
+  const btn = document.getElementById('abRunBtn');
+  btn.disabled = true;
+  document.getElementById('abSpinnerWrap').style.display = 'inline-flex';
+  document.getElementById('abError').innerHTML = '';
+  document.getElementById('abResults').innerHTML = '';
+
+  try{
+    const resp = await fetch(toolUrl('/api/tools/ab-compare'), {method:'POST', body: fd});
+    const body = await resp.json();
+    if (!resp.ok){
+      document.getElementById('abError').innerHTML = `<div class="err-box">${escapeHtml(body.error || ('请求失败：HTTP ' + resp.status))}</div>`;
+      return;
+    }
+    renderAbResults(body);
+  }catch(e){
+    document.getElementById('abError').innerHTML = `<div class="err-box">网络错误：${escapeHtml(e.message)}</div>`;
+  }finally{
+    btn.disabled = false;
+    document.getElementById('abSpinnerWrap').style.display = 'none';
+  }
+});
+
 })();
 </script>
 </body>

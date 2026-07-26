@@ -13,7 +13,7 @@
 | 鉴权 | HTTP Header：`Authorization: Bearer ***REMOVED***` |
 | 响应格式 | JSON，UTF-8 |
 | 实测延迟 | 约 0.55s（含跨境网络往返） |
-| 数据更新频率 | **每 4 小时**（cron 于 UTC 0/4/8/12/16/20 点整触发，单轮耗时约 20 分钟） |
+| 数据更新频率 | **每 12 小时**（cron 于 UTC 0/12 点整触发，单轮约 19 分钟；免费信源另有 2 小时级高频存档，处理仍按 12h 批量） |
 
 无鉴权或 token 错误返回 `401 {"error": "Unauthorized"}`。
 
@@ -96,7 +96,8 @@ curl -s "http://34.138.247.158:8080/health"
 | `id` | string | 事件唯一 ID，**由事件指纹派生，跨轮稳定**——同一事件重复抓到不会产生新 ID，可安全用作前端 key |
 | `title_zh` / `title_en` | string | 双语标题，LLM 重写为可独立理解的一句话（中文 ≤25 字） |
 | `description_short_zh` / `_en` | string | 短摘要（中文 50-100 字），含具体数字 |
-| `description_long_zh` / `_en` | string | 长摘要（中文 200-400 字），含背景与市场影响 |
+| `description_long_zh` | string | 长摘要，**只产中文**（2026-07-26 起，省成本+提速），长度按事件重要性分档：S/A 档 ≤300 字完整背景，B 档 ≤160 字，C/D 档 ≤80 字只给结论 |
+| `description_long_en` | string | **已废弃，新数据恒为空**。仅历史行（该时间点之前入库）可能有值，新代码不要依赖这个字段 |
 | `date` | string | 事件日期 |
 | `time_event` | datetime | 事件真实发生时间（ISO8601） |
 | `time_get_data` | datetime | 本系统抓取时间 |
@@ -246,8 +247,8 @@ for event in fetch_macro_feed(10):
 2. **单一静态 token，无分级权限、无速率限制**。任何拿到 token 的人可读取全部数据。
 3. **单实例无高可用**，systemd 管理（`crypto-news-api.service`）。VM 重启后 RSSHub 容器偶尔不自启，需 `docker start rsshub`。
 4. **`event_tier` 与 `sector` 只支持单值**，多值筛选需多次请求后自行合并。
-5. **无 WebSocket / 推送**，只能轮询。数据每 4 小时更新一次，轮询频率高于此没有意义。
-6. **推荐策略接口尚未开发**。当前 `/api/news` 返回的是按 `importance_score` 排序的**全量事件**，Macro Insight 的四层去重与体验混排已在入库阶段完成，但 Sector Insight 的相关性打分（Rel 硬门 + `Rel^1.5` 乘子 + Top≤3）**尚未实现**——按板块取新闻目前只能用 `?sector=` 做标签筛选，不等于 Sector Insight 策略输出。
+5. **无 WebSocket / 推送**，只能轮询。数据每 12 小时更新一次，轮询频率高于此没有意义。
+6. **Sector Insight 策略接口已上线**（2026-07-26）：`GET /api/recommend/sector?sector=<板块>` 返回真实相关性打分（Rel 硬门 0.5 + `Rel^1.5 × (0.25T+0.25H+0.20A+0.30M)`、板块内去重 0.75、宁缺毋滥 Top≤3，附逐条 reason 与被过滤事件的落选原因）。`/api/news?sector=` 仍是简单标签筛选，两者语义不同，推荐场景请用前者。
 
 ---
 

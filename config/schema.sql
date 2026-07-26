@@ -65,6 +65,13 @@ CREATE TABLE IF NOT EXISTS news_events (
                                                 -- 「真相关才打」的量化：relevance < 0.55 的不进 sectors 列，
                                                 -- 但仍留在这里供调阈值与 badcase 复盘
     impact_horizon          VARCHAR(16),        -- immediate/short_term/medium_term/long_term
+    -- 真实性校验（migration 004；2026-07-26 review 发现基线漏收，补齐——
+    -- 否则用本文件引导的新库会让 /api/news 的 EVENT_COLUMNS 白名单直接 500）
+    verification_status     VARCHAR(16)  DEFAULT NULL,  -- VERIFIED/PROBABLE/UNVERIFIED/DISPUTED
+    verification_score      FLOAT        DEFAULT NULL,
+    verification_reason     TEXT,
+    verification_flags      JSON,
+    independent_source_count INT         DEFAULT 1,
     created_at           DATETIME     DEFAULT CURRENT_TIMESTAMP,
     updated_at           DATETIME     DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     INDEX idx_date (date),
@@ -76,7 +83,8 @@ CREATE TABLE IF NOT EXISTS news_events (
     INDEX idx_fingerprint (event_fingerprint),
     INDEX idx_primary_coin (primary_coin),
     INDEX idx_cap_tier (coin_cap_tier),
-    INDEX idx_sentiment (sentiment)
+    INDEX idx_sentiment (sentiment),
+    INDEX idx_verification (verification_status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS x_raw_posts (
@@ -122,5 +130,6 @@ CREATE TABLE IF NOT EXISTS pipeline_runs (
     llm_cached_tokens    INT          DEFAULT 0,
     embedding_tokens     INT          DEFAULT 0,
     estimated_cost_usd   DECIMAL(10,6) DEFAULT 0,
+    stage_timings        JSON,        -- 各环节耗时秒数（migration 008）
     INDEX idx_run_at (run_at DESC)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

@@ -441,8 +441,14 @@ def record_run(conn, stats: dict, duration: float,
                status: str = "success", error: str | None = None,
                usage: dict | None = None) -> None:
     """记录本轮 pipeline 水位，供「零丢失铁律」核查；`usage` 是
-    UsageTracker.snapshot() 的输出，供 scripts/usage_monitor.py 做成本追踪。"""
+    UsageTracker.snapshot() 的输出，供 scripts/usage_monitor.py 做成本追踪。
+
+    `stats["stage_timings"]`（若有）是 pipeline.run_pipeline() 用 lap() 记的
+    各阶段耗时（秒），存成 JSON——2026-07-26 加的，此前"pipeline 为什么这么久"
+    只能翻日志按时间戳手动倒推，现在一条 SQL 就能看分解。
+    """
     usage = usage or {}
+    stage_timings = json.dumps(stats.get("stage_timings") or {}, ensure_ascii=False)
     cursor = conn.cursor()
     try:
         cursor.execute(
@@ -450,16 +456,84 @@ def record_run(conn, stats: dict, duration: float,
                (raw_count, deduped_count, enriched_count, events_count,
                 rumors_count, duration_seconds, status, error_msg,
                 llm_input_tokens, llm_output_tokens, llm_cached_tokens,
-                embedding_tokens, estimated_cost_usd)
-               VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
+                embedding_tokens, estimated_cost_usd, stage_timings)
+               VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
             (stats.get("raw", 0), stats.get("deduped", 0), stats.get("enriched", 0),
              stats.get("events", 0), stats.get("rumors", 0), duration, status, error,
              usage.get("chat_input_tokens", 0), usage.get("chat_output_tokens", 0),
              usage.get("chat_cached_tokens", 0), usage.get("embedding_tokens", 0),
-             usage.get("estimated_cost_usd", 0.0)),
+             usage.get("estimated_cost_usd", 0.0), stage_timings),
         )
         conn.commit()
     except Exception as e:
         logger.warning(f"pipeline_runs write failed: {e}")
     finally:
         cursor.close()
+
+
+# ── 本地 Claude 预处理缓存（enrich bridge）───────────────────────────
+#
+# 背景（2026-07-26）：Lawrence 的 Claude Max 订阅有大量闲置额度，而 VM 上的
+# OpenAI credit 在真金白银地烧。于是把最贵的 LLM 结构化环节做成"可预计算"：
+# 他的 Mac 上有个 worker（scripts/local_enrich_worker.py）闲时拉取 staging
+# 里还没处理的条目，用本地 claude CLI 按同一份 prompt 结构化，结果回传到
+# llm_enrich_cache 表；本模块提供 pipeline 侧的读取。
+#
+# 稳定性设计（Mac 是工作机，不保证在线，这是硬前提）：
+#   1. 缓存未命中 → enrich_one 走 OpenAI 原路径，行为与没有这套机制时完全一致
+#   2. 读缓存本身任何异常 → 返回空 dict，等价于全部未命中
+#   3. prompt_hash 不匹配的缓存行直接不选 —— prompt 一旦迭代，旧缓存自动全部失效，
+#      不会出现"一半条目用旧口径、一半用新口径"的精神分裂数据
+
+def load_enrich_cache(conn, url_hashes: list[str], prompt_hash: str) -> dict:
+    """按 url_hash 批量取本地 Claude 预处理结果，返回 {url_hash: enriched_dict}。
+
+    只取 prompt_hash 与当前一致的行。任何异常都吞掉返回 {}——缓存是纯加速层，
+    绝不允许它的故障影响主流程。
+    """
+    if not url_hashes:
+        return {}
+    out = {}
+    try:
+        cursor = conn.cursor()
+        # IN 子句分块，避免单条 SQL 过长（一轮 800+ 条目 × 64 字符 hash）
+        for i in range(0, len(url_hashes), 500):
+            chunk = url_hashes[i:i + 500]
+            placeholders = ",".join(["%s"] * len(chunk))
+            cursor.execute(
+                f"""SELECT url_hash, enriched FROM llm_enrich_cache
+                    WHERE prompt_hash = %s AND url_hash IN ({placeholders})""",
+                (prompt_hash, *chunk),
+            )
+            for url_hash, enriched in cursor.fetchall():
+                try:
+                    out[url_hash] = json.loads(enriched)
+                except (TypeError, ValueError):
+                    continue  # 单行坏数据只影响它自己，落回 OpenAI
+        cursor.close()
+    except Exception as e:
+        logger.warning(f"enrich cache load failed (falling back to OpenAI for all): {e}")
+        return {}
+    if out:
+        logger.info(f"Enrich cache: {len(out)}/{len(url_hashes)} pre-enriched locally")
+    return out
+
+
+def mark_enrich_cache_consumed(conn, url_hashes: list[str]) -> None:
+    """标记已被本轮 pipeline 用掉的缓存行（观测用，不影响正确性）。"""
+    if not url_hashes:
+        return
+    try:
+        cursor = conn.cursor()
+        for i in range(0, len(url_hashes), 500):
+            chunk = url_hashes[i:i + 500]
+            placeholders = ",".join(["%s"] * len(chunk))
+            cursor.execute(
+                f"UPDATE llm_enrich_cache SET consumed_at = NOW() "
+                f"WHERE url_hash IN ({placeholders})",
+                tuple(chunk),
+            )
+        conn.commit()
+        cursor.close()
+    except Exception as e:
+        logger.warning(f"enrich cache consume-mark failed (harmless): {e}")

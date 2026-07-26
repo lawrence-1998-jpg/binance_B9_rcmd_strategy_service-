@@ -53,6 +53,8 @@
   --teal-wash:#E1F3F0;
   --teal-line:#B9E1DA;
 
+  --sidenav-w:238px;
+
   --r:10px; --r-lg:16px;
   --shadow-sm:0 1px 2px rgba(18,20,26,.05);
   --shadow:0 1px 3px rgba(18,20,26,.06), 0 12px 28px -18px rgba(18,20,26,.22);
@@ -67,6 +69,7 @@ body{
   margin:0;background:var(--paper);color:var(--ink);font-family:var(--sans);
   font-size:14.5px;line-height:1.62;-webkit-font-smoothing:antialiased;
   text-rendering:optimizeLegibility;overflow-x:hidden;
+  padding-left:var(--sidenav-w);   /* 给固定侧边导航栏让位，窄屏在媒体查询里归零 */
 }
 h1,h2,h3,h4{margin:0;font-weight:600;line-height:1.22;letter-spacing:-.018em}
 p{margin:0}
@@ -94,8 +97,12 @@ code,pre,.mono{font-family:var(--mono)}
 
 /* ── Header (与 index.html 一致的导航壳，Tab 5 高亮) ─────────────────── */
 header{
-  position:sticky;top:0;z-index:60;background:rgba(251,250,247,.88);
-  backdrop-filter:saturate(180%) blur(16px);-webkit-backdrop-filter:saturate(180%) blur(16px);
+  /* 不用 backdrop-filter 毛玻璃：header 里的状态灯 `.dot.ok` 挂着无限循环的
+     pulse 动画，动画元素在 backdrop-filter 容器内会逼浏览器每帧重算一次
+     16px 高斯模糊，表现为背景持续闪烁（2026-07-26 实测到的真实问题）。
+     何况 header 底色 #FBFAF7 与页面底色本来就是同一个色，毛玻璃看不出效果，
+     改成不透明纯色：观感几乎不变，彻底消除这一类重绘开销。 */
+  position:sticky;top:0;z-index:60;background:var(--paper);
   border-bottom:1px solid var(--rule);
 }
 .hbar{display:flex;align-items:center;gap:18px;padding:14px 0 12px;flex-wrap:wrap}
@@ -115,29 +122,120 @@ header{
 .dot.bad{background:var(--red);box-shadow:0 0 0 3px rgba(180,36,60,.14)}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
 
-nav.tabs{display:flex;gap:0;overflow-x:auto;scrollbar-width:none;align-items:stretch}
-nav.tabs::-webkit-scrollbar{display:none}
-.tab{
-  position:relative;background:none;border:0;padding:11px 0 14px;margin-right:30px;
-  color:var(--ink-3);font-size:13.5px;font-weight:520;white-space:nowrap;
-  display:inline-flex;align-items:center;gap:8px;transition:color .16s;text-decoration:none;
+/* ── 侧边导航（与 index.html 同一套设计，两页保持一致）───────────────── */
+.sidenav{
+  position:fixed;left:0;top:0;bottom:0;width:var(--sidenav-w);z-index:80;
+  background:var(--surface);border-right:1px solid var(--rule);
+  display:flex;flex-direction:column;overflow-y:auto;overscroll-behavior:contain;
+  /* 图层提升：整屏高的 position:fixed 元素如果不单独成层，页面每滚动一帧
+     都要连带重绘它，在部分机器上表现为画面闪烁/撕裂。translateZ(0) 把它
+     交给合成器独立处理，滚动时不再触发重绘。contain 进一步告诉浏览器
+     侧栏内部的布局/绘制不会影响外部，缩小失效范围。 */
+  transform:translateZ(0);
+  contain:layout paint;
 }
-.tab .idx{font-family:var(--mono);font-size:10px;color:var(--ink-4);letter-spacing:.06em}
-.tab:hover{color:var(--ink);text-decoration:none}
-.tab[aria-selected="true"]{color:var(--ink);font-weight:600}
+.sn-brand{
+  display:flex;align-items:center;gap:11px;padding:17px 16px 15px;
+  border-bottom:1px solid var(--rule-2);flex:none;text-decoration:none;color:inherit;
+}
+.sn-brand:hover{text-decoration:none}
+.sn-brand .mark{width:28px;height:28px;flex:none}
+.sn-brand .n{font-size:13px;font-weight:650;letter-spacing:-.025em;line-height:1.32}
+.sn-brand .n b{color:var(--gold-deep);font-weight:650}
+.sn-brand .s{font-size:9px;color:var(--ink-4);letter-spacing:.08em;font-family:var(--mono);margin-top:3px}
+
+nav.tabs{display:flex;flex-direction:column;gap:1px;padding:8px 10px 16px;flex:1 1 auto}
+/* 分组标题：与 index.html 保持一致的两层语义分组 */
+.sn-group{
+  padding:14px 14px 6px;font-family:var(--mono);font-size:9px;font-weight:700;
+  letter-spacing:.11em;color:var(--ink-4);
+}
+.tab{
+  position:relative;background:none;border:0;width:100%;text-align:left;
+  padding:9px 12px 9px 14px;border-radius:8px;
+  color:var(--ink-3);font-size:13.5px;font-weight:520;
+  display:flex;align-items:center;gap:9px;text-decoration:none;
+  transition:background .15s,color .15s;
+}
+.tab .idx{font-family:var(--mono);font-size:10px;color:var(--ink-4);letter-spacing:.06em;flex:none}
+.tab:hover{color:var(--ink);background:var(--surface-2);text-decoration:none}
+.tab[aria-selected="true"]{color:var(--ink);font-weight:600;background:var(--gold-wash)}
 .tab[aria-selected="true"] .idx{color:var(--gold-deep)}
 .tab::after{
+  content:"";position:absolute;left:0;top:7px;bottom:7px;width:3px;border-radius:0 3px 3px 0;
+  background:var(--gold);transform:scaleY(0);
+  transition:transform .2s cubic-bezier(.4,0,.2,1);
+}
+.tab[aria-selected="true"]::after{transform:scaleY(1)}
+.tab.ext{color:var(--ink-4)}
+.tab.ext .arw{font-size:10px;opacity:.7;margin-left:auto}
+.tab.ext:hover{color:var(--ink-2)}
+.navsep{height:1px;width:auto;background:var(--rule-2);margin:9px 12px;flex:none}
+
+/* 侧边栏里策略实验室自己的两个子项 */
+.sn-sub{display:flex;flex-direction:column;gap:1px;margin:1px 0 3px}
+.sn-subitem{
+  position:relative;background:none;border:0;width:100%;text-align:left;
+  padding:6px 12px 6px 36px;border-radius:7px;
+  color:var(--ink-4);font-size:12.5px;transition:background .15s,color .15s;
+}
+.sn-subitem::before{
+  content:"";position:absolute;left:24px;top:50%;width:4px;height:4px;margin-top:-2px;
+  border-radius:50%;background:var(--rule);transition:background .15s;
+}
+.sn-subitem:hover{color:var(--ink-2);background:var(--surface-2)}
+.sn-subitem[aria-current="true"]{color:var(--ink-2);font-weight:560}
+.sn-subitem[aria-current="true"]::before{background:var(--gold)}
+
+.navtoggle{
+  display:none;background:var(--surface);border:1px solid var(--rule);border-radius:9px;
+  width:34px;height:34px;align-items:center;justify-content:center;
+  color:var(--ink-2);box-shadow:var(--shadow-sm);flex:none;
+}
+.navtoggle:hover{color:var(--ink);background:var(--surface-2)}
+.sn-backdrop{position:fixed;inset:0;z-index:79;background:rgba(18,20,26,.34);display:none}
+.sn-backdrop.show{display:block}
+.hbrand{display:none}
+
+/* ── 页面内子 tab：单版本重排 / 两版本对比 ───────────────────────────
+   原来两段是竖着堆在一起的（"一拉到底"），改成同页子 tab 切换。 */
+nav.subtabs{
+  display:flex;gap:2px;overflow-x:auto;scrollbar-width:none;
+  border-bottom:1px solid var(--rule);margin:0 0 24px;
+}
+nav.subtabs::-webkit-scrollbar{display:none}
+.stab{
+  position:relative;background:none;border:0;padding:10px 2px 12px;margin-right:26px;
+  color:var(--ink-3);font-size:13.5px;font-weight:520;white-space:nowrap;
+  display:inline-flex;align-items:center;gap:8px;transition:color .16s;
+}
+.stab:last-child{margin-right:0}
+.stab .idx{font-family:var(--mono);font-size:10.5px;color:var(--ink-4)}
+.stab:hover{color:var(--ink-2)}
+.stab[aria-selected="true"]{color:var(--ink);font-weight:600}
+.stab[aria-selected="true"] .idx{color:var(--gold-deep)}
+.stab::after{
   content:"";position:absolute;left:0;right:0;bottom:-1px;height:2px;border-radius:2px;
   background:var(--gold);transform:scaleX(0);transform-origin:left;
   transition:transform .22s cubic-bezier(.4,0,.2,1);
 }
-.tab[aria-selected="true"]::after{transform:scaleX(1)}
-.tab.ext{color:var(--ink-4)}
-.tab.ext .arw{font-size:10px;opacity:.7}
-.tab.ext:hover{color:var(--ink-2)}
-.navsep{width:1px;background:var(--rule);margin:12px 30px 14px 0;flex:none}
+.stab[aria-selected="true"]::after{transform:scaleX(1)}
+.labpane[hidden]{display:none}
+.labpane{animation:fade .3s cubic-bezier(.2,.8,.2,1)}
+@keyframes fade{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
 
 main{padding:36px 0 90px}
+
+@media (max-width:1080px){
+  body{padding-left:0}
+  .sidenav{
+    transform:translateX(-100%);box-shadow:var(--shadow-lg);
+    transition:transform .24s cubic-bezier(.4,0,.2,1);
+  }
+  .sidenav.open{transform:none}
+  .navtoggle{display:inline-flex}
+  .hbrand{display:block}
+}
 
 /* ── Cards / grid ───────────────────────────────────────────────────── */
 .card{
@@ -216,6 +314,16 @@ select:focus,input:focus{outline:none;border-color:var(--indigo);box-shadow:0 0 
 .btn.gold:hover{background:#FBC91C;border-color:#DCA908}
 .btn.sm{padding:5px 11px;font-size:11.5px;border-radius:8px}
 .btn:disabled{opacity:.42;cursor:not-allowed}
+.btn.saved{background:var(--green);border-color:var(--green);color:#fff}
+
+/* ── 保存结果条（两个子 tab 共用同一套样式）───────────────────────────── */
+.save-row{display:flex;align-items:center;gap:8px;margin-top:14px;flex-wrap:wrap}
+.save-row input[type=text]{
+  flex:1 1 180px;min-width:0;background:var(--surface);color:var(--ink);border:1px solid var(--rule);
+  border-radius:9px;padding:8px 12px;font-size:12.5px;font-family:inherit;
+}
+.save-row input[type=text]:focus{outline:none;border-color:var(--indigo);box-shadow:0 0 0 3px rgba(58,74,143,.10)}
+.save-msg{font-size:11.5px;color:var(--ink-3)}
 
 /* ── Weight sliders ─────────────────────────────────────────────────── */
 .wpanel-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:14px;flex-wrap:wrap}
@@ -303,35 +411,58 @@ footer{border-top:1px solid var(--rule);padding:26px 0;margin-top:20px}
 </head>
 <body>
 
+<aside class="sidenav" id="sidenav">
+  <a class="sn-brand" href="/">
+    <svg class="mark" viewBox="0 0 64 64" aria-hidden="true">
+      <g fill="#F0B90B">
+        <rect x="26.4" y="4"    width="11.2" height="11.2" rx="1.6" transform="rotate(45 32 9.6)"/>
+        <rect x="4"    y="26.4" width="11.2" height="11.2" rx="1.6" transform="rotate(45 9.6 32)"/>
+        <rect x="48.8" y="26.4" width="11.2" height="11.2" rx="1.6" transform="rotate(45 54.4 32)"/>
+        <rect x="26.4" y="48.8" width="11.2" height="11.2" rx="1.6" transform="rotate(45 32 54.4)"/>
+        <rect x="25.6" y="25.6" width="12.8" height="12.8" rx="1.8" transform="rotate(45 32 32)"/>
+      </g>
+    </svg>
+    <div>
+      <div class="n">Lawrence <b>Crypto News</b></div>
+      <div class="s">B9 · STRATEGY LAB</div>
+    </div>
+  </a>
+
+  <nav class="tabs" role="tablist" aria-label="主导航">
+    <div class="sn-group">新闻策略数据服务</div>
+    <a class="tab ext" href="/#tab1"><span class="idx">01</span>生成流程</a>
+    <a class="tab ext" href="/#tab2"><span class="idx">02</span>数据展示</a>
+    <a class="tab ext" href="/#tab3"><span class="idx">03</span>API 接入</a>
+
+    <div class="sn-group">策略产品工作态</div>
+    <a class="tab ext" href="/#tab4"><span class="idx">04</span>评测工具</a>
+    <span class="tab" role="tab" aria-selected="true"><span class="idx">05</span>策略实验室</span>
+    <div class="sn-sub">
+      <button class="sn-subitem" data-sub="1" aria-current="true">单版本权重调节</button>
+      <button class="sn-subitem" data-sub="2" aria-current="false">两版本对比</button>
+    </div>
+
+    <span class="navsep" aria-hidden="true"></span>
+    <a class="tab ext" href="/#tab5"><span class="idx">06</span>历史数据</a>
+  </nav>
+</aside>
+<div class="sn-backdrop" id="snBackdrop" hidden></div>
+
 <header>
   <div class="wrap">
     <div class="hbar">
-      <a class="brand" href="/">
-        <svg class="mark" viewBox="0 0 64 64" aria-hidden="true">
-          <g fill="#F0B90B">
-            <rect x="26.4" y="4"    width="11.2" height="11.2" rx="1.6" transform="rotate(45 32 9.6)"/>
-            <rect x="4"    y="26.4" width="11.2" height="11.2" rx="1.6" transform="rotate(45 9.6 32)"/>
-            <rect x="48.8" y="26.4" width="11.2" height="11.2" rx="1.6" transform="rotate(45 54.4 32)"/>
-            <rect x="26.4" y="48.8" width="11.2" height="11.2" rx="1.6" transform="rotate(45 32 54.4)"/>
-            <rect x="25.6" y="25.6" width="12.8" height="12.8" rx="1.8" transform="rotate(45 32 32)"/>
-          </g>
+      <button class="navtoggle" id="navToggle" aria-label="打开导航" aria-expanded="false" aria-controls="sidenav">
+        <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor"
+             stroke-width="1.6" stroke-linecap="round" aria-hidden="true">
+          <path d="M1.5 3.5h12M1.5 7.5h12M1.5 11.5h12"/>
         </svg>
-        <div>
-          <div class="n">Lawrence <b>Crypto News</b> Crawler</div>
-          <div class="s">B9 RECOMMENDATION · STRATEGY LAB</div>
-        </div>
+      </button>
+      <a class="brand hbrand" href="/">
+        <div class="n">Lawrence <b>Crypto News</b> Crawler</div>
       </a>
       <div class="hspacer"></div>
       <div class="pill"><span class="dot" id="healthDot"></span><span id="healthTx">连接中…</span></div>
     </div>
-    <nav class="tabs" role="tablist" aria-label="主导航">
-      <a class="tab ext" href="/"><span class="idx">01</span>生成流程</a>
-      <a class="tab ext" href="/"><span class="idx">02</span>数据展示</a>
-      <a class="tab ext" href="/"><span class="idx">03</span>API 接入</a>
-      <span class="navsep" aria-hidden="true"></span>
-      <a class="tab ext" href="/eval"><span class="idx">04</span>评测工具</a>
-      <span class="tab" role="tab" aria-selected="true"><span class="idx">05</span>策略实验室</span>
-    </nav>
   </div>
 </header>
 
@@ -391,7 +522,14 @@ footer{border-top:1px solid var(--rule);padding:26px 0;margin-top:20px}
     </div>
   </div>
 
-  <!-- ══════════════ Section 1：单版本实时重排 ══════════════ -->
+  <!-- 两个工具改成同页子 tab（原来是竖着堆在一起，一直往下拉） -->
+  <nav class="subtabs" role="tablist" aria-label="策略实验室子导航">
+    <button class="stab" role="tab" id="lstab-1" aria-controls="lpane-1" aria-selected="true"><span class="idx">01</span>单版本权重调节 · 实时重排</button>
+    <button class="stab" role="tab" id="lstab-2" aria-controls="lpane-2" aria-selected="false"><span class="idx">02</span>两版本权重对比</button>
+  </nav>
+
+  <!-- ══════════════ 子 Tab 1：单版本实时重排 ══════════════ -->
+  <div class="labpane" id="lpane-1" role="tabpanel" aria-labelledby="lstab-1">
   <div class="section">
     <div class="sec-head">
       <span class="eyebrow">01 · Real-time Reorder</span>
@@ -421,11 +559,19 @@ footer{border-top:1px solid var(--rule);padding:26px 0;margin-top:20px}
           <span class="pill" id="singleMeta" style="box-shadow:none">—</span>
         </div>
         <div id="singleResults"><div class="loading">正在加载…</div></div>
+        <div class="save-row">
+          <input type="text" id="singleSaveLabel" placeholder="备注（可选，例如「权威优先方案」）">
+          <button class="btn sm" id="singleSaveBtn" type="button">💾 保存结果</button>
+          <span class="save-msg" id="singleSaveMsg"></span>
+        </div>
       </div>
     </div>
   </div>
 
-  <!-- ══════════════ Section 2：两版本对比 ══════════════ -->
+  </div><!-- /lpane-1 -->
+
+  <!-- ══════════════ 子 Tab 2：两版本对比 ══════════════ -->
+  <div class="labpane" id="lpane-2" role="tabpanel" aria-labelledby="lstab-2" hidden>
   <div class="section">
     <div class="sec-head">
       <span class="eyebrow">02 · A / B Comparison</span>
@@ -473,7 +619,13 @@ footer{border-top:1px solid var(--rule);padding:26px 0;margin-top:20px}
     <div id="compareResults">
       <div class="loading">正在加载…</div>
     </div>
+    <div class="save-row">
+      <input type="text" id="compareSaveLabel" placeholder="备注（可选，例如「权威优先 vs 时效优先」）">
+      <button class="btn sm" id="compareSaveBtn" type="button">💾 保存结果</button>
+      <span class="save-msg" id="compareSaveMsg"></span>
+    </div>
   </div>
+  </div><!-- /lpane-2 -->
 
 </main>
 
@@ -497,6 +649,59 @@ var API = (location.protocol === "http:" || location.protocol === "https:")
 var SECTORS = ["New Listing","bStocks","Seed","tCommodities","BSC","DeFi","Gaming","NFT",
   "Layer1/Layer2","Launchpad","Payments","Monitoring","RWA","Solana","Fan Token",
   "Infrastructure","AI","Launchpool","Megadrop","MEME"];
+
+/* ══════════════════════════════════════════════════════════════════════
+   子 tab 切换 + 侧边导航
+   两个工具（单版本重排 / 两版本对比）原本竖着堆在一页里要一直往下拉，
+   改成同页子 tab；侧边栏里对应的两个子项与它双向同步。
+   ══════════════════════════════════════════════════════════════════════ */
+function showLabPane(n){
+  [1,2].forEach(function(i){
+    var pane=document.getElementById("lpane-"+i), tab=document.getElementById("lstab-"+i);
+    if(pane) pane.hidden = (i!==n);
+    if(tab)  tab.setAttribute("aria-selected", i===n ? "true" : "false");
+  });
+  document.querySelectorAll(".sn-subitem").forEach(function(b){
+    b.setAttribute("aria-current", Number(b.dataset.sub)===n ? "true" : "false");
+  });
+  if(location.hash!=="#sub"+n) history.replaceState(null,"","#sub"+n);
+}
+function setNav(open){
+  var nav=document.getElementById("sidenav"), bd=document.getElementById("snBackdrop"),
+      tg=document.getElementById("navToggle");
+  if(!nav) return;
+  nav.classList.toggle("open",open);
+  if(bd){ bd.classList.toggle("show",open); bd.hidden=!open; }
+  if(tg) tg.setAttribute("aria-expanded",open?"true":"false");
+}
+function closeNavIfDrawer(){
+  if(window.matchMedia("(max-width:1080px)").matches) setNav(false);
+}
+document.addEventListener("DOMContentLoaded",function(){
+  [1,2].forEach(function(i){
+    var tab=document.getElementById("lstab-"+i);
+    if(tab) tab.addEventListener("click",function(){ showLabPane(i); });
+  });
+  document.querySelectorAll(".sn-subitem").forEach(function(btn){
+    btn.addEventListener("click",function(){
+      showLabPane(Number(btn.dataset.sub));
+      closeNavIfDrawer();
+      window.scrollTo({top:0,behavior:"smooth"});
+    });
+  });
+  var tg=document.getElementById("navToggle"), bd=document.getElementById("snBackdrop");
+  if(tg) tg.addEventListener("click",function(){
+    setNav(!document.getElementById("sidenav").classList.contains("open"));
+  });
+  if(bd) bd.addEventListener("click",function(){ setNav(false); });
+  document.addEventListener("keydown",function(e){ if(e.key==="Escape") setNav(false); });
+  document.querySelectorAll("nav.tabs .tab").forEach(function(t){
+    t.addEventListener("click",closeNavIfDrawer);
+  });
+  // 支持直接用 /lab#sub2 打开第二个子 tab
+  var m=/^#sub([12])$/.exec(location.hash);
+  showLabPane(m ? Number(m[1]) : 1);
+});
 
 var FACTORS = [
   {k:"M",   name:"影响面", sub:"Impact",     color:"var(--gold)",   wash:"var(--gold-wash)"},
@@ -530,6 +735,29 @@ function api(path, body){
   }).then(function(r){
     if (!r.ok) return r.json().catch(function(){ return {}; }).then(function(j){ throw new Error(j.error || ("HTTP " + r.status)); });
     return r.json();
+  });
+}
+
+/* 埋点：fire-and-forget，失败静默吞掉，不影响页面正常使用。*/
+function track(eventType, meta){
+  try{ api("/api/analytics/track", {event_type: eventType, page: "lab", meta: meta || {}}).catch(function(){}); }
+  catch(e){}
+}
+
+/* 「保存结果」：两个子 tab 共用，把已经拿到手的响应 JSON 原样 POST 给 /api/history/save。*/
+var lastReweightResult = null, lastCompareResult = null;
+function saveLabResult(tool, payload, btnId, labelId, msgId){
+  var btn = document.getElementById(btnId), msg = document.getElementById(msgId);
+  if (!payload){ msg.textContent = "还没有可保存的结果，请等待加载完成后再试。"; return; }
+  var label = (document.getElementById(labelId) || {}).value || "";
+  var original = btn.textContent;
+  btn.disabled = true; btn.textContent = "保存中…";
+  api("/api/history/save", {tool: tool, label: label, payload: payload, cost_usd: 0}).then(function(){
+    btn.classList.add("saved"); btn.textContent = "已保存 ✓"; msg.textContent = "已保存，可在主站「06 历史数据」tab 查看";
+    setTimeout(function(){ btn.classList.remove("saved"); btn.textContent = original; btn.disabled = false; }, 1800);
+  }).catch(function(e){
+    btn.textContent = "保存失败"; msg.textContent = e.message;
+    setTimeout(function(){ btn.textContent = original; btn.disabled = false; }, 1800);
   });
 }
 
@@ -666,8 +894,15 @@ function init(){
     $("#" + id).addEventListener("change", function(){ onWeightsChanged("single"); onWeightsChanged("a"); onWeightsChanged("b"); });
   });
 
-  $("#btnCompare").addEventListener("click", runCompare);
+  $("#btnCompare").addEventListener("click", function(){ track("tool_run", {tool:"lab_ab_compare"}); runCompare(); });
+  $("#singleSaveBtn").addEventListener("click", function(){
+    saveLabResult("lab_weight", lastReweightResult, "singleSaveBtn", "singleSaveLabel", "singleSaveMsg");
+  });
+  $("#compareSaveBtn").addEventListener("click", function(){
+    saveLabResult("lab_ab_compare", lastCompareResult, "compareSaveBtn", "compareSaveLabel", "compareSaveMsg");
+  });
 
+  track("page_view", {});
   checkHealth();
   runReweight();
   runCompare();
@@ -725,6 +960,7 @@ function runReweight(){
   var el = $("#singleResults");
   var body = Object.assign(baseParams(), { weights: panelSingle.rawWeights() });
   api("/api/tools/reweight", body).then(function(d){
+    lastReweightResult = d;
     $("#poolPill").textContent = "池大小 " + d.meta.pool_size;
     $("#singleMeta").textContent = "Top " + d.results.length + " · 基准 " + d.meta.social_baseline;
     $("#footMeta").textContent = "上次计算：" + new Date(d.meta.generated_at).toLocaleString("zh-CN");
@@ -796,6 +1032,7 @@ function runCompare(){
   el.innerHTML = '<div class="loading">正在计算对比…</div>';
   api("/api/tools/compare", body).then(function(d){
     if (d.error){ el.innerHTML = '<div class="err">' + esc(d.error) + '</div>'; return; }
+    lastCompareResult = d;
     var t = d.turnover;
     $("#footMeta").textContent = "上次计算：" + new Date(d.meta.generated_at).toLocaleString("zh-CN");
     el.innerHTML =

@@ -220,8 +220,10 @@ FUNDING_UNIVERSE_TOP_N = 40
 
 # ── 信号 5：持仓量骤变 ────────────────────────────────────────────────
 # OKX /public/open-interest 是当前快照的批量接口（一次拉全市场），没有历史序列；
-# 用状态表存上一轮快照，跨轮做差——爬虫本来就是 4 小时一轮，正好是合理的观察
-# 窗口。首轮没有基线，不产信号，从第二轮开始生效。
+# 用状态表存上一轮快照，跨轮做差。2026-07-26 更正：本模块现在跟随
+# scripts/stage_fetch.py 每 2 小时跑一轮（不再是写这段注释时的 4 小时主 cron），
+# 快照间隔 ~2h，落在 OI_MIN_HOURS(1.5)～OI_MAX_HOURS(12) 的有效窗口内。
+# 首轮没有基线，不产信号，从第二轮开始生效。
 OI_CHANGE_PCT = 30.0
 # 4 小时内持仓量增减三成属于明确的资金进出，通常对应插针爆仓或新资金建仓。
 
@@ -823,10 +825,16 @@ def _trade_url(symbol: str, base: str, anchor: str) -> str:
 def _item(source: str, title: str, url: str, summary: str, authority: int,
           signal_type: str, signal_key: str) -> dict:
     """组装成与 crawler/main.py 其他 fetch_* 完全一致的 item 结构。"""
+    # URL 追加触发时间成分（2026-07-26 review 修复，HIGH）：行情页锚点原本是
+    # 静态的（#move-up 等），而 staging 表按 url_hash 永久去重、consumed_at 一去
+    # 不回——同一 (币, 信号类型, 方向) 第二次合法触发起，条目会在存档层被静默
+    # 吞掉，且 llm_enrich_cache 还会把首次播报的旧数字喂给未来的重报。加上
+    # 小时级时间戳后每次 SignalState 放行的播报都是独立 URL；重发频率本就由
+    # 冷却闸门控制，不会爆量。对行情页本身，fragment 无副作用。
     return {
         "source": source,
         "title": title,
-        "url": url,
+        "url": f"{url}-{_now().strftime('%Y%m%dT%H')}",
         "summary": summary,
         "published_at": _now().isoformat(),
         "lang": "zh",

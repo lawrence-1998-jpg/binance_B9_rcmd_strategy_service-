@@ -26,8 +26,12 @@ logger = logging.getLogger(__name__)
 # ——OpenAI 会调价，这里不会自动同步。
 PRICING_USD_PER_MILLION_TOKENS = {
     "gpt-5.4": {"input": 2.50, "output": 15.00, "cached_input": 0.25},
+    # 2026-07-26 新增：pipeline.py 把 market_signal/calendar 这类模板化条目路由
+    # 到这个降级模型（见 pipeline.LLM_MODEL_LITE），定价同样查证自官方定价页。
+    "gpt-5.4-nano": {"input": 0.20, "output": 1.25, "cached_input": 0.02},
     "text-embedding-3-small": {"input": 0.02, "output": 0.0, "cached_input": 0.02},
 }
+_DEFAULT_CHAT_MODEL = "gpt-5.4"
 
 
 class UsageTracker:
@@ -46,8 +50,12 @@ class UsageTracker:
         self.chat_cached_tokens = 0
         self.embedding_calls = 0
         self.embedding_tokens = 0
+        # 按模型分桶，是精确计价的前提——多模型混跑之后，"总 token 数 ×
+        # 单一价格"会算错账。旧调用方（api/eval_tools.py、
+        # crawler/sector_relevance.py）不传 model，落进默认桶，行为不变。
+        self._by_model: dict[str, dict[str, int]] = {}
 
-    def record_chat(self, usage) -> None:
+    def record_chat(self, usage, model: str = _DEFAULT_CHAT_MODEL) -> None:
         """记一次 chat.completions 调用。`usage` 是响应对象的 `.usage` 属性。"""
         if usage is None:
             return
@@ -55,11 +63,20 @@ class UsageTracker:
         details = getattr(usage, "prompt_tokens_details", None)
         if details is not None:
             cached = getattr(details, "cached_tokens", 0) or 0
+        prompt = getattr(usage, "prompt_tokens", 0) or 0
+        completion = getattr(usage, "completion_tokens", 0) or 0
         with self._lock:
             self.chat_calls += 1
-            self.chat_input_tokens += getattr(usage, "prompt_tokens", 0) or 0
-            self.chat_output_tokens += getattr(usage, "completion_tokens", 0) or 0
+            self.chat_input_tokens += prompt
+            self.chat_output_tokens += completion
             self.chat_cached_tokens += cached
+            bucket = self._by_model.setdefault(
+                model, {"calls": 0, "input": 0, "output": 0, "cached": 0}
+            )
+            bucket["calls"] += 1
+            bucket["input"] += prompt
+            bucket["output"] += completion
+            bucket["cached"] += cached
 
     def record_embedding(self, usage) -> None:
         """记一次 embeddings 调用。"""
@@ -70,17 +87,20 @@ class UsageTracker:
             self.embedding_tokens += getattr(usage, "total_tokens", 0) or 0
 
     def estimated_cost_usd(self) -> float:
-        """按价格表估算本轮总花费。缓存命中部分按缓存价计，其余按标准输入价计。"""
+        """按价格表估算本轮总花费，逐模型分别计价后求和。"""
         with self._lock:
-            chat_price = PRICING_USD_PER_MILLION_TOKENS["gpt-5.4"]
             embed_price = PRICING_USD_PER_MILLION_TOKENS["text-embedding-3-small"]
-
-            uncached_input = max(0, self.chat_input_tokens - self.chat_cached_tokens)
-            chat_cost = (
-                uncached_input * chat_price["input"]
-                + self.chat_cached_tokens * chat_price["cached_input"]
-                + self.chat_output_tokens * chat_price["output"]
-            ) / 1_000_000
+            chat_cost = 0.0
+            for model, bucket in self._by_model.items():
+                price = PRICING_USD_PER_MILLION_TOKENS.get(
+                    model, PRICING_USD_PER_MILLION_TOKENS[_DEFAULT_CHAT_MODEL]
+                )
+                uncached_input = max(0, bucket["input"] - bucket["cached"])
+                chat_cost += (
+                    uncached_input * price["input"]
+                    + bucket["cached"] * price["cached_input"]
+                    + bucket["output"] * price["output"]
+                ) / 1_000_000
             embed_cost = self.embedding_tokens * embed_price["input"] / 1_000_000
             return round(chat_cost + embed_cost, 6)
 
@@ -95,6 +115,7 @@ class UsageTracker:
                 "embedding_calls": self.embedding_calls,
                 "embedding_tokens": self.embedding_tokens,
                 "estimated_cost_usd": self.estimated_cost_usd(),
+                "by_model": {m: dict(b) for m, b in self._by_model.items()},
             }
 
     def log_summary(self) -> None:

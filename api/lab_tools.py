@@ -45,6 +45,17 @@ from crawler import scoring, storage
 # ─────────────────────────────────────────────────────────────────────────────
 API_SECRET_KEY = os.environ.get("API_SECRET_KEY", "***REMOVED***")
 
+# 2026-07-26：跟 api/server.py 的 VALID_API_KEYS 保持同步——5 个可分发给不同人的
+# token，同样的原因（独立实现，不 import server.py，见上面的模块说明）。
+API_TOKENS = {
+    "lawrence":  os.environ.get("API_TOKEN_LAWRENCE",  "***REMOVED***"),
+    "team-a":    os.environ.get("API_TOKEN_TEAM_A",    "***REMOVED***"),
+    "team-b":    os.environ.get("API_TOKEN_TEAM_B",    "***REMOVED***"),
+    "partner-1": os.environ.get("API_TOKEN_PARTNER1",  "***REMOVED***"),
+    "partner-2": os.environ.get("API_TOKEN_PARTNER2",  "***REMOVED***"),
+}
+VALID_API_KEYS = {API_SECRET_KEY, *API_TOKENS.values()}
+
 
 def require_api_key(f):
     @wraps(f)
@@ -52,7 +63,7 @@ def require_api_key(f):
         key = request.headers.get("Authorization", "").replace("Bearer ", "")
         if not key:
             key = request.args.get("token", "")
-        if key != API_SECRET_KEY:
+        if key not in VALID_API_KEYS:
             return jsonify({"error": "Unauthorized"}), 401
         return f(*args, **kwargs)
     return decorated
@@ -169,7 +180,12 @@ def compute_factors(event: dict, baseline: float, now: datetime, sector: str | N
         "M": scoring.compute_impact(event),
         "T": scoring.compute_timeliness(event, now),
         "H": scoring.compute_hotness(event, baseline),
-        "A": scoring.compute_authority(event),
+        # A 不能再调 compute_authority：库里的 score_authority 存的已经是
+        # 折扣后的终值（rumor ×0.7 + verification 降权都在入库打分时应用过，
+        # 见 scoring.compute_macro_score → storage.write_events 的写入链）。
+        # 再调一遍会对 rumor/未验证事件二次折扣（2026-07-26 review 确认）。
+        # 直接用存量值，夹紧到 [0,1] 即可。
+        "A": min(1.0, max(0.0, float(event.get("score_authority") or 0.0))),
         "Q": scoring.compute_quality(event),
     }
     if sector:

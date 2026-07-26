@@ -13,11 +13,14 @@ from functools import wraps
 # import 之前。两次 dirname：第一次剥掉文件名到 api/，第二次剥到项目根目录。
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from flask import Flask, request, jsonify, g, send_from_directory
+from flask import Flask, request, jsonify, g, send_from_directory, redirect
 import mysql.connector
 
 from lab_tools import lab_bp
 from eval_tools import eval_bp
+from sector_insight import sector_insight_bp
+from history_tools import history_bp
+from enrich_bridge import enrich_bridge_bp
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -25,6 +28,19 @@ logger = logging.getLogger(__name__)
 app = Flask(__name__)
 
 API_SECRET_KEY = os.environ.get("API_SECRET_KEY", "***REMOVED***")
+
+# 2026-07-26：按 Lawrence 要求生成 5 个独立 token，方便分给不同的人/团队用——
+# 出问题时可以单独吊销一个，不用所有对接方一起换 token。原 API_SECRET_KEY
+# 继续有效（向下兼容，不影响已经在用它的地方），这 5 个是新增的。
+# 环境变量可覆盖默认值（生产环境如需轮换，改 config/.env 后重启服务即可）。
+API_TOKENS = {
+    "lawrence":  os.environ.get("API_TOKEN_LAWRENCE",  "***REMOVED***"),
+    "team-a":    os.environ.get("API_TOKEN_TEAM_A",    "***REMOVED***"),
+    "team-b":    os.environ.get("API_TOKEN_TEAM_B",    "***REMOVED***"),
+    "partner-1": os.environ.get("API_TOKEN_PARTNER1",  "***REMOVED***"),
+    "partner-2": os.environ.get("API_TOKEN_PARTNER2",  "***REMOVED***"),
+}
+VALID_API_KEYS = {API_SECRET_KEY, *API_TOKENS.values()}
 
 
 def get_db():
@@ -63,7 +79,7 @@ def require_api_key(f):
         key = request.headers.get("Authorization", "").replace("Bearer ", "")
         if not key:
             key = request.args.get("token", "")
-        if key != API_SECRET_KEY:
+        if key not in VALID_API_KEYS:
             return jsonify({"error": "Unauthorized"}), 401
         return f(*args, **kwargs)
     return decorated
@@ -346,11 +362,16 @@ def health():
 # 路径白名单而非通配：通配会把所有拼错的 URL 都吞成 200 首页，掩盖真实的 404。
 WEB_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "web")
 WEB_PAGES = {
-    "": "index.html",           # 主页面：生成流程 / 数据展示 / API 接入
+    "": "index.html",           # 主页面：生成流程 / 数据展示 / API 接入 / 评测工具（同页 tab）
     "dashboard": "index.html",
-    "eval": "eval.html",        # 评测工具
     "lab": "lab.html",          # 策略实验室
 }
+
+# 2026-07-26：评测工具（原 Tab 4）从独立页面 web/eval.html 合并进 index.html 的
+# 同页 tab 结构（不再有单独的 /eval 页面）。旧的 /eval 链接/书签不应该 500 或
+# 静默变成一个不相关的页面——302 重定向到主页的第 4 个 tab 锚点，行为对用户来说
+# 等价于"点开还是那个功能"，比裸 404 更友好，也不需要保留 eval.html 这个死文件。
+_EVAL_REDIRECT_TARGET = "/#tab4"
 
 
 def _nocache(resp):
@@ -362,6 +383,8 @@ def _nocache(resp):
 @app.route("/", methods=["GET"])
 @app.route("/<page>", methods=["GET"])
 def web_page(page=""):
+    if page == "eval":
+        return redirect(_EVAL_REDIRECT_TARGET, code=302)
     filename = WEB_PAGES.get(page)
     if not filename:
         return jsonify({"error": "Not found"}), 404
@@ -376,6 +399,9 @@ def web_assets(filename):
 
 app.register_blueprint(lab_bp)
 app.register_blueprint(eval_bp)
+app.register_blueprint(sector_insight_bp)
+app.register_blueprint(history_bp)
+app.register_blueprint(enrich_bridge_bp)
 
 
 if __name__ == "__main__":

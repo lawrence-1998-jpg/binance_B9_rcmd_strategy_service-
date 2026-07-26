@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- B9 enrich bridge 本地 worker 的 launchd 定时器（跑在 Lawrence 的 Mac 上）。
+     安装（两步，2026-07-26 已装好，此处备查）：
+       1. cp scripts/local_enrich_worker.py ~/.b9/local_enrich_worker.py
+          —— 必须复制到非 TCC 保护目录再跑：launchd 的 python3 没有 Desktop
+             目录读取权限，直接指向仓库路径会报 Operation not permitted
+       2. cp 本文件到 ~/Library/LaunchAgents/ 后 launchctl load -w <路径>
+     卸载：launchctl unload -w ~/Library/LaunchAgents/com.lawrence.b9-enrich-worker.plist
+     日志：~/Library/Logs/b9-enrich-worker.log
+     注意：仓库里的 scripts/local_enrich_worker.py 是源文件，改动后要重新执行第 1 步。
+     Mac 睡眠/关机期间不触发，醒来后按周期恢复——这正是设计预期（VM 有 OpenAI 兜底）。 -->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.lawrence.b9-enrich-worker</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/usr/bin/python3</string>
+    <string>/Users/user/.b9/local_enrich_worker.py</string>
+  </array>
+  <key>StartInterval</key>
+  <integer>1800</integer>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>StandardOutPath</key>
+  <string>/Users/user/Library/Logs/b9-enrich-worker.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/user/Library/Logs/b9-enrich-worker.log</string>
+</dict>
+</plist>

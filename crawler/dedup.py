@@ -5,7 +5,7 @@
 
     DC-1  标题归一化后精确匹配      —— 去标点/信源前缀/大小写差异
     DC-2  事件三元组无条件归簇      —— (主体, 动作, 事件日期) 一致即同事件
-    DC-3  embedding 语义聚类        —— cosine >= 0.65，48h 时间窗
+    DC-3  embedding 语义聚类        —— cosine >= COSINE_THRESHOLD(实测标定 0.82)，48h 时间窗
     DC-4  跨轮归并                  —— 写库前与库中近期事件比对（见 storage.py）
 
 修复背景（2026-07-26）：
@@ -233,7 +233,7 @@ def cluster_items(items: list[dict], embeddings: np.ndarray) -> list[list[int]]:
     三层依次执行，任一层命中即 union：
       DC-1  归一化标题相同
       DC-2  事件指纹相同
-      DC-3  余弦 >= 0.65 且事件时间差 <= 48h
+      DC-3  余弦 >= COSINE_THRESHOLD（0.82，实测标定）且事件时间差 <= 48h
     """
     n = len(items)
     if n <= 1:
