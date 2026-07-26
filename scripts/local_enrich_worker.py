@@ -29,6 +29,7 @@ import re
 import shutil
 import subprocess
 import sys
+import threading
 import time
 import urllib.error
 import urllib.request
@@ -46,6 +47,61 @@ LOCK_STALE_S = 2 * 3600
 logging.basicConfig(level=logging.INFO,
                     format="%(asctime)s [%(levelname)s] %(message)s")
 log = logging.getLogger("enrich-worker")
+
+
+class Progress:
+    """并发批次的实时进度显示。
+
+    交互式跑（stdout 是 TTY）时画进度条 + 每条完成一行明细；被 launchd 拉起
+    写日志文件时自动退化成纯行式输出（进度条的 \\r 覆写在日志里是乱码）。
+    线程安全：4 个 worker 线程会并发调用 done()。
+    """
+
+    BAR_WIDTH = 24
+
+    def __init__(self, total: int):
+        self.total = total
+        self.done_n = 0
+        self.ok = 0
+        self.fail = 0
+        self.t0 = time.time()
+        self._lock = threading.Lock()
+        self.tty = sys.stdout.isatty()
+
+    @staticmethod
+    def _fmt(seconds: float) -> str:
+        m, s = divmod(int(seconds), 60)
+        return f"{m}m{s:02d}s" if m else f"{s}s"
+
+    def done(self, ok: bool, elapsed: float, tier: str = "", title: str = "") -> None:
+        with self._lock:
+            self.done_n += 1
+            self.ok += 1 if ok else 0
+            self.fail += 0 if ok else 1
+            n, total = self.done_n, self.total
+            spent = time.time() - self.t0
+            eta = (spent / n) * (total - n) if n else 0
+
+            mark = "✓" if ok else "✗"
+            line = (f"[{n:>3}/{total}] {mark} {elapsed:5.1f}s  "
+                    f"{(tier or '-'):1}  {title[:42]}")
+            if self.tty:
+                # 先清掉进度条那一行，打印明细，再把进度条重画到底部
+                sys.stdout.write("\r\033[K" + line + "\n")
+                filled = int(self.BAR_WIDTH * n / total) if total else 0
+                bar = "█" * filled + "░" * (self.BAR_WIDTH - filled)
+                sys.stdout.write(
+                    f"\033[K▕{bar}▏ {n}/{total} {100 * n // total:>3}%  "
+                    f"已用 {self._fmt(spent)}  预计还需 {self._fmt(eta)}  "
+                    f"成功 {self.ok} 失败 {self.fail}")
+                sys.stdout.flush()
+            else:
+                log.info(line)
+
+    def finish(self) -> None:
+        if self.tty:
+            sys.stdout.write("\r\033[K")
+            sys.stdout.flush()
 
 
 def find_claude() -> str:
@@ -179,19 +235,34 @@ def main() -> int:
 
         t0 = time.time()
         results = []
+        progress = Progress(len(items))
+
+        def run_one(it):
+            """包一层只为测单条耗时并驱动进度显示。"""
+            started = time.time()
+            enriched = enrich_with_claude(claude_bin, spec, it)
+            progress.done(
+                ok=enriched is not None,
+                elapsed=time.time() - started,
+                tier=(enriched or {}).get("event_tier", ""),
+                title=(enriched or {}).get("title_zh") or it.get("title", ""),
+            )
+            return it, enriched
+
         with cf.ThreadPoolExecutor(max_workers=CONCURRENCY) as pool:
-            futures = {pool.submit(enrich_with_claude, claude_bin, spec, it): it
-                       for it in items}
-            for fut in cf.as_completed(futures):
-                item = futures[fut]
-                enriched = fut.result()
+            for fut in cf.as_completed([pool.submit(run_one, it) for it in items]):
+                item, enriched = fut.result()
                 if enriched is not None:
                     results.append({"url_hash": item["url_hash"],
                                     "enriched": enriched,
                                     "model": f"claude-local/{CLAUDE_MODEL}"})
+        progress.finish()
 
-        log.info(f"enriched {len(results)}/{len(items)} "
-                 f"in {time.time() - t0:.0f}s")
+        spent = time.time() - t0
+        # 省下的钱按 OpenAI 侧实测单价估：gpt-5.4 单条约 $0.0093（run 12 实测）
+        log.info(f"enriched {len(results)}/{len(items)} in {spent:.0f}s "
+                 f"（单条均 {spent / max(1, len(items)):.1f}s，"
+                 f"约省 ${len(results) * 0.0093:.2f} OpenAI 费用）")
         submitted = 0
         for i in range(0, len(results), 20):
             chunk = results[i:i + 20]
