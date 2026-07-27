@@ -39,6 +39,7 @@ import numpy as np
 
 from .dedup import blob_to_embedding, parse_dt
 from .timeutil import now_local
+from .x_search import _normalized_key
 
 logger = logging.getLogger(__name__)
 
@@ -314,16 +315,50 @@ def event_sources(event: dict) -> list[dict]:
     return sources
 
 
-def analyze_sources(sources: list[dict]) -> dict:
+def analyze_sources(sources: list[dict],
+                    tweet_text_by_id: dict[str, str] | None = None) -> dict:
     """把 sources 列表压成机构级证据画像。
 
     返回 institutions（机构 id → 最高权重）、best_weight（最强单源权重）、
     corroboration（除最强源外的独立佐证强度，0~1）、n_credible（可信独立机构数）。
+
+    2026-07-27 加的转发折叠（Drew Zhu 提的问题："多个 KOL 单纯转发一个内容算
+    独立多个信源吗" —— 不算，只算非转载内容）：`resolve_source` 按账号名分机构，
+    N 个不同 KOL 转发/复制同一段原文时，账号名互不相同，天然绕开了这层"按机构
+    去重"，会把转发量误算成信源广度。`tweet_text_by_id` 传入时，对带
+    `x_tweet_id` 的来源按正文算 `_normalized_key`（复用 x_search.py 单次抓取里
+    已经在用的同一套"识别跨账号复制粘贴"逻辑），同一段原文只留权重最高的那个
+    机构计入独立信源，其余判定为转发，不重复计数。不传该参数时行为不变
+    （向后兼容旧调用）。
     """
+    tweet_text_by_id = tweet_text_by_id or {}
+    resolved = [(*resolve_source(src), src) for src in (sources or [])]
+
+    # 转发折叠第一遍：同一段原文（normalized key 相同）里选权重最高的机构
+    best_inst_for_key: dict[str, tuple[str, float]] = {}
+    for inst, tier, weight, src in resolved:
+        tid = src.get("x_tweet_id")
+        text = tweet_text_by_id.get(tid) if tid else None
+        if not text:
+            continue
+        key = _normalized_key(text)
+        if not key:
+            continue
+        cur = best_inst_for_key.get(key)
+        if cur is None or weight > cur[1]:
+            best_inst_for_key[key] = (inst, weight)
+
     by_inst: dict[str, float] = {}
     tiers: dict[str, str] = {}
-    for src in sources or []:
-        inst, tier, weight = resolve_source(src)
+    n_reposts_folded = 0
+    for inst, tier, weight, src in resolved:
+        tid = src.get("x_tweet_id")
+        text = tweet_text_by_id.get(tid) if tid else None
+        if text:
+            key = _normalized_key(text)
+            if key and best_inst_for_key[key][0] != inst:
+                n_reposts_folded += 1
+                continue  # 这条不是该原文里权重最高的机构，判定为转发，跳过
         if weight > by_inst.get(inst, -1.0):
             by_inst[inst] = weight
             tiers[inst] = tier
@@ -331,7 +366,7 @@ def analyze_sources(sources: list[dict]) -> dict:
     if not by_inst:
         return {"institutions": {}, "tiers": {}, "best_weight": 0.0, "best_inst": "",
                 "corroboration": 0.0, "n_institutions": 0, "n_credible": 0,
-                "has_official": False}
+                "has_official": False, "n_reposts_folded": n_reposts_folded}
 
     best_inst = max(by_inst, key=lambda k: by_inst[k])
     best_weight = by_inst[best_inst]
@@ -350,6 +385,7 @@ def analyze_sources(sources: list[dict]) -> dict:
         "n_institutions": len(by_inst),
         "n_credible": sum(1 for w in by_inst.values() if w >= CREDIBLE_FLOOR),
         "has_official": any(tiers[i] == TIER_OFFICIAL for i in by_inst),
+        "n_reposts_folded": n_reposts_folded,
     }
 
 
@@ -631,9 +667,10 @@ RUMOR_OVERRIDE_SOURCES = 3
 
 
 def compute_verification(event: dict, now: datetime,
-                         contradictions: list[dict] | None = None) -> dict:
+                         contradictions: list[dict] | None = None,
+                         tweet_text_by_id: dict[str, str] | None = None) -> dict:
     """算单条事件的验证结论。纯本地计算，无网络无 LLM。"""
-    profile = analyze_sources(event_sources(event))
+    profile = analyze_sources(event_sources(event), tweet_text_by_id)
     time_score, time_flags = check_time_consistency(event, now)
 
     objective = (W_SOURCE * profile["best_weight"] +
@@ -644,6 +681,8 @@ def compute_verification(event: dict, now: datetime,
     score = (1 - W_LLM_PRIOR) * objective + W_LLM_PRIOR * llm_prior
 
     flags = list(time_flags)
+    if profile.get("n_reposts_folded"):
+        flags.append("REPOST_FOLDED")
     is_rumor = bool(event.get("is_rumor"))
     if is_rumor:
         score *= RUMOR_PENALTY
@@ -729,6 +768,10 @@ def _build_reason(profile: dict, time_flags: list[str], is_rumor: bool,
         parts.append(f"{n_inst} 家独立机构报道（其中 {n_cred} 家达可信门槛），"
                      f"最高档 {tier_zh}")
 
+    n_folded = profile.get("n_reposts_folded", 0)
+    if n_folded:
+        parts.append(f"另有 {n_folded} 条判定为转发同一原文，未计入独立信源")
+
     if contradictions:
         modes = {c["mode"] for c in contradictions}
         label = "存在辟谣/否认报道" if "DENIAL" in modes else "存在结论相反的事件"
@@ -804,6 +847,36 @@ def _load_json(raw, default):
         return default
 
 
+def _load_tweet_texts(events: list[dict], conn) -> dict[str, str]:
+    """批量取本轮事件涉及到的推文原文，供 analyze_sources 做转发折叠。
+
+    查询模式与 storage.attach_social_metrics 一致（同一个 x_tweet_id → 一次
+    IN 查询），这里只多取 tweet_body 一列，成本可忽略。conn 为空或没有 X
+    来源时返回空字典，analyze_sources 会自动退化为不做转发折叠（老行为）。
+    """
+    tweet_ids = {
+        src.get("x_tweet_id")
+        for event in events
+        for src in (event.get("sources") or [])
+        if src.get("x_tweet_id")
+    }
+    if not tweet_ids or conn is None:
+        return {}
+    try:
+        placeholders = ",".join(["%s"] * len(tweet_ids))
+        cursor = conn.cursor()
+        cursor.execute(
+            f"SELECT tweet_id, tweet_body FROM x_raw_posts WHERE tweet_id IN ({placeholders})",
+            tuple(tweet_ids),
+        )
+        result = dict(cursor.fetchall())
+        cursor.close()
+        return result
+    except Exception as e:
+        logger.warning(f"Verification: 取推文原文失败，转发折叠本轮跳过: {e}")
+        return {}
+
+
 def verify_events(events: list[dict], conn=None,
                   now: datetime | None = None,
                   reference: list[dict] | None = None) -> dict:
@@ -840,14 +913,21 @@ def verify_events(events: list[dict], conn=None,
     reference = [r for r in reference if r.get("id") not in new_ids]
 
     contradictions = detect_contradictions(events, reference)
+    tweet_text_by_id = _load_tweet_texts(events, conn)
 
     stats = {"total": len(events), STATUS_VERIFIED: 0, STATUS_PROBABLE: 0,
              STATUS_UNVERIFIED: 0, STATUS_DISPUTED: 0}
+    reposts_folded = 0
     for index, event in enumerate(events):
-        result = compute_verification(event, now, contradictions.get(index))
-        result.pop("_profile", None)
+        result = compute_verification(event, now, contradictions.get(index),
+                                      tweet_text_by_id)
+        reposts_folded += result.pop("_profile").get("n_reposts_folded", 0)
         event.update(result)
         stats[result["verification_status"]] += 1
+
+    if reposts_folded:
+        logger.info(f"Verification: 转发折叠 {reposts_folded} 条（多 KOL 转发同一"
+                    f"原文不重复计入独立信源）")
 
     logger.info(
         "Verification: {total} events → VERIFIED {VERIFIED} / PROBABLE {PROBABLE} / "
