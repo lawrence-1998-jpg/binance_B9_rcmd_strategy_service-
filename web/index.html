@@ -1409,7 +1409,7 @@ footer{border-top:1px solid var(--rule);padding:26px 0 40px;font-size:12px;color
 
 
   <div class="hero">
-    <span class="kicker"><span class="dot ok"></span>Production · 每日 2 次自动运行</span>
+    <span class="kicker"><span class="dot ok"></span>Production · 每 2 天 1 次自动运行</span>
     <h1 class="h1-oneline">策略 API Agent：全网 crypto 新闻事件<em>挖掘、理解、排序</em></h1>
     <p class="lede">
       七类渠道并行抓取加密货币、美股与高相关科技新闻，用 <b>gpt-5.4</b> 结构化成标准事件，
@@ -1451,7 +1451,7 @@ footer{border-top:1px solid var(--rule);padding:26px 0 40px;font-size:12px;color
       <div class="sched-panel" id="schedPanel" hidden>
         <div class="sched-list" id="schedList"></div>
         <div class="sched-foot">
-          <span>调度：每天 <b>08:00 / 20:00</b>（UTC+8）· 数据来自 <code>GET /api/runs</code></span>
+          <span>调度：每 2 天 1 轮 <b>08:00</b>（UTC+8，2026-07-27 起；此前为每天 2 轮）· 数据来自 <code>GET /api/runs</code></span>
           <code class="sched-cmd">tail -f ~/crypto-news-crawler/logs/cron.log</code>
         </div>
       </div>
@@ -1648,7 +1648,7 @@ footer{border-top:1px solid var(--rule);padding:26px 0 40px;font-size:12px;color
           <rect x="382" y="208" width="140" height="4" rx="2" fill="var(--gold)"/>
           <text class="nt" x="452" y="240" text-anchor="middle">爬虫</text>
           <text class="nd" x="452" y="258" text-anchor="middle">并发抓取 · 7 天时间窗</text>
-          <text class="nd" x="452" y="273" text-anchor="middle">每天 2 轮 · 08:00 / 20:00</text>
+          <text class="nd" x="452" y="273" text-anchor="middle">每 2 天 1 轮 · 08:00</text>
           <rect x="404" y="282" width="96" height="17" rx="5" fill="var(--a100)" stroke="var(--a300)"/>
           <text class="nb" x="452" y="294" text-anchor="middle">~1200 条 / 轮</text>
 
@@ -1874,7 +1874,7 @@ footer{border-top:1px solid var(--rule);padding:26px 0 40px;font-size:12px;color
         <div class="eyebrow">部署</div>
         <dl class="kv" style="grid-template-columns:76px 1fr">
           <dt>主机</dt><dd>GCP VM · 34.138.247.158</dd>
-          <dt>调度</dt><dd>cron · 每天 08:00 / 20:00（UTC+8）</dd>
+          <dt>调度</dt><dd>cron · 每 2 天 1 轮 08:00（UTC+8）</dd>
           <dt>服务</dt><dd>systemd · crypto-news-api</dd>
           <dt>存储</dt><dd>MySQL 8 · crypto_news</dd>
         </dl>
@@ -2181,7 +2181,7 @@ footer{border-top:1px solid var(--rule);padding:26px 0 40px;font-size:12px;color
       <div class="card">
         <div class="eyebrow">数据更新节奏</div>
         <p style="font-size:13px;color:var(--ink-2);line-height:1.8">
-          Pipeline 每天 08:00 / 20:00（UTC+8）各跑一轮，单轮耗时约 15–20 分钟。
+          Pipeline 每 2 天 08:00（UTC+8）跑一轮，单轮耗时约 15–20 分钟（2026-07-27 起从每天 2 轮降为每 2 天 1 轮，同时暂停该轮内的 X 抓取，均为降本调整）。
           建议下游按 <code>time_get_data</code> 增量拉取，或直接 <code>sort=date</code> 取最新。
         </p>
         <div class="note" style="margin-top:14px">
@@ -2665,7 +2665,7 @@ footer{border-top:1px solid var(--rule);padding:26px 0 40px;font-size:12px;color
     <h1 class="p7-h1" id="p7-project-h">开发者资讯</h1>
     <p class="p7-lead">
       B9 推荐策略服务：从多信源抓取加密新闻，经结构化抽取、去重合并、真实性校验与五因子打分，
-      产出可直接接入的排序结果。整套流水线每天定时跑两轮，结果通过 03 tab 的只读 API 对外提供。
+      产出可直接接入的排序结果。整套流水线每 2 天定时跑一轮，结果通过 03 tab 的只读 API 对外提供。
     </p>
 
     <div class="p7-stack">
@@ -2708,25 +2708,24 @@ footer{border-top:1px solid var(--rule);padding:26px 0 40px;font-size:12px;color
     <span class="p7-eyebrow">Dev Bill</span>
     <h2 class="p7-h2" id="p7-devbill-h">开发者账单 · 实际运行成本</h2>
     <p class="p7-lead">
-      跑通一轮完整流水线（抓取 → 结构化 → 去重 → 校验 → 打分 → 落库）的资源开销拆解，
-      金额为<b>实测原始值</b>，按 <b>2 轮 / 天</b>、<b>30 天 / 月</b> 折算。
+      跑通一轮完整流水线（抓取 → 结构化 → 去重 → 校验 → 打分 → 落库）的资源开销拆解，金额为<b>实测原始值</b>，按 <b>2 天 / 轮</b>、<b>30 天 / 月</b> 折算（2026-07-27 起：调度由每天2轮改为每2天1轮，且该轮暂停 X 抓取，均为降本调整）。
     </p>
 
     <div class="p7-kpis">
       <div class="p7-kpi">
         <span class="p7-kpi-k">Per Run · 单轮</span>
-        <span class="p7-kpi-v">$14.17</span>
-        <span class="p7-kpi-s">一次完整 run 的实测开销</span>
+        <span class="p7-kpi-v">$28.56</span>
+        <span class="p7-kpi-s">一次完整 run 的实测开销（含订阅制日租按新节奏摊分）</span>
       </div>
       <div class="p7-kpi">
         <span class="p7-kpi-k">Per Day · 每天</span>
-        <span class="p7-kpi-v">$28.33</span>
-        <span class="p7-kpi-s">2 轮 + 云主机常驻</span>
+        <span class="p7-kpi-v">$14.28</span>
+        <span class="p7-kpi-s">真实日均：云主机+Claude 固定日租 + OpenAI 摊薄</span>
       </div>
       <div class="p7-kpi">
         <span class="p7-kpi-k">Per Month · 每月</span>
-        <span class="p7-kpi-v">$850</span>
-        <span class="p7-kpi-s">按 30 天折算</span>
+        <span class="p7-kpi-v">$428.50</span>
+        <span class="p7-kpi-s">按 30 天折算（原 $850，频率降为1/4后近腰斩）</span>
       </div>
     </div>
 
@@ -2745,14 +2744,14 @@ footer{border-top:1px solid var(--rule);padding:26px 0 40px;font-size:12px;color
         <tbody>
           <tr>
             <td class="p7-item">云主机 <small>GCP VM · 常驻实例</small></td>
-            <td class="p7-num">$1.50</td>
+            <td class="p7-num">$6.00</td>
             <td class="p7-num">$3.00</td>
             <td class="p7-num">$90.00</td>
-            <td class="p7-why">按天计费的常驻实例，不随轮次伸缩；单轮金额是按 2 轮/天摊分出来的，仅供横向对比。</td>
+            <td class="p7-why">按天计费的常驻实例，不随轮次伸缩；单轮金额是按新节奏（1 轮/2 天）摊分出来的，仅供横向对比，每天/每月两列才是真实开销。</td>
           </tr>
           <tr>
             <td class="p7-item">Claude <small>Claude Max 订阅</small></td>
-            <td class="p7-num">$4.17</td>
+            <td class="p7-num">$16.66</td>
             <td class="p7-num">$8.33</td>
             <td class="p7-num">$250.00</td>
             <td class="p7-why">工程实现与本地预处理都跑在 Claude Max 顶配订阅上（$250/月），<b>按订阅计费、无增量 API 费用</b>；这里按 30 天摊到每轮，便于看总盘子。命中本地预处理缓存的事件不再走 OpenAI。</td>
@@ -2760,23 +2759,23 @@ footer{border-top:1px solid var(--rule);padding:26px 0 40px;font-size:12px;color
           <tr>
             <td class="p7-item">OpenAI <small>gpt-5.4 + 5.4-nano</small></td>
             <td class="p7-num">$5.90</td>
-            <td class="p7-num">$11.80</td>
-            <td class="p7-num">$354.00</td>
-            <td class="p7-why">结构化抽取 + embedding。优化后实测单事件 $0.00925，单轮 500–800 事件 ≈ $5.9。成本随事件量线性变化，是最大的可变项。</td>
+            <td class="p7-num">$2.95</td>
+            <td class="p7-num">$88.50</td>
+            <td class="p7-why">结构化抽取 + embedding。优化后实测单事件 $0.00925，单轮 500–800 事件 ≈ $5.9，单轮成本本身不受调度频率影响；每天/每月按新节奏（约15轮/月，此前60轮/月）重新摊算。</td>
           </tr>
           <tr>
             <td class="p7-item">X API <small>推文召回</small></td>
-            <td class="p7-num">$2.60</td>
-            <td class="p7-num">$5.20</td>
-            <td class="p7-num">$156.00</td>
-            <td class="p7-why">按拉回条数计费 $0.0021/条，平衡档约 1200 条/轮 ≈ $2.6。降档拉取可直接压缩这一项。</td>
+            <td class="p7-num">$0.00</td>
+            <td class="p7-num">$0.00</td>
+            <td class="p7-num">$0.00</td>
+            <td class="p7-why"><b>2026-07-27 起已暂停</b>（`X_FETCH_ENABLED=false`），本行按暂停状态归零。恢复后按拉回条数计费 $0.0021/条，平衡档约 1200 条/轮 ≈ $2.6。</td>
           </tr>
           <tr class="p7-total">
             <td class="p7-item">合计</td>
-            <td class="p7-num">$14.17</td>
-            <td class="p7-num">$28.33</td>
-            <td class="p7-num">$850.00</td>
-            <td class="p7-why">实测原始值。其中订阅制（云主机 + Claude）$340/月是固定盘，用量制（OpenAI + X）$510/月随事件量与拉取档位浮动。</td>
+            <td class="p7-num">$28.56</td>
+            <td class="p7-num">$14.28</td>
+            <td class="p7-num">$428.50</td>
+            <td class="p7-why">实测原始值。其中订阅制（云主机 + Claude）$340/月是固定盘不受频率影响，用量制（OpenAI，X 已暂停）$88.50/月随调度频率与事件量浮动。对比调整前 $850/月，主要降幅来自调度频率降为 1/4 与 X 完全暂停。</td>
           </tr>
         </tbody>
       </table>
@@ -3565,11 +3564,25 @@ function fillFlowAxis(runs){
 }
 /* 下一轮调度时刻：cron 是 0 8,20 * * *（UTC+8）。浏览器可能在任意时区，
    所以先把当前时刻换算到 UTC+8 再算，否则给海外同事看到的"下轮"是错的。 */
-function nextRunLabel(){
-  var utc8 = new Date(Date.now() + (new Date().getTimezoneOffset() * 60000) + 8 * 3600000);
-  var h = utc8.getHours();
-  var next = (h < 8) ? "08:00" : (h < 20 ? "20:00" : "次日 08:00");
-  return "下轮 " + next;
+/* 2026-07-27：调度从"每天2轮"改成"每2天1轮"后，不能再靠"现在几点"猜下一轮
+   ——同一个钟点在新节奏里可能是"今天"也可能是"后天"。改成用最近一轮的真实
+   run_at 加 2 天算，这个数字来自 /api/runs，不是本地猜的。lastRunAt 传空
+   （比如还没有任何运行记录）时退回旧的"猜大概时间"兜底，不报错。 */
+function nextRunLabel(lastRunAt){
+  // 新排期固定在 08:00 触发，小时数不能从上一轮的时间戳里继承——上一轮可能
+  // 是老排期（每天2轮）遗留的 20:00 记录，直接 +48h 会把"20:00"也带到下一轮
+  // 的展示上，而新排期根本不存在 20:00 这个时段。做法：只用上一轮的日期部分
+  // +2 天，小时数固定写 08:00。
+  // run_at 本来就是 UTC+8 挂钟字符串（项目统一口径），直接摘年月日数字做加法，
+  // 不经过 Date 的时区解析/getUTC*往返——那条路径在小时数落在 UTC+8 与 UTC
+  // 分属不同日期时（比如凌晨 0~7 点）会把日期算错一天。
+  var m = String(lastRunAt || "").match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (m){
+    var next = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3]) + 2 * 86400000);
+    var p = function(x){ return String(x).padStart(2, "0"); };
+    return "下轮 " + (next.getUTCMonth() + 1) + "-" + p(next.getUTCDate()) + " 08:00";
+  }
+  return "下轮 08:00";
 }
 function fillSchedBar(runs){
   var recent = runs.slice(0, 3);
@@ -3585,7 +3598,7 @@ function fillSchedBar(runs){
     return '<i class="' + (ok(r) ? "" : "bad") + '" title="' +
       esc(String(r.run_at || "").replace("T", " ").slice(0, 16)) + " · " + esc(r.status || "") + '"></i>';
   }).join("");
-  $("#schedNext").textContent = nextRunLabel();
+  $("#schedNext").textContent = nextRunLabel(top.run_at);
   $("#schedList").innerHTML = recent.map(function(r){
     var t = parseTimings(r);
     var llm = t ? Math.round(Number(t.llm_enrich || 0)) : null;
@@ -4018,7 +4031,7 @@ var ENDPOINTS=[
      ["date_to","YYYY-MM-DD","事件日期上界（含）"],
      ["run_at","YYYY-MM-DD HH:MM:SS","只取某一轮生产采集的事件，取值见 /api/run-nodes"]
    ],sample:{limit:5,sort:"importance",event_tier:"A"}},
-  {m:"GET",path:"/api/run-nodes",desc:"生产轮次节点 —— 每天 08:00 / 20:00 两轮，含各轮事件数；供 run_at 取值",
+  {m:"GET",path:"/api/run-nodes",desc:"生产轮次节点 —— 每 2 天 08:00 一轮，含各轮事件数；供 run_at 取值",
    params:[["limit","int","返回节点数，上限 60，默认 20"]],sample:{limit:5}},
   {m:"GET",path:"/api/news/{id}",desc:"事件详情 —— 按 id 返回单个完整对象",
    params:[["id","path","事件 id，取自列表接口的 data[].id"]],pathSample:true},

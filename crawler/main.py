@@ -378,6 +378,13 @@ def fetch_cheap_sources() -> list[dict]:
     return all_items
 
 
+# 2026-07-27：agent 演示完毕后，Lawrence 要求暂停增量扫描里的 X API 调用
+# （降本，X 是按拉回条数计费的唯一付费抓取渠道）。这是**暂停**，不是删除——
+# 默认关闭，需要恢复时把 config/.env 里的 X_FETCH_ENABLED 改回 true 或直接
+# 删掉这行即可，不用改代码、不用回滚 git。
+X_FETCH_ENABLED = os.environ.get("X_FETCH_ENABLED", "true").strip().lower() != "false"
+
+
 def fetch_x_sources() -> tuple[list[dict], list[dict]]:
     """X 召回分两条腿：KOL 时间线（固定 32 个账号，深度）+ 全网关键词搜索（广度）。
 
@@ -387,7 +394,14 @@ def fetch_x_sources() -> tuple[list[dict], list[dict]]:
 
     单独成函数是因为它**不参与** fetch_cheap_sources 的高频抓取——X 维持
     主 pipeline 节奏，不跟着提速。
+
+    `X_FETCH_ENABLED=false` 时整条腿直接跳过，返回空列表——不是"抓了 0 条"
+    的静默异常，是刻意关闭，日志里明确写清楚原因，避免被当成故障排查。
     """
+    if not X_FETCH_ENABLED:
+        logger.info("X sources: 已通过 X_FETCH_ENABLED=false 暂停，本轮跳过 X 抓取（KOL + 搜索）")
+        return [], []
+
     x_items, x_raw_posts = fetch_x_kols()
     kol_ids = {p["tweet_id"] for p in x_raw_posts}
 
