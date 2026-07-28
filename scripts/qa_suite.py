@@ -265,7 +265,7 @@ def qa_data_integrity():
 
 
 def qa_tools(run_paid: bool):
-    print("\n[6/6] 交互工具（用户真正会点的东西）")
+    print("\n[6/7] 交互工具（用户真正会点的东西）")
     g = "工具"
     st, d = http("/api/tools/reweight", "POST",
                  {"weights": {"M": 35, "T": 20, "H": 15, "A": 15, "Q": 15},
@@ -315,6 +315,96 @@ def qa_tools(run_paid: bool):
         print("  · 跳过付费用例（--no-paid）")
 
 
+def qa_persona():
+    """评测 Agent 管理 + 评测留档 + 校准闭环（2026-07-28 新增子系统）。
+
+    全部是零成本用例：CRUD/上传/回滚/列表都不调 LLM。唯一会花钱的「归纳校准」
+    和「批量评测」这里只断言**成本刹车生效**（缺参数必须被拒），不真跑。
+    CRUD 用例自清理，跑完不留脏数据。
+    """
+    print("\n[7/7] 评测 Agent 管理与校准闭环")
+    g = "Persona"
+
+    st, d = http("/api/personas?with_stats=1")
+    ok = st == 200 and isinstance(d, dict) and d.get("personas")
+    check(g, "/api/personas 列表可用", ok, f"status={st}")
+
+    if ok:
+        FIELDS = ["personality", "story", "preferences", "memory", "mood"]
+        check(g, "返回五要素字段定义", d.get("fields") == FIELDS, f"实际={d.get('fields')}")
+        # 人设是空的等于 agent 没人格，评测结果会退化成千篇一律的通用点评，
+        # 是那种"接口 200 但产品坏了"的故障，必须由不变量用例兜住。
+        empties = [p["id"] for p in d["personas"]
+                   if not any((p.get(f) or "").strip() for f in FIELDS)
+                   and not (p.get("prompt_override") or "").strip()]
+        check(g, "每个 Agent 都有非空人设", not empties, f"人设全空={empties}")
+        active = [p for p in d["personas"] if p.get("is_active")]
+        check(g, "至少有一个启用中的 Agent", bool(active),
+              "一个都没有的话 LLM 评测室会直接 409")
+
+    # CRUD 往返 —— 自清理
+    pid = "qa_tmp_persona"
+    http(f"/api/personas/{pid}", "DELETE")          # 防上一次异常退出留下的残留
+    st, d = http("/api/personas", "POST",
+                 {"id": pid, "name": "QA临时", "tagline": "自动化用例",
+                  "personality": "原始人格", "preferences": "原始偏好"})
+    check(g, "新建 Agent", st == 201 and d.get("persona", {}).get("version") == 1, f"status={st}")
+
+    st, d = http(f"/api/personas/{pid}", "PUT", {"mood": "QA改过的心情"})
+    v2_ok = st == 200 and d.get("persona", {}).get("version") == 2
+    check(g, "更新后版本号 +1", v2_ok, f"status={st}")
+    check(g, "改动进入 system_prompt", "QA改过的心情" in (d.get("system_prompt") or ""),
+          "人设改了但发给模型的 prompt 没变，等于白改")
+
+    st, d = http(f"/api/personas/{pid}/rollback", "POST", {"version": 1})
+    rb = d.get("persona", {}) if isinstance(d, dict) else {}
+    check(g, "回滚产生更新的版本号（不删历史）",
+          st == 200 and rb.get("version", 0) > 2, f"status={st} v={rb.get('version')}")
+    check(g, "回滚后内容确实回到 v1", (rb.get("mood") or "") == "", f"mood={rb.get('mood')!r}")
+
+    st, d = http(f"/api/personas/{pid}/calibrate", "POST", {"comment": "QA 用例写的校准"})
+    calib_ok = st == 200 and d.get("effective") == "immediate"
+    check(g, "校准提交即生效（零成本）", calib_ok, f"status={st}")
+    if calib_ok:
+        st2, d2 = http(f"/api/personas/{pid}/preview-prompt")
+        check(g, "校准记忆进入 system_prompt",
+              st2 == 200 and "历史校准记录" in (d2.get("system_prompt") or ""),
+              "校准写进去了但 prompt 里没有，闭环是断的")
+
+    st, _ = http(f"/api/personas/{pid}/calibrate", "POST", {"comment": ""})
+    check(g, "空校准应 400", st == 400, f"status={st}")
+    st, _ = http(f"/api/personas/{pid}/calibrate", "POST",
+                 {"comment": "x", "suggested_score": 99})
+    check(g, "越界的建议分应 400", st == 400, f"status={st}")
+
+    st, _ = http(f"/api/personas/{pid}", "DELETE")
+    check(g, "删除 Agent（用例自清理）", st == 200, f"status={st}")
+    st, _ = http(f"/api/personas/{pid}")
+    check(g, "删除后再查应 404", st == 404, f"status={st}")
+
+    # 评测留档与分析
+    st, d = http("/api/eval-runs?limit=5")
+    check(g, "/api/eval-runs 评测历史可用",
+          st == 200 and isinstance(d, dict) and "runs" in d, f"status={st}")
+    st, d = http("/api/eval-analysis/correlation")
+    check(g, "/api/eval-analysis/correlation 可用",
+          st == 200 and isinstance(d, dict) and "correlations" in d, f"status={st}")
+    st, d = http("/api/eval-runs/export.csv")
+    check(g, "评测历史 CSV 导出", st == 200 and isinstance(d, str), f"status={st}")
+
+    # 成本刹车 —— 这两条是防「手滑点一下烧掉几十刀」的闸门，退化必须被抓到
+    st, _ = http("/api/tools/persona-eval-batch", "POST", {"event_ids": ["x"]})
+    check(g, "批量评测缺 confirm_cost 应 400 且零花费", st == 400, f"status={st}")
+    st, _ = http("/api/tools/persona-eval-batch", "POST",
+                 {"event_ids": ["x"] * 31, "confirm_cost": True})
+    check(g, "批量评测超 30 条上限应 400", st == 400, f"status={st}")
+
+    # 鉴权（这几个端点能改人设、能花钱，漏鉴权比漏在只读端点严重）
+    for p in ["/api/personas", "/api/eval-runs", "/api/eval-analysis/correlation"]:
+        st, _ = http(p, token=None)
+        check(g, f"{p} 无 token 应 401", st == 401, f"status={st}")
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--no-paid", action="store_true", help="跳过会真花钱的用例")
@@ -331,6 +421,7 @@ def main() -> int:
     qa_write_paths()
     qa_data_integrity()
     qa_tools(run_paid=not args.no_paid)
+    qa_persona()
 
     failed = [r for r in results if not r[2]]
     print("\n" + "=" * 68)

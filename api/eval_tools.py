@@ -46,6 +46,7 @@ import os
 import re
 import sys
 import time
+import uuid
 from datetime import datetime, timedelta, timezone
 
 import numpy as np
@@ -66,6 +67,11 @@ from crawler.dedup import (  # noqa: E402
 from crawler.usage_tracker import PRICING_USD_PER_MILLION_TOKENS, UsageTracker  # noqa: E402
 from crawler import storage  # noqa: E402  （只读用，见 persona-eval 的 event_id 便捷参数）
 from crawler.timeutil import now_local
+
+# persona 人设与评测留档的数据层。刻意是一个无 Flask 依赖的共享模块而不是
+# 直接 import persona_tools 那个 blueprint——见 persona_store.py 头部说明。
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import persona_store  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
@@ -410,139 +416,29 @@ def dedup_test():
 # 子 Tab 2: LLM 评测室
 # ══════════════════════════════════════════════════════════════════════
 
-PERSONAS = [
-    {
-        "id": "newbie",
-        "name": "阿哲",
-        "emoji": "🐣",
-        "tagline": "入圈 3 个月的新手小白",
-        "profile": (
-            "24 岁，互联网大厂运营岗。看同事炒山寨币翻倍心动入场，目前只买过 BTC 和 ETH，"
-            "用币安 App 看新闻。专业名词基本看不懂（\"ETF 净流出\"\"做市商\"\"流动性\"\"Launchpool\" "
-            "这些词都要查一下，查完常常还是似懂非懂）。想知道新闻和自己的币有没有关系、该不该慌，"
-            "希望有人能用大白话讲清楚。最怕被\"暴涨/暴跌/xx 亿美元\"的大字吓到但完全不知道该怎么办。"
-        ),
-        "system_prompt": (
-            "你正在扮演\"阿哲\"，一个刚接触加密货币 3 个月的普通用户。\n\n"
-            "背景：24 岁，互联网大厂运营岗，因为同事炫耀\"抓住了一波山寨币翻倍\"心动入场，目前只买过 "
-            "BTC 和 ETH，用的是币安 App。平时看新闻主要看信息流里的标题，专业名词基本看不懂"
-            "（\"ETF 净流出\"\"做市商\"\"流动性\"\"Launchpool\"这些词都要查一下才明白，很多时候查完还是"
-            "似懂非懂）。\n"
-            "诉求：想知道这条新闻到底和\"我的币\"有没有关系、该\"买/卖/装死\"，希望有人能用大白话告诉"
-            "我发生了什么、要不要慌。\n"
-            "痛点：专业术语堆砌的新闻直接划走；容易被\"暴涨/暴跌/xx 亿美元\"的大字吓到，但看完不知道"
-            "具体该怎么办；很难判断新闻的真假和重要性。\n\n"
-            "现在请你完全代入阿哲的第一人称视角评测下面这条新闻。评分标准：完全看不懂/太专业/离自己太"
-            "远 → 1-3 分；工整易懂但觉得跟自己没关系 → 4-6 分；能看懂且觉得有用/有意思 → 7-10 分。"
-            "请诚实展现\"看不懂\"这件事，不要为了配合评测假装自己听懂了专业内容。"
-        ),
-    },
-    {
-        "id": "veteran_trader",
-        "name": "老K",
-        "emoji": "📈",
-        "tagline": "5 年经验的资深交易员",
-        "profile": (
-            "35 岁，全职炒币 5 年以上，经历过多轮牛熊周期，日内和波段交易为主，同时看链上数据。"
-            "每天刷几十条新闻，一眼扫过标题就能判断有没有用。极度讨厌营销号软文、标题党和\"据传/"
-            "消息人士\"这类无法验证的内容，也讨厌换了措辞的重复新闻。只认信息密度高、可验证、"
-            "带具体数字的干货。"
-        ),
-        "system_prompt": (
-            "你正在扮演\"老K\"，一位有 5 年以上全职炒币经验的资深交易员/老韭菜。\n\n"
-            "背景：35 岁，经历过多轮牛熊周期，日内交易和波段交易为主，同时关注链上数据"
-            "（Nansen/Arkham 之类）。每天刷几十条新闻和推特，练就了一眼扫过标题就能判断\"有没有用\""
-            "的本事。\n"
-            "诉求：新闻必须有明确的、可验证的信息增量——具体数字、具体时间、可追溯的信源；最好能"
-            "直接判断出这是利好/利空/无关紧要，以及大概的影响力度和持续时间。\n"
-            "痛点：极度讨厌营销号软文、清水文、标题党、\"据传/消息人士\"这类无法验证的东西；讨厌换了"
-            "措辞但重复了很多遍的新闻；讨厌\"分析师认为 XX 可能上涨\"这种没有依据的空话。\n\n"
-            "现在请你完全代入老K的第一人称视角，用简洁、略带挑剔甚至刻薄的语气评测下面这条新闻。"
-            "评分标准：信息密度低/是软文/是重复内容/无法验证 → 1-3 分；信息尚可但影响有限或缺乏"
-            "可执行性 → 4-6 分；信息密度高、可验证、对短期交易有直接参考价值 → 7-10 分。"
-        ),
-    },
-    {
-        "id": "institutional",
-        "name": "Diana Chen",
-        "emoji": "🏦",
-        "tagline": "机构加密资管的高级研究员",
-        "profile": (
-            "香港一家管理规模约 2 亿美元的加密对冲基金高级研究员，CFA 持证人，传统金融背景转投"
-            "加密行业。日常工作是为基金经理准备投资备忘录、监控监管动态、评估交易对手方风险、"
-            "撰写季度 LP 报告。关心的是这件事对组合的系统性风险敞口有什么影响，而不是\"这个币能不"
-            "能买\"。"
-        ),
-        "system_prompt": (
-            "你正在扮演\"Diana Chen\"，香港一家加密资管机构（管理规模约 2 亿美元的对冲基金）的"
-            "高级研究员。\n\n"
-            "背景：传统金融背景转投加密行业，CFA 持证人，日常工作包括为基金经理准备投资备忘录、"
-            "监控监管动态、评估交易对手方风险、撰写季度 LP 报告。她关注的不是\"这个币能不能买\"，"
-            "而是\"这件事对我管理的组合的风险敞口有什么系统性影响\"。\n"
-            "诉求：新闻需要有明确的信源可追溯（最好是官方公告/权威数据商如 SoSoValue/彭博社，而不是"
-            "匿名推特爆料）；关注监管合规动态（SEC/CFTC/MiCA 等）、宏观资金流（ETF 流入流出、机构"
-            "持仓变化）、系统性风险（交易对手方风险、托管风险、清算风险）；希望新闻给出足够的背景"
-            "和传导逻辑，而不只是单个数字。\n"
-            "痛点：无法追溯信源的新闻不能写进备忘录；缺乏宏观/监管背景解读的新闻价值有限；对纯粹"
-            "的散户情绪/meme 炒作新闻毫无兴趣。\n\n"
-            "现在请你完全代入 Diana 的第一人称视角，用专业、克制、略带官僚气的语气评测下面这条"
-            "新闻，重点看这条新闻能不能被她直接引用进投资备忘录或风险报告。评分标准：来源不可追溯/"
-            "纯属噪音 → 1-3 分；有一定参考价值但不够权威或不够系统 → 4-6 分；可直接引用、有明确"
-            "监管/宏观意义 → 7-10 分。"
-        ),
-    },
-    {
-        "id": "meme_degen",
-        "name": "阿飞",
-        "emoji": "🚀",
-        "tagline": "追热点的 MEME/空投党",
-        "profile": (
-            "22 岁，全职撸空投和炒 meme 币，活跃在多个 Telegram 群和 X，手机里装了七八个钱包插件。"
-            "时间尺度是分钟级——热点如果 5 分钟内没看到基本就错过了。只关心\"现在什么在飞\"\"能不能"
-            "上车\"，对监管、机构 ETF 流水这类严肃新闻完全无感。"
-        ),
-        "system_prompt": (
-            "你正在扮演\"阿飞\"，一个 22 岁的 Degen/空投猎人。\n\n"
-            "背景：大学刚毕业，全职撸空投和炒 meme 币为生，活跃在多个 Telegram 群和 X（推特），"
-            "手机里装了七八个钱包插件，随时准备上车新出的 meme 币或参与新协议的空投任务。他的时间"
-            "尺度是分钟级——一个热点如果他 5 分钟内没看到，基本就错过了。\n"
-            "诉求：第一时间知道\"现在什么在飞\"\"哪个新币/新协议值得冲\"\"有没有新的空投机会\"；对"
-            "热度、社区讨论量、KOL 转发量极其敏感；不关心长期基本面，只关心\"现在\"和能不能赚快钱。\n"
-            "痛点：绝大多数严肃新闻（监管、机构 ETF 流水、宏观分析）对他来说是噪音，直接跳过；新闻"
-            "里没有\"能不能上车\"的信息，他就觉得没用；喜欢短平快、带数字带梗的内容，讨厌长篇大论。\n\n"
-            "现在请你完全代入阿飞的第一人称视角，用网络化、简短、跳脱的语气评测下面这条新闻（可以用"
-            "\"冲\"\"上车\"\"利好\"\"没意思\"这类网络用语）。评分标准：跟 meme/热点/空投毫无关系的严肃"
-            "新闻 → 1-3 分（可以直接表现出\"关我屁事\"式的无感）；有一定热度但不够刺激或者不是他能"
-            "参与的 → 4-6 分；直接相关的热点/meme/空投机会 → 7-10 分。"
-        ),
-    },
-    {
-        "id": "industry_insider",
-        "name": "王工",
-        "emoji": "🛠️",
-        "tagline": "Layer2/DeFi 协议的 BD 兼产品经理",
-        "profile": (
-            "32 岁，前互联网大厂产品经理，2 年前转行加入一家中型 DeFi 协议（TVL 约 2 亿美元），"
-            "负责生态合作和竞品分析。关心同赛道竞品的融资/上市/被黑/产品更新、生态基础设施变化，"
-            "需要判断这件事要不要写进周报、要不要主动联系对方谈合作。"
-        ),
-        "system_prompt": (
-            "你正在扮演\"王工\"，某 Layer2/DeFi 协议的商务拓展（BD）兼产品经理。\n\n"
-            "背景：32 岁，前互联网大厂产品经理，2 年前转行加入一家中型 DeFi 协议（TVL 约 2 亿美元），"
-            "负责生态合作和竞品分析，经常要向创始人汇报竞品又搞了什么大动作、有没有值得抄的产品"
-            "设计、有没有潜在合作方。\n"
-            "诉求：关注同赛道竞品的融资、上市、被黑、重大产品更新、合作动态；关注生态基础设施变化"
-            "（新公链/新 Launchpad 规则）；希望新闻能帮他判断这件事要不要写进周报给老板、要不要主动"
-            "联系对方谈合作。\n"
-            "痛点：新闻里如果没提到具体项目名/具体产品动作，对他没有实操价值；纯粹的价格新闻他不太"
-            "关心，除非价格波动会影响合作方的商务决策。\n\n"
-            "现在请你完全代入王工的第一人称视角，用略带打工人疲惫感但认真负责的语气评测下面这条"
-            "新闻，重点看是否值得写进给老板的周报、或者是否该主动联系对方谈合作。评分标准：与生态/"
-            "竞品/合作无关 → 1-3 分；有一定行业参考价值但不直接涉及生态动态 → 4-6 分；直接涉及"
-            "竞品/生态大事件，值得跟进 → 7-10 分。"
-        ),
-    },
-]
+# ── persona 来源：数据库（api/persona_store.py） ───────────────────────
+#
+# 2026-07-28 之前这里是一段硬编码的 5 个 persona 常量：改一次人设要改代码 + 重启
+# 服务，也没法让用户自己增删改。现在人设住在 eval_personas 表里，本文件只负责
+# "取出来 -> 拼 prompt -> 调模型 -> 落结果"。
+#
+# 兜底：数据库读不到时（迁移没跑 / MySQL 抖动）回落到 persona_store.BUILTIN_PERSONAS
+# 那三个内置人设，让评测室仍然可用。但**必须**在响应里如实标注 persona_source，
+# 不能让用户以为自己刚改的人设生效了、实际跑的是内置默认值——那种静默降级正是
+# 本文件头部注释里反复强调要避免的那类"假装成功"。
+def load_personas() -> tuple[list[dict], str]:
+    """返回 (personas, source)。source ∈ {"db", "builtin_fallback"}。"""
+    try:
+        persona_store.ensure_seeded()
+        rows = persona_store.list_personas(active_only=True)
+        if rows:
+            return rows, "db"
+        # 表存在但一个启用的 persona 都没有：这是用户把人全停用/删光了，不是故障。
+        # 此时不该拿内置人设顶上——那等于无视用户的操作。
+        return [], "db"
+    except Exception as e:
+        logger.warning(f"从数据库读取 persona 失败，回落到内置默认人设：{e}")
+        return [dict(p, version=1) for p in persona_store.BUILTIN_PERSONAS], "builtin_fallback"
 
 _EVAL_INSTRUCTION_SUFFIX = (
     "\n\n下面会给你一条加密货币新闻的完整文本（标题+摘要/正文）。请你完全代入上面描述的人设，"
@@ -639,8 +535,11 @@ def _fetch_event_full(event_id: str) -> dict | None:
     try:
         cursor = conn.cursor(dictionary=True)
         cursor.execute(
+            # importance_score 是 2026-07-28 加的：批量评测要把它和 persona 主观评分
+            # 一起落库，用来算「排序模型 vs 真实人群感受」的相关性（外部效度）。
             "SELECT id, title_zh, description_long_zh, description_short_zh, "
-            "event_subject, social_interactions, time_event, time_get_data, embedding "
+            "event_subject, social_interactions, time_event, time_get_data, embedding, "
+            "importance_score "
             "FROM news_events WHERE id = %s", (event_id,),
         )
         row = cursor.fetchone()
@@ -774,10 +673,14 @@ def _compute_novelty(meta: dict) -> dict:
 
 
 def _evaluate_one_persona(persona: dict, news_text: str, tracker: UsageTracker) -> dict:
+    # system prompt 由五要素 + 校准记忆现拼（persona_store.compose_system_prompt），
+    # 不再是人设字典里的一个固定字段——用户在管理页改完人设、或者提交完一条校准，
+    # 下一次评测立刻生效，中间没有缓存层。
     resp = get_client().chat.completions.create(
         model=MODEL,
         messages=[
-            {"role": "system", "content": persona["system_prompt"] + _EVAL_INSTRUCTION_SUFFIX},
+            {"role": "system",
+             "content": persona_store.compose_system_prompt(persona) + _EVAL_INSTRUCTION_SUFFIX},
             {"role": "user", "content": f"新闻内容：\n{news_text}"},
         ],
         response_format=_PERSONA_EVAL_SCHEMA,
@@ -788,10 +691,30 @@ def _evaluate_one_persona(persona: dict, news_text: str, tracker: UsageTracker) 
     return {
         "persona_id": persona["id"],
         "name": persona["name"],
-        "emoji": persona["emoji"],
-        "tagline": persona["tagline"],
+        "emoji": persona.get("emoji") or "🙂",
+        "tagline": persona.get("tagline") or "",
+        # 记下这条结果是拿哪一版人设跑出来的。没有它就没法做校准前后对比——
+        # 人设改过之后历史结果会被误当成新人设的表现。
+        "persona_version": int(persona.get("version") or 1),
         **result,
     }
+
+
+def _run_personas(personas: list[dict], news_text: str, tracker: UsageTracker):
+    """并发跑一组 persona，返回 (成功列表, 失败列表)。批量评测复用同一个函数。"""
+    def _one(persona):
+        try:
+            return _evaluate_one_persona(persona, news_text, tracker), None
+        except Exception as e:
+            logger.warning(f"Persona eval failed for {persona['id']}: {e}")
+            return None, {"persona_id": persona["id"], "name": persona.get("name"),
+                          "persona_version": int(persona.get("version") or 1),
+                          "error": str(e)}
+
+    with cf.ThreadPoolExecutor(max_workers=max(1, len(personas))) as pool:
+        results = list(pool.map(_one, personas))
+    return ([r for r, err in results if r is not None],
+            [err for r, err in results if err is not None])
 
 
 @eval_bp.route("/api/tools/persona-eval", methods=["POST"])
@@ -843,18 +766,39 @@ def persona_eval():
     if not news_text:
         return jsonify({"error": "未能获取到有效新闻文本"}), 422
 
-    def _run(persona):
+    active_personas, persona_source = load_personas()
+    if not active_personas:
+        return jsonify({"error": "当前没有任何启用的评测 Agent。请到「Persona 管理」"
+                                 "新建一个，或把已停用的重新启用。"}), 409
+
+    personas_out, errors = _run_personas(active_personas, news_text, tracker)
+
+    # 自动留档。刻意 try 住：评测本身已经花了钱、结果已经算出来了，落库失败不该
+    # 让整个请求返 500 把用户的结果吞掉。落库失败时 run_uid 为 None，前端据此
+    # 隐藏"写校准"入口（没有 result_id 可挂），但结果照常展示。
+    run_uid = None
+    try:
+        run_uid = persona_store.record_run(
+            input_mode=("text" if text_input else ("image" if image_file else "event_id")),
+            news_text=news_text, results=personas_out, errors=errors,
+            event_id=(event_id.strip() if event_id else None),
+            importance_score=(event_meta or {}).get("importance_score"),
+            cost_usd=_chat_cost_usd(tracker), model=MODEL,
+        )
+    except Exception:
+        logger.exception("评测结果落库失败（不影响本次返回的评测结果）")
+
+    # 把落库后拿到的 result_id 回填进每个 persona 结果——前端要靠它把
+    # 「写校准」和「人工标注分」挂到具体某一条上。
+    if run_uid:
         try:
-            return _evaluate_one_persona(persona, news_text, tracker), None
-        except Exception as e:
-            logger.warning(f"Persona eval failed for {persona['id']}: {e}")
-            return None, {"persona_id": persona["id"], "error": str(e)}
-
-    with cf.ThreadPoolExecutor(max_workers=len(PERSONAS)) as pool:
-        results = list(pool.map(_run, PERSONAS))
-
-    personas_out = [r for r, err in results if r is not None]
-    errors = [err for r, err in results if err is not None]
+            saved = persona_store.get_run(run_uid) or {}
+            by_pid = {r["persona_id"]: r["id"] for r in saved.get("results", [])
+                      if r.get("error") is None}
+            for r in personas_out:
+                r["result_id"] = by_pid.get(r["persona_id"])
+        except Exception:
+            logger.exception("回填 result_id 失败（评测结果本身不受影响）")
 
     if event_meta is not None:
         reference_metrics = {
@@ -878,6 +822,110 @@ def persona_eval():
         "cost_breakdown": tracker.snapshot(),
         "model": MODEL,
         "reference_metrics": reference_metrics,
+        "run_uid": run_uid,
+        # 如实告诉前端这批人设是从库里读的还是兜底的内置默认值。用户刚在管理页
+        # 改完人设，如果因为数据库故障实际跑的是内置人设，必须让他看得见。
+        "persona_source": persona_source,
+    })
+
+
+# ══════════════════════════════════════════════════════════════════════
+# 批量评测：N 条新闻 × M 个 Agent
+# ══════════════════════════════════════════════════════════════════════
+#
+# 单条评测只能看个别案例，回答不了产品问题。真正有用的是「某一轮次的 top 20 事件，
+# 三档资产人群分别怎么看」——这才看得出排序策略对不同人群的覆盖差异，也才能跟
+# 「对比 baseline 评估召回率」那条业务线接上。
+#
+# 成本刹车：条数 × persona 数就是 LLM 调用次数，很容易失控。所以硬上限 30 条，
+# 且请求里必须显式带 confirm_cost=true —— 不给"手滑点一下花掉几十刀"的机会。
+MAX_BATCH_EVENTS = 30
+
+
+@eval_bp.route("/api/tools/persona-eval-batch", methods=["POST"])
+@require_api_key
+def persona_eval_batch():
+    body = request.get_json(silent=True)
+    if not isinstance(body, dict):
+        return jsonify({"error": "请求体必须是 JSON 对象"}), 400
+
+    event_ids = body.get("event_ids") or []
+    if not isinstance(event_ids, list) or not event_ids:
+        return jsonify({"error": "event_ids 必填，且必须是非空数组"}), 400
+    if len(event_ids) > MAX_BATCH_EVENTS:
+        return jsonify({"error": f"单次批量评测最多 {MAX_BATCH_EVENTS} 条，"
+                                 f"当前 {len(event_ids)} 条"}), 400
+    if not body.get("confirm_cost"):
+        return jsonify({"error": "批量评测会产生真实费用，请带 confirm_cost=true 再调用"}), 400
+
+    active_personas, persona_source = load_personas()
+    if not active_personas:
+        return jsonify({"error": "当前没有任何启用的评测 Agent"}), 409
+
+    only = body.get("persona_ids")
+    if isinstance(only, list) and only:
+        active_personas = [p for p in active_personas if p["id"] in set(only)]
+        if not active_personas:
+            return jsonify({"error": "persona_ids 里没有一个是当前启用的 Agent"}), 400
+
+    tracker = UsageTracker()
+    batch_uid = str(uuid.uuid4())
+    rows, failed = [], []
+
+    # 串行跑各条新闻、每条新闻内部并发跑各 persona。不做二维全并发是刻意的：
+    # 30 条 × 3 个 persona = 90 个并发请求会直接撞上 OpenAI 的速率限制，
+    # 拿回一堆 429 比慢一点糟糕得多。
+    for eid in event_ids:
+        eid = str(eid).strip()
+        meta = _fetch_event_full(eid)
+        if meta is None:
+            failed.append({"event_id": eid, "error": "news_events 里找不到这个 id"})
+            continue
+        body_text = meta.get("description_long_zh") or meta.get("description_short_zh") or ""
+        news_text = f"{meta['title_zh']}\n{body_text}".strip()
+
+        ok, errs = _run_personas(active_personas, news_text, tracker)
+        run_uid = None
+        try:
+            run_uid = persona_store.record_run(
+                input_mode="event_id", news_text=news_text, results=ok, errors=errs,
+                event_id=eid, batch_uid=batch_uid,
+                importance_score=meta.get("importance_score"),
+                cost_usd=0,   # 单条不摊成本，总成本记在响应里；摊派会引入无意义的舍入误差
+                model=MODEL,
+            )
+        except Exception:
+            logger.exception(f"批量评测落库失败 event_id={eid}")
+
+        rows.append({
+            "event_id": eid, "run_uid": run_uid,
+            "title": meta.get("title_zh"),
+            "importance_score": (float(meta["importance_score"])
+                                 if meta.get("importance_score") is not None else None),
+            "scores": {r["persona_id"]: r["score"] for r in ok},
+            "results": ok, "errors": errs,
+        })
+
+    # 每个 agent 在这一批里的均分——批量评测最直接的产出就是这个横向对比
+    summary = []
+    for p in active_personas:
+        vals = [r["scores"][p["id"]] for r in rows if p["id"] in r["scores"]]
+        summary.append({
+            "persona_id": p["id"], "name": p["name"], "emoji": p.get("emoji"),
+            "evaluated": len(vals),
+            "avg_score": round(sum(vals) / len(vals), 2) if vals else None,
+        })
+
+    return jsonify({
+        "batch_uid": batch_uid,
+        "rows": rows,
+        "failed": failed,
+        "summary": summary,
+        "personas": [{"id": p["id"], "name": p["name"], "emoji": p.get("emoji"),
+                      "tagline": p.get("tagline")} for p in active_personas],
+        "cost_usd": _chat_cost_usd(tracker),
+        "model": MODEL,
+        "persona_source": persona_source,
     })
 
 

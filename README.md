@@ -70,7 +70,7 @@ curl -s "http://34.138.247.158:8080/api/news?limit=20&sort=importance" -H "Autho
 | **新闻策略数据服务** | 01 生成流程 | 全链路流程图（步骤胶囊+实时耗时）、最近调度监控横条、八步流水线、打分模型、真实耗时标注 |
 | | 02 数据展示 | 事件表格 + 筛选（观测时间按生产轮次单选）+ 行展开详情（五因子/校验/内容理解标签/X 原贴）+ App 模拟器 + **信源统计**（380 个信源的接入方式/校验分层/产出量，可筛选） |
 | | 03 API 接入 | 端点清单、字段格式、案例数据、多语言示例、**页内直接试跑** |
-| **策略产品工作台** | 04 评测工具 | Duplicate Tester（截图判重）· LLM 评测室（5 persona）· AB 对比（重合度/GSB） |
+| **策略产品工作台** | 04 评测工具 | Duplicate Tester（截图判重）· LLM 评测室（多 Agent 评测）· AB 对比（重合度/GSB）· **Persona 管理**（人设增删改查/文件导入/版本回滚/校准闭环）· **批量评测**（N 条 × M Agent 矩阵）· **评测历史**（自动留档/人工标注/外部效度） |
 | | 05 策略实验室 | 因子权重实时调节重排 + 两版本对比（换手率/升降 case/规则总结） |
 | **其它** | 06 历史数据 | 评测/实验结果的保存与检索 |
 | | 07 开发者资讯 | 仓库入口、Dev Bill 成本预估、Built by 协作链路 |
@@ -98,12 +98,14 @@ api/              Flask 服务（每个 blueprint 自包含，便于多人并行
   lab_tools.py      策略实验室  ·  eval_tools.py    评测工具
   sector_insight.py Sector 推荐 ·  history_tools.py 历史/埋点/反馈
   enrich_bridge.py  本地 Claude 预处理桥  ·  notify.py  邮件通知
+  persona_store.py  评测 Agent 数据层（无 Flask 依赖，被下面两个 blueprint 共用）
+  persona_tools.py  Agent 管理 / 校准闭环 / 评测历史 / 外部效度分析
 web/              前端（纯 HTML，无构建）
   index.html        7-tab 工作台   ·  assets/app.css  共享设计系统
   lab.html          并入前的旧独立页（已不再路由，留档备查）
 scripts/          qa_suite.py（交付门禁）· local_enrich_worker.py（Mac 侧）
                   stage_fetch.py · usage_monitor.py · backfill_*.py
-config/           schema.sql · migrations/（10 个，全部幂等）· env.example
+config/           schema.sql · migrations/（12 个，全部幂等）· env.example
 docs/             文档（见下）· design_source/（设计改版源材料）
 ```
 
@@ -152,7 +154,7 @@ docs/             文档（见下）· design_source/（设计改版源材料）
 ssh manus-vm "cd ~/crypto-news-crawler && set -a && source config/.env && set +a && python3 scripts/qa_suite.py"
 ```
 
-66+ 条用例覆盖服务/鉴权/接口/写入链路/数据不变量/交互工具。退出码非 0 即**不得交付**。
+93 条用例覆盖服务/鉴权/接口/写入链路/数据不变量/交互工具/评测 Agent 与校准闭环。退出码非 0 即**不得交付**。
 用例只断言不变量（鉴权必须拦住、指纹不能重复、相关性必须连续……），可无脑重跑；
 写库用例自清理；`--no-paid` 跳过唯一一条会花钱的用例。
 

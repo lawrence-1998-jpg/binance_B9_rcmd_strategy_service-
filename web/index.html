@@ -768,6 +768,86 @@ footer{border-top:1px solid var(--rule);padding:26px 0 40px;font-size:12px;color
 #panel-4 .verdict-pill.bad{background:var(--ev-red-dim);color:var(--ev-red)}
 #panel-4 .ab-conclusion{background:var(--ev-gold-dim);border:1px solid var(--ev-gold-line);border-radius:var(--ev-r);padding:14px 16px;font-size:13px;line-height:1.75;color:var(--ev-tx-2);margin-top:14px}
 #panel-4 .ab-conclusion b{color:var(--ev-tx)}
+
+/* ── Persona 管理 / 批量评测 / 评测历史（2026-07-28 新增） ────────────
+   继续沿用本 panel 已有的 --ev-* 作用域变量，不引入新的一套颜色 token。 */
+#panel-4 .pm-card{background:var(--ev-bg-1);border:1px solid var(--ev-line);border-radius:var(--ev-r-lg);padding:0;box-shadow:var(--ev-shadow);margin-bottom:16px;overflow:hidden}
+#panel-4 .pm-card.inactive{opacity:.62}
+#panel-4 .pm-head{display:flex;align-items:flex-start;gap:14px;padding:18px 20px;cursor:pointer;background:var(--ev-bg-2);border-bottom:1px solid var(--ev-line)}
+#panel-4 .pm-head:hover{background:var(--ev-gold-dim)}
+#panel-4 .pm-avatar{font-size:32px;line-height:1;flex:none;width:46px;height:46px;display:flex;align-items:center;justify-content:center;background:var(--ev-bg-1);border:1px solid var(--ev-line);border-radius:12px}
+#panel-4 .pm-id{flex:1;min-width:0}
+#panel-4 .pm-name{font-size:16px;font-weight:650;color:var(--ev-tx);display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+#panel-4 .pm-tagline{font-size:12.5px;color:var(--ev-tx-3);margin-top:3px}
+#panel-4 .pm-vpill{font-family:var(--mono);font-size:10px;padding:2px 7px;border-radius:100px;background:var(--ev-bg-3);color:var(--ev-tx-3);font-weight:600}
+#panel-4 .pm-vpill.builtin{background:var(--ev-gold-dim);color:var(--ev-gold)}
+#panel-4 .pm-vpill.off{background:var(--ev-red-dim);color:var(--ev-red)}
+#panel-4 .pm-metrics{display:flex;gap:16px;flex-wrap:wrap;flex:none;align-items:center}
+#panel-4 .pm-metric{text-align:right;min-width:56px}
+#panel-4 .pm-metric .l{font-size:9.5px;color:var(--ev-tx-4);text-transform:uppercase;letter-spacing:.06em;font-family:var(--mono)}
+#panel-4 .pm-metric .v{font-size:16px;font-weight:650;font-family:var(--mono);color:var(--ev-tx);margin-top:2px}
+#panel-4 .pm-metric .v.gold{color:var(--ev-gold)}
+#panel-4 .pm-metric .v.dim{color:var(--ev-tx-4);font-size:13px}
+#panel-4 .pm-body{display:none;padding:20px}
+#panel-4 .pm-card.open .pm-body{display:block}
+#panel-4 .pm-fields{display:grid;grid-template-columns:1fr;gap:14px}
+#panel-4 .pm-field label{display:block;font-size:11px;font-weight:700;color:var(--ev-tx-2);margin-bottom:5px;letter-spacing:.02em}
+#panel-4 .pm-field label .hint{font-weight:500;color:var(--ev-tx-4);letter-spacing:0}
+#panel-4 .pm-field textarea,#panel-4 .pm-field input{width:100%;background:var(--ev-bg-2);border:1px solid var(--ev-line);border-radius:9px;padding:10px 12px;font-size:12.5px;color:var(--ev-tx);font-family:inherit;line-height:1.7}
+#panel-4 .pm-field textarea{min-height:88px;resize:vertical}
+#panel-4 .pm-field textarea:focus,#panel-4 .pm-field input:focus{outline:none;border-color:var(--ev-gold);background:var(--ev-bg-1)}
+#panel-4 .pm-field textarea.tall{min-height:150px}
+#panel-4 .pm-row{display:flex;gap:12px;flex-wrap:wrap}
+#panel-4 .pm-row > *{flex:1 1 180px}
+#panel-4 .pm-actions{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:16px;padding-top:16px;border-top:1px solid var(--ev-line)}
+#panel-4 .pm-sub{margin-top:18px;padding-top:16px;border-top:1px solid var(--ev-line)}
+#panel-4 .pm-sub h4{font-size:12.5px;color:var(--ev-tx-2);margin-bottom:10px;display:flex;align-items:center;gap:8px}
+#panel-4 .pm-vlist{display:flex;flex-direction:column;gap:0;max-height:230px;overflow-y:auto;border:1px solid var(--ev-line);border-radius:var(--ev-r)}
+#panel-4 .pm-vitem{display:flex;gap:12px;align-items:flex-start;padding:9px 12px;font-size:11.5px;border-bottom:1px solid var(--ev-line-soft)}
+#panel-4 .pm-vitem:last-child{border-bottom:0}
+#panel-4 .pm-vitem .vn{font-family:var(--mono);font-weight:700;color:var(--ev-gold);flex:none;min-width:30px}
+#panel-4 .pm-vitem .vd{flex:1;color:var(--ev-tx-2);line-height:1.6}
+#panel-4 .pm-vitem .vt{color:var(--ev-tx-4);font-family:var(--mono);font-size:10px;flex:none}
+#panel-4 .pm-src{display:inline-block;font-size:9.5px;padding:1px 6px;border-radius:4px;background:var(--ev-bg-3);color:var(--ev-tx-3);font-family:var(--mono);margin-left:6px}
+#panel-4 .pm-calib{background:var(--ev-bg-2);border:1px solid var(--ev-line);border-radius:var(--ev-r);padding:12px;font-size:12px;line-height:1.8;color:var(--ev-tx-2);white-space:pre-wrap;max-height:180px;overflow-y:auto}
+#panel-4 .pm-prompt{background:var(--ev-bg-3);border:1px solid var(--ev-line);border-radius:var(--ev-r);padding:12px;font-size:11.5px;line-height:1.75;color:var(--ev-tx-2);white-space:pre-wrap;max-height:300px;overflow-y:auto;font-family:var(--mono)}
+#panel-4 .pm-dist{display:flex;align-items:flex-end;gap:3px;height:44px;margin-top:6px}
+#panel-4 .pm-dist .bar{flex:1;background:var(--ev-gold);border-radius:2px 2px 0 0;min-height:2px;position:relative}
+#panel-4 .pm-dist .bar span{position:absolute;bottom:-15px;left:0;right:0;text-align:center;font-size:9px;color:var(--ev-tx-4);font-family:var(--mono)}
+
+#panel-4 .be-picks{display:flex;gap:8px;flex-wrap:wrap;padding-top:4px}
+#panel-4 .be-pick{display:inline-flex;align-items:center;gap:6px;padding:6px 11px;border-radius:100px;border:1px solid var(--ev-line);background:var(--ev-bg-2);font-size:12px;color:var(--ev-tx-2);cursor:pointer;user-select:none}
+#panel-4 .be-pick.on{border-color:var(--ev-gold);background:var(--ev-gold-dim);color:var(--ev-tx)}
+#panel-4 .be-pick input{display:none}
+#panel-4 table.bemtx{width:100%;border-collapse:collapse;font-size:12px;min-width:640px}
+#panel-4 table.bemtx th{text-align:left;padding:9px 10px;background:var(--ev-bg-2);color:var(--ev-tx-3);font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;font-family:var(--mono);border-bottom:1px solid var(--ev-line);white-space:nowrap}
+#panel-4 table.bemtx td{padding:9px 10px;border-bottom:1px solid var(--ev-line-soft);vertical-align:middle}
+#panel-4 table.bemtx td.t{max-width:340px}
+#panel-4 .sc-chip{display:inline-flex;align-items:center;justify-content:center;min-width:30px;height:24px;border-radius:6px;font-family:var(--mono);font-size:12px;font-weight:700;color:#1E2329}
+#panel-4 .eh-run{background:var(--ev-bg-1);border:1px solid var(--ev-line);border-radius:var(--ev-r);margin-bottom:10px;overflow:hidden}
+#panel-4 .eh-run-head{display:flex;gap:12px;align-items:center;padding:12px 14px;cursor:pointer;flex-wrap:wrap}
+#panel-4 .eh-run-head:hover{background:var(--ev-bg-2)}
+#panel-4 .eh-time{font-family:var(--mono);font-size:11px;color:var(--ev-tx-3);flex:none}
+#panel-4 .eh-title{flex:1;min-width:180px;font-size:12.5px;color:var(--ev-tx);font-weight:550}
+#panel-4 .eh-mode{font-size:9.5px;padding:2px 7px;border-radius:100px;background:var(--ev-bg-3);color:var(--ev-tx-3);font-family:var(--mono);flex:none}
+#panel-4 .eh-scores{display:flex;gap:5px;flex:none}
+#panel-4 .eh-body{display:none;padding:0 14px 14px;border-top:1px solid var(--ev-line-soft)}
+#panel-4 .eh-run.open .eh-body{display:block}
+#panel-4 .eh-res{border:1px solid var(--ev-line);border-radius:var(--ev-r);padding:12px;margin-top:12px;background:var(--ev-bg-2)}
+#panel-4 .eh-res-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px}
+#panel-4 .eh-res-name{font-size:13px;font-weight:650;color:var(--ev-tx)}
+#panel-4 .eh-blk{margin-top:8px;font-size:12px;line-height:1.7;color:var(--ev-tx-2)}
+#panel-4 .eh-blk .l{font-size:10px;color:var(--ev-tx-4);text-transform:uppercase;letter-spacing:.06em;font-family:var(--mono);margin-bottom:3px}
+#panel-4 .calib-box{margin-top:10px;padding-top:10px;border-top:1px dashed var(--ev-line)}
+#panel-4 .calib-box textarea{width:100%;background:var(--ev-bg-1);border:1px solid var(--ev-line);border-radius:8px;padding:8px 10px;font-size:12px;color:var(--ev-tx);font-family:inherit;min-height:54px;resize:vertical;line-height:1.6}
+#panel-4 .calib-box textarea:focus{outline:none;border-color:var(--ev-gold)}
+#panel-4 .calib-row{display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap}
+#panel-4 .calib-row select{background:var(--ev-bg-1);border:1px solid var(--ev-line);border-radius:8px;padding:7px 10px;font-size:12px;color:var(--ev-tx);font-family:inherit}
+@media (max-width:720px){
+  #panel-4 .pm-head{flex-wrap:wrap}
+  #panel-4 .pm-metrics{width:100%;justify-content:flex-start}
+  #panel-4 .pm-metric{text-align:left}
+}
 @media(max-width:900px){#panel-4 .ab-grid{grid-template-columns:1fr}}
 @media(max-width:640px){#panel-4 .kpi-row{flex-direction:column}}
 
@@ -2199,13 +2279,16 @@ footer{border-top:1px solid var(--rule);padding:26px 0 40px;font-size:12px;color
   <div class="sec-head">
     <span class="eyebrow">EVALUATION TOOLKIT</span>
     <h2>评测工具</h2>
-    <p class="sub">Duplicate Tester 去重检测、LLM 评测室多 persona 评测、AB 对比排序质量分析 —— 原 <code>/eval</code> 独立页面，现合并为同页 tab。</p>
+    <p class="sub">去重检测、多 Agent 新闻评测、AB 对比、Agent 人设管理与校准、批量矩阵评测、评测历史留档 —— 一套完整的评测闭环。</p>
   </div>
 
   <nav class="subtabs" role="tablist" aria-label="评测工具子导航">
     <button class="stab" role="tab" id="stab-1" aria-controls="spanel-1" aria-selected="true"><span class="idx">01</span>Duplicate Tester</button>
     <button class="stab" role="tab" id="stab-2" aria-controls="spanel-2" aria-selected="false"><span class="idx">02</span>LLM 评测室</button>
     <button class="stab" role="tab" id="stab-3" aria-controls="spanel-3" aria-selected="false"><span class="idx">03</span>AB 对比</button>
+    <button class="stab" role="tab" id="stab-4" aria-controls="spanel-4" aria-selected="false"><span class="idx">04</span>Persona 管理</button>
+    <button class="stab" role="tab" id="stab-5" aria-controls="spanel-5" aria-selected="false"><span class="idx">05</span>批量评测</button>
+    <button class="stab" role="tab" id="stab-6" aria-controls="spanel-6" aria-selected="false"><span class="idx">06</span>评测历史</button>
   </nav>
 
   <!-- ══════════════════════════ 子 Tab 1: Duplicate Tester ══════════════════════════ -->
@@ -2242,12 +2325,12 @@ footer{border-top:1px solid var(--rule);padding:26px 0 40px;font-size:12px;color
   </section>
 
   <!-- ══════════════════════════ 子 Tab 2: LLM 评测室 ══════════════════════════ -->
-  <section class="panel" id="spanel-2" role="tabpanel" aria-labelledby="stab-2">
+  <section class="panel" id="spanel-2" role="tabpanel" aria-labelledby="stab-2" data-onshow="initEvalRoom">
     <div class="section">
       <div class="section-head">
         <span class="eyebrow">LLM 评测室</span>
         <h2>多 Persona 新闻评测</h2>
-        <div class="sub">粘贴新闻文本或上传新闻截图，5 个不同画像的币圈用户会分别给出打分、定性评估、是否看得懂、优化建议 —— 用于判断一条新闻对不同受众的实际体验。</div>
+        <div class="sub">粘贴新闻文本或上传新闻截图，当前启用的每个评测 Agent 会分别给出打分、定性评估、是否看得懂、优化建议 —— 用于判断一条新闻对不同受众的实际体验。人设在「04 Persona 管理」里维护，结果自动落库到「06 评测历史」。</div>
       </div>
 
       <div class="card">
@@ -2268,7 +2351,7 @@ footer{border-top:1px solid var(--rule);padding:26px 0 40px;font-size:12px;color
           <div class="dropzone" id="dropzoneEval">
             <div class="ic">📰</div>
             <div class="t1">点击选择新闻截图，或拖拽到此处</div>
-            <div class="t2">会先用视觉模型提取标题+正文文本，再交给 5 个 persona 评测</div>
+            <div class="t2">会先用视觉模型提取标题+正文文本，再交给各 Agent 评测</div>
             <input type="file" id="fileInputEval" accept="image/png,image/jpeg,image/jpg,image/webp,image/gif">
           </div>
           <div id="evalThumbWrap" style="margin-top:12px"></div>
@@ -2288,7 +2371,7 @@ footer{border-top:1px solid var(--rule);padding:26px 0 40px;font-size:12px;color
 
         <div class="eval-actions">
           <button class="btn primary" id="runEvalBtn">开始评测</button>
-          <span id="evalSpinnerWrap" style="display:none" class="pc-score-row"><span class="spinner"></span><span class="progress-tx">5 个 persona 并发评测中…</span></span>
+          <span id="evalSpinnerWrap" style="display:none" class="pc-score-row"><span class="spinner"></span><span class="progress-tx">各 Agent 并发评测中…</span></span>
         </div>
         <div id="evalError"></div>
       </div>
@@ -2392,6 +2475,132 @@ footer{border-top:1px solid var(--rule);padding:26px 0 40px;font-size:12px;color
       </div>
       <div id="abError"></div>
       <div id="abResults"></div>
+    </div>
+  </section>
+
+  <!-- ══════════════════════════ 子 Tab 4: Persona 管理 ══════════════════════════ -->
+  <section class="panel" id="spanel-4" role="tabpanel" aria-labelledby="stab-4" data-onshow="loadPersonas">
+    <div class="section">
+      <div class="section-head">
+        <span class="eyebrow">PERSONA 管理</span>
+        <h2>评测 Agent 管理</h2>
+        <div class="sub">
+          评测 Agent 的人设住在数据库里（不是代码里的常量），改完立刻生效、不用重启服务。
+          每个 Agent 由<b>人格 / 故事 / 偏好 / 记忆 / 心情</b>五要素构成，可以手动编辑、也可以上传
+          txt / md / json 文件批量导入。每次改动都会存一份版本快照，随时能回滚。
+        </div>
+      </div>
+
+      <div class="note amber" style="margin-bottom:16px">
+        <span class="lbl">校准闭环怎么用</span>
+        在「LLM 评测室」或「批量评测」的结果卡片下写一条 comment（可以顺带填「实际应该打几分」），
+        <b>提交即生效</b>——它立刻进入该 Agent 的「校准记忆」，下一次评测就带上，这一步零成本。
+        攒够几条之后，在下面点<b>「归纳进人格」</b>可以让模型把这些散落的校准压缩进人格/偏好正文
+        （这一步会调一次 LLM，有小额费用）。填过的「实际应该打几分」同时成为人工标注基准，
+        用来算这个 Agent 的偏差 MAE —— 校准到底有没有让它更准，看这个数字降没降。
+      </div>
+
+      <div class="eval-actions" style="margin-bottom:16px">
+        <button class="btn primary" id="pmNewBtn" type="button">＋ 新建 Agent</button>
+        <button class="btn small" id="pmRefreshBtn" type="button">刷新</button>
+        <span class="count-pill" id="pmCountPill">加载中…</span>
+      </div>
+
+      <div id="pmError"></div>
+      <div id="pmList"></div>
+    </div>
+  </section>
+
+  <!-- ══════════════════════════ 子 Tab 5: 批量评测 ══════════════════════════ -->
+  <section class="panel" id="spanel-5" role="tabpanel" aria-labelledby="stab-5" data-onshow="initBatchEval">
+    <div class="section">
+      <div class="section-head">
+        <span class="eyebrow">批量评测</span>
+        <h2>N 条新闻 × M 个 Agent 矩阵</h2>
+        <div class="sub">
+          单条评测只能看个案。真正能回答产品问题的是「某一轮次的 top N 事件，三档资产人群分别怎么看」——
+          矩阵里同一行的评分差异，就是这条新闻的<b>受众宽度</b>；某个 Agent 整列偏低，说明当前排序策略
+          对这类人群不适配。跑完还会给出各 Agent 评分与生产 <code>importance_score</code> 的对照。
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="frow">
+          <div class="field" style="flex:1 1 200px">
+            <label for="beSource">取数方式</label>
+            <select id="beSource">
+              <option value="recent">最近入库的事件</option>
+              <option value="importance">生产重要性最高的事件</option>
+            </select>
+          </div>
+          <div class="field" style="flex:0 1 140px">
+            <label for="beLimit">条数（上限 30）</label>
+            <input type="number" id="beLimit" value="8" min="1" max="30">
+          </div>
+          <div class="field" style="flex:1 1 240px">
+            <label>参与的 Agent</label>
+            <div id="bePersonaPicks" class="be-picks">加载中…</div>
+          </div>
+        </div>
+
+        <div class="note" style="margin-top:12px">
+          <span class="lbl">成本提示</span>
+          <span id="beCostHint">LLM 调用次数 = 条数 × Agent 数。请先确认预估费用再运行。</span>
+        </div>
+
+        <div class="eval-actions">
+          <button class="btn primary" id="beRunBtn" type="button">开始批量评测</button>
+          <span id="beSpinnerWrap" style="display:none" class="pc-score-row"><span class="spinner"></span><span class="progress-tx" id="beSpinnerTx">评测中…</span></span>
+        </div>
+        <div id="beError"></div>
+      </div>
+
+      <div id="beResults"></div>
+    </div>
+  </section>
+
+  <!-- ══════════════════════════ 子 Tab 6: 评测历史 ══════════════════════════ -->
+  <section class="panel" id="spanel-6" role="tabpanel" aria-labelledby="stab-6" data-onshow="loadEvalHistory">
+    <div class="section">
+      <div class="section-head">
+        <span class="eyebrow">评测历史</span>
+        <h2>历史评测任务与结果</h2>
+        <div class="sub">
+          每一次评测（单条或批量）都会自动落库，无需手动保存。可以按 Agent 过滤、展开看当时的完整结果、
+          补打人工标注分，或整表导出 CSV。每条结果都记录了<b>当时用的是哪一版人设</b>——校准前后的对比
+          能成立，全靠这个版本号。
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="frow" style="align-items:flex-end">
+          <div class="field" style="flex:1 1 220px">
+            <label for="ehPersonaFilter">按 Agent 过滤</label>
+            <select id="ehPersonaFilter"><option value="">全部 Agent</option></select>
+          </div>
+          <div class="field" style="flex:0 1 130px">
+            <label for="ehLimit">每页条数</label>
+            <input type="number" id="ehLimit" value="20" min="1" max="200">
+          </div>
+          <div class="field">
+            <label style="opacity:0">操作</label>
+            <button class="btn small" id="ehRefreshBtn" type="button">刷新</button>
+          </div>
+          <div class="field">
+            <label style="opacity:0">导出</label>
+            <button class="btn small" id="ehExportBtn" type="button">⬇ 导出 CSV</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="ehStats"></div>
+      <div id="ehError"></div>
+      <div id="ehList"></div>
+      <div class="eval-actions" id="ehPager" style="display:none">
+        <button class="btn small" id="ehPrev" type="button">← 上一页</button>
+        <span class="count-pill" id="ehPageInfo"></span>
+        <button class="btn small" id="ehNext" type="button">下一页 →</button>
+      </div>
     </div>
   </section>
 
@@ -4268,18 +4477,34 @@ function loadApi(){
    复用主脚本的 activeToken()（用户在 Tab3 填了自己的 secret 就用它，否则用页面
    自带的 DEMO_TOKEN），typeof 判断只是防御性写法，避免脚本块加载顺序意外时整个
    评测面板直接抛错。 */
+// 2026-07-28：原来这里无条件拼 '?token='，path 本身带 query 时会产出
+// `/api/personas?with_stats=1?token=xxx` 这种两个问号的 URL —— 服务端把
+// `1?token=xxx` 当成 with_stats 的值，token 参数根本不存在，于是稳定 401。
+// 同一个坑主脚本的 liveUrl() 已经踩过一次，这里按分隔符判断修掉。
 function toolUrl(path){
   const t = (typeof activeToken === 'function') ? activeToken() : '';
-  return t ? path + '?token=' + encodeURIComponent(t) : path;
+  if (!t) return path;
+  return path + (path.indexOf('?') >= 0 ? '&' : '?') + 'token=' + encodeURIComponent(t);
 }
 
 // ── 通用：01/02/03 三个子 tab 切换 ──────────────────────────────────
-const stabs = [document.getElementById('stab-1'), document.getElementById('stab-2'), document.getElementById('stab-3')];
-const spanels = [document.getElementById('spanel-1'), document.getElementById('spanel-2'), document.getElementById('spanel-3')];
+// 子 tab 切换。原来是手写三个 id 的定长数组，2026-07-28 加 Persona 管理/批量评测/
+// 评测历史时改成按 DOM 查询——每加一个子 tab 就要回来改一次数组是典型的会忘的地方，
+// 忘了的表现还是"按钮点了没反应"这种不报错的沉默故障。
+const stabs   = Array.from(document.querySelectorAll('#panel-4 nav.subtabs .stab'));
+const spanels = stabs.map(b => document.getElementById(b.getAttribute('aria-controls')));
+
+// 进 tab 时的懒加载钩子。注意本文件整块包在 IIFE 里（见上面的注释），所以这里
+// **不能**用 window[名字] 去找函数——那样永远找不到，表现是"点了子 tab 没反应、
+// 控制台也不报错"。用这个块内的注册表，在下面各功能定义完之后填。
+const SUBTAB_HOOKS = {};
+
 stabs.forEach((btn, i) => {
   btn.addEventListener('click', () => {
     stabs.forEach((b, j) => b.setAttribute('aria-selected', j === i ? 'true' : 'false'));
-    spanels.forEach((p, j) => p.classList.toggle('active', j === i));
+    spanels.forEach((p, j) => p && p.classList.toggle('active', j === i));
+    const hook = spanels[i] && spanels[i].dataset.onshow;
+    if (hook && SUBTAB_HOOKS[hook]) SUBTAB_HOOKS[hook]();
   });
 });
 
@@ -4673,12 +4898,24 @@ function renderReferenceMetrics(rm){
 function renderEvalResults(body, isExample){
   const wrap = document.getElementById('evalResults');
   let html = '';
-  if (isExample){
+  if (isExample === 'history'){
+    html += `<div class="note" style="margin-bottom:14px">
+      <span class="lbl">上一次真实评测的结果</span>
+      这是从评测历史里取的最近一次记录，不是重新调用生成的（进这个 tab 不花钱）。
+      粘贴/上传新内容后点"开始评测"会覆盖它并真实调用。
+    </div>`;
+  } else if (isExample){
     html += `<div class="note amber" style="margin-bottom:14px">
-      <span class="lbl">示例结果 · 非实时生成</span>
-      这是预先跑好的一次真实评测（$0.028，下方新闻原文），进这个子 tab 立刻能看到
-      5 张 persona 卡片长什么样，不用每次都重新花钱生成。想看真实新内容的评测效果，
-      粘贴/上传后点"开始评测"即可，会覆盖这份示例并真实调用。
+      <span class="lbl">示例结果 · 非实时生成 · 用的是旧版人设</span>
+      这是一份固化的历史样例（$0.028），只是让空白页面有东西可看。
+      它跑的是 2026-07-28 之前的 5 人设配置，<b>与当前启用的 Agent 不一致</b>；
+      真实跑一次之后这里会自动换成最近一次的真实结果。
+    </div>`;
+  }
+  if (body.persona_source === 'builtin_fallback'){
+    html += `<div class="err-box" style="margin-bottom:14px">
+      ⚠️ 本次评测<b>没有</b>用数据库里的人设 —— 读取 eval_personas 失败，已回落到代码内置的默认人设。
+      你在「Persona 管理」里的修改这次<b>未生效</b>。请检查数据库连接与 012 迁移是否已执行。
     </div>`;
   }
   html += `<div class="news-preview">${escapeHtml(body.news_text)}</div>`;
@@ -4716,19 +4953,687 @@ function renderEvalResults(body, isExample){
         <div class="l">优化建议</div>
         <div class="t">${escapeHtml(p.improvement_suggestion)}</div>
       </div>
+      ${calibBoxHtml(p.persona_id, p.result_id, p.human_score)}
     </div>`;
   });
   html += `</div>`;
   if ((body.persona_errors || []).length){
     html += `<div class="err-box">部分 persona 评测失败：${escapeHtml(JSON.stringify(body.persona_errors))}</div>`;
   }
-  if (!isExample) html += saveBarHtml('eval');   // 示例结果本来就是固化的，不需要再存一遍
+  if (isExample !== true) html += saveBarHtml('eval');   // 固化样例不需要再存一遍
   wrap.innerHTML = html;
-  if (!isExample) wireSaveButton('eval', 'llm_eval', body);
+  if (isExample !== true) wireSaveButton('eval', 'llm_eval', body);
+  wireCalibBoxes(wrap);
 }
 
-// 页面加载即展示默认示例（不发任何请求，纯本地静态数据渲染）
+// 进「LLM 评测室」时展示最近一次真实评测（从历史读，不花钱）。历史为空时才退回
+// 那份固化样例——样例跑的是 2026-07-28 之前的 5 人设配置，跟当前启用的 Agent 对不上，
+// 只适合当"空页面占位"，不该长期冒充当前效果。
+let EVAL_ROOM_INITED = false;
+async function initEvalRoom(){
+  if (EVAL_ROOM_INITED) return;
+  EVAL_ROOM_INITED = true;
+  try{
+    const body = await pmFetch('/api/eval-runs?limit=1');
+    const run = (body.runs || [])[0];
+    if (!run) return;                       // 没有历史就保留已渲染的样例
+    const full = await pmFetch('/api/eval-runs/' + encodeURIComponent(run.run_uid));
+    const names = full.persona_names || {};
+    const personas = (full.results || []).filter(r => r.error == null).map(r => ({
+      persona_id: r.persona_id, name: names[r.persona_id] || r.persona_id,
+      emoji: '🙂', tagline: '人设 v' + r.persona_version,
+      score: r.score, is_understandable: r.is_understandable,
+      qualitative_assessment: r.qualitative_assessment,
+      understandable_reason: r.understandable_reason,
+      improvement_suggestion: r.improvement_suggestion,
+      result_id: r.id, human_score: r.human_score,
+    }));
+    if (!personas.length) return;
+    // emoji 从 persona 列表补齐（历史结果表里没存 emoji，那是展示属性不是评测数据）
+    try{
+      if (!PERSONAS_CACHE.length) PERSONAS_CACHE = (await pmFetch('/api/personas')).personas || [];
+      const byId = Object.fromEntries(PERSONAS_CACHE.map(p => [p.id, p]));
+      personas.forEach(p => { if (byId[p.persona_id]){ p.emoji = byId[p.persona_id].emoji || '🙂'; } });
+    }catch(e){ /* emoji 补不齐不影响阅读 */ }
+
+    renderEvalResults({
+      news_text: full.news_text || full.news_title || '',
+      personas, persona_errors: [],
+      cost_usd: Number(full.cost_usd || 0), model: full.model || '',
+      reference_metrics: {available:false, reason:'历史记录回放，未重算 Momentum / Novelty。'},
+    }, 'history');
+  }catch(e){ /* 取历史失败就保留样例，不打扰用户 */ }
+}
+
+// 页面加载即展示固化样例（不发任何请求）；进 tab 时 initEvalRoom 会用真实历史替换它
 renderEvalResults(EVAL_EXAMPLE_RESULT, true);
+
+// ══════════════════════════════════════════════════════════════════
+// Persona 管理 / 批量评测 / 评测历史（2026-07-28）
+// ══════════════════════════════════════════════════════════════════
+// 三个子 tab 共用下面这批工具函数。所有请求走 toolUrl()（token 进 query），
+// 与本 panel 其它子工具保持一致。
+// ══════════════════════════════════════════════════════════════════
+
+const PERSONA_FIELD_META = [
+  {k:'personality', label:'人格', hint:'性格底色、说话方式、决策风格'},
+  {k:'story',       label:'故事', hint:'来历、经历过什么、为什么是现在这样'},
+  {k:'preferences', label:'偏好', hint:'想看什么、讨厌什么、打分倾向'},
+  {k:'memory',      label:'记忆', hint:'长期设定：踩过的坑、认准的信源'},
+  {k:'mood',        label:'心情', hint:'当前情绪状态，会影响评分宽严'},
+];
+
+let PERSONAS_CACHE = [];
+
+async function pmFetch(path, opts){
+  const resp = await fetch(toolUrl(path), opts);
+  const body = await resp.json().catch(() => ({}));
+  if (!resp.ok) throw new Error(body.error || ('HTTP ' + resp.status));
+  return body;
+}
+
+function fmtMoney(n){
+  if (!n) return '—';
+  return '$' + Number(n).toLocaleString('en-US');
+}
+
+// ── Persona 管理 ───────────────────────────────────────────────────
+async function loadPersonas(){
+  const box = document.getElementById('pmList');
+  const err = document.getElementById('pmError');
+  err.innerHTML = '';
+  box.innerHTML = '<div class="progress-tx">加载中…</div>';
+  try{
+    const body = await pmFetch('/api/personas?with_stats=1');
+    PERSONAS_CACHE = body.personas || [];
+    document.getElementById('pmCountPill').textContent =
+      `${PERSONAS_CACHE.length} 个 Agent（启用 ${PERSONAS_CACHE.filter(p=>p.is_active).length}）`;
+    box.innerHTML = PERSONAS_CACHE.map(renderPersonaCard).join('') ||
+      '<div class="note">还没有任何 Agent。点上面的「＋ 新建 Agent」创建一个。</div>';
+    wirePersonaCards();
+  }catch(e){
+    box.innerHTML = '';
+    err.innerHTML = `<div class="err-box">读取 Agent 列表失败：${escapeHtml(e.message)}</div>`;
+  }
+}
+
+function renderPersonaCard(p){
+  const s = p.stats || {};
+  const dist = s.score_dist || [];
+  const maxD = Math.max(1, ...dist);
+  return `<div class="pm-card ${p.is_active ? '' : 'inactive'}" data-pid="${escapeHtml(p.id)}">
+    <div class="pm-head" data-act="toggle">
+      <div class="pm-avatar">${p.emoji || '🙂'}</div>
+      <div class="pm-id">
+        <div class="pm-name">${escapeHtml(p.name)}
+          <span class="pm-vpill">v${p.version}</span>
+          ${p.is_builtin ? '<span class="pm-vpill builtin">内置</span>' : ''}
+          ${p.is_active ? '' : '<span class="pm-vpill off">已停用</span>'}
+          ${s.pending_calibrations ? `<span class="pm-vpill builtin">${s.pending_calibrations} 条待归纳</span>` : ''}
+        </div>
+        <div class="pm-tagline">${escapeHtml(p.tagline || '')}</div>
+      </div>
+      <div class="pm-metrics">
+        <div class="pm-metric"><div class="l">资产</div><div class="v dim">${fmtMoney(p.assets_usd)}</div></div>
+        <div class="pm-metric"><div class="l">评测数</div><div class="v">${s.eval_count || 0}</div></div>
+        <div class="pm-metric"><div class="l">均分</div><div class="v gold">${s.avg_score != null ? s.avg_score : '—'}</div></div>
+        <div class="pm-metric"><div class="l">偏差 MAE</div><div class="v ${s.mae_vs_human != null ? '' : 'dim'}">${s.mae_vs_human != null ? s.mae_vs_human : '未标注'}</div></div>
+      </div>
+    </div>
+    <div class="pm-body">
+      <div class="pm-row">
+        <div class="pm-field"><label>名字</label><input type="text" data-f="name" value="${escapeHtml(p.name)}"></div>
+        <div class="pm-field" style="flex:0 1 90px"><label>Emoji</label><input type="text" data-f="emoji" value="${escapeHtml(p.emoji||'')}"></div>
+        <div class="pm-field" style="flex:0 1 150px"><label>资产（美元）</label><input type="number" data-f="assets_usd" value="${p.assets_usd||0}"></div>
+        <div class="pm-field" style="flex:0 1 110px"><label>排序</label><input type="number" data-f="sort_order" value="${p.sort_order||100}"></div>
+      </div>
+      <div class="pm-field" style="margin-top:14px"><label>一句话标签 <span class="hint">卡片上展示</span></label><input type="text" data-f="tagline" value="${escapeHtml(p.tagline||'')}"></div>
+
+      <div class="pm-fields" style="margin-top:14px">
+        ${PERSONA_FIELD_META.map(f => `<div class="pm-field">
+          <label>${f.label} <span class="hint">— ${f.hint}</span></label>
+          <textarea data-f="${f.k}" class="${f.k==='story'?'tall':''}">${escapeHtml(p[f.k]||'')}</textarea>
+        </div>`).join('')}
+      </div>
+
+      <div class="pm-field" style="margin-top:14px">
+        <label>整段 Prompt 覆盖 <span class="hint">— 填了这里就完全忽略上面五要素，直接把这段当 system prompt；留空则用五要素拼装</span></label>
+        <textarea data-f="prompt_override">${escapeHtml(p.prompt_override||'')}</textarea>
+      </div>
+
+      <div class="pm-actions">
+        <button class="btn primary small" data-act="save">保存修改</button>
+        <label class="btn small" style="cursor:pointer;margin:0">
+          📄 上传人设文件<input type="file" data-act="upload" accept=".txt,.md,.json,text/plain,text/markdown,application/json" style="display:none">
+        </label>
+        <select data-act="upload-mode" style="background:var(--ev-bg-2);border:1px solid var(--ev-line);border-radius:8px;padding:8px 10px;font-size:12px;color:var(--ev-tx)">
+          <option value="replace">覆盖同名字段</option>
+          <option value="append">追加到现有内容后</option>
+        </select>
+        <button class="btn small" data-act="preview">预览最终 Prompt</button>
+        <button class="btn small" data-act="toggle-active">${p.is_active ? '停用' : '启用'}</button>
+        ${s.pending_calibrations ? `<button class="btn small" data-act="apply-calib">🧠 归纳 ${s.pending_calibrations} 条校准进人格</button>` : ''}
+        <button class="btn small" data-act="delete" style="margin-left:auto;color:var(--ev-red)">删除</button>
+      </div>
+
+      <div data-slot="msg"></div>
+      <div data-slot="preview"></div>
+
+      ${(p.calib_memory||'').trim() ? `<div class="pm-sub">
+        <h4>校准记忆 <span class="pm-src">系统自动维护 · 每次评测都会带进 prompt</span></h4>
+        <div class="pm-calib">${escapeHtml(p.calib_memory)}</div>
+      </div>` : ''}
+
+      ${(s.eval_count||0) > 0 ? `<div class="pm-sub">
+        <h4>评分分布 <span class="pm-src">共 ${s.eval_count} 次 · 看得懂率 ${s.understandable_rate != null ? Math.round(s.understandable_rate*100)+'%' : '—'}</span></h4>
+        <div class="pm-dist">
+          ${dist.map((n,i) => `<div class="bar" style="height:${Math.max(2,(n/maxD)*100)}%" title="${i+1} 分：${n} 次"><span>${i+1}</span></div>`).join('')}
+        </div>
+        <div style="height:16px"></div>
+      </div>` : ''}
+
+      <div class="pm-sub"><h4>版本历史 <span class="pm-src">点版本号可回滚</span></h4>
+        <div class="pm-vlist" data-slot="versions"><div class="progress-tx" style="padding:10px">展开时加载…</div></div>
+      </div>
+    </div>
+  </div>`;
+}
+
+function wirePersonaCards(){
+  document.querySelectorAll('#pmList .pm-card').forEach(card => {
+    const pid = card.dataset.pid;
+    const msg = card.querySelector('[data-slot="msg"]');
+    const setMsg = (html) => { msg.innerHTML = html; };
+
+    card.querySelector('[data-act="toggle"]').addEventListener('click', () => {
+      card.classList.toggle('open');
+      if (card.classList.contains('open')) loadVersions(pid, card);
+    });
+
+    const collect = () => {
+      const out = {};
+      card.querySelectorAll('[data-f]').forEach(el => {
+        out[el.dataset.f] = el.type === 'number' ? Number(el.value || 0) : el.value;
+      });
+      return out;
+    };
+
+    card.querySelector('[data-act="save"]').addEventListener('click', async () => {
+      setMsg('<div class="progress-tx">保存中…</div>');
+      try{
+        const body = await pmFetch('/api/personas/' + encodeURIComponent(pid), {
+          method:'PUT', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify(Object.assign(collect(), {change_note:'在管理页手动编辑'})),
+        });
+        setMsg(`<div class="note" style="margin-top:12px"><span class="lbl">已保存 · v${body.persona.version}</span>下一次评测立刻使用新人设，无需重启服务。</div>`);
+        toast('已保存 v' + body.persona.version);
+        loadVersions(pid, card);
+      }catch(e){ setMsg(`<div class="err-box">保存失败：${escapeHtml(e.message)}</div>`); }
+    });
+
+    card.querySelector('[data-act="upload"]').addEventListener('change', async (ev) => {
+      const f = ev.target.files && ev.target.files[0];
+      if (!f) return;
+      const mode = card.querySelector('[data-act="upload-mode"]').value;
+      setMsg('<div class="progress-tx">解析并导入中…</div>');
+      const fd = new FormData(); fd.append('file', f, f.name); fd.append('mode', mode);
+      try{
+        const body = await pmFetch('/api/personas/' + encodeURIComponent(pid) + '/upload', {method:'POST', body:fd});
+        setMsg(`<div class="note" style="margin-top:12px"><span class="lbl">导入成功 · v${body.persona.version}</span>
+          从 <code>${escapeHtml(f.name)}</code> 解析出字段：<b>${body.parsed_fields.map(k=>{
+            const m = PERSONA_FIELD_META.find(x=>x.k===k); return m?m.label:k;}).join('、')}</b>（${mode==='append'?'追加':'覆盖'}模式）。
+          页面已刷新为最新内容。</div>`);
+        toast('导入成功');
+        await loadPersonas();
+      }catch(e){ setMsg(`<div class="err-box">导入失败：${escapeHtml(e.message)}</div>`); }
+      ev.target.value = '';
+    });
+
+    card.querySelector('[data-act="preview"]').addEventListener('click', async () => {
+      const slot = card.querySelector('[data-slot="preview"]');
+      slot.innerHTML = '<div class="progress-tx">生成中…</div>';
+      try{
+        const body = await pmFetch('/api/personas/' + encodeURIComponent(pid) + '/preview-prompt');
+        slot.innerHTML = `<div class="pm-sub"><h4>最终发给模型的 System Prompt
+          <span class="pm-src">${body.char_count} 字${body.uses_override ? ' · 走的是整段覆盖' : ' · 由五要素拼装'}</span></h4>
+          <div class="pm-prompt">${escapeHtml(body.system_prompt)}</div></div>`;
+      }catch(e){ slot.innerHTML = `<div class="err-box">${escapeHtml(e.message)}</div>`; }
+    });
+
+    card.querySelector('[data-act="toggle-active"]').addEventListener('click', async () => {
+      const p = PERSONAS_CACHE.find(x => x.id === pid);
+      try{
+        await pmFetch('/api/personas/' + encodeURIComponent(pid), {
+          method:'PUT', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({is_active: !p.is_active, change_note: p.is_active ? '停用' : '启用'}),
+        });
+        toast(p.is_active ? '已停用（不再参与评测）' : '已启用');
+        loadPersonas();
+      }catch(e){ setMsg(`<div class="err-box">${escapeHtml(e.message)}</div>`); }
+    });
+
+    const applyBtn = card.querySelector('[data-act="apply-calib"]');
+    if (applyBtn) applyBtn.addEventListener('click', async () => {
+      if (!confirm('把待归纳的校准意见压缩进「人格」和「偏好」两段正文？\n\n会调用一次 LLM（小额费用），并产生一个新版本。改坏了可以回滚。')) return;
+      applyBtn.disabled = true;
+      setMsg('<div class="progress-tx">归纳中（调用 LLM）…</div>');
+      try{
+        const body = await pmFetch('/api/personas/' + encodeURIComponent(pid) + '/apply-calibration', {
+          method:'POST', headers:{'Content-Type':'application/json'}, body:'{}',
+        });
+        setMsg(`<div class="note amber" style="margin-top:12px">
+          <span class="lbl">已归纳 ${body.applied_count} 条 → v${body.new_version} · $${(body.cost_usd||0).toFixed(4)}</span>
+          ${escapeHtml(body.change_summary)}<br><span style="color:var(--ev-tx-3)">${escapeHtml(body.note)}</span></div>`);
+        toast('已归纳进 v' + body.new_version);
+        await loadPersonas();
+      }catch(e){ applyBtn.disabled = false; setMsg(`<div class="err-box">归纳失败：${escapeHtml(e.message)}</div>`); }
+    });
+
+    card.querySelector('[data-act="delete"]').addEventListener('click', async () => {
+      const p = PERSONAS_CACHE.find(x => x.id === pid);
+      const warn = p && p.is_builtin
+        ? `「${p.name}」是内置 Agent，删除后不会自动恢复。\n\n` : '';
+      if (!confirm(warn + '确定删除这个 Agent？\n\n它的历史评测记录会保留（历史是既成事实），但它不再参与任何新评测。')) return;
+      try{
+        const body = await pmFetch('/api/personas/' + encodeURIComponent(pid), {method:'DELETE'});
+        toast('已删除');
+        await loadPersonas();
+      }catch(e){ setMsg(`<div class="err-box">删除失败：${escapeHtml(e.message)}</div>`); }
+    });
+  });
+}
+
+async function loadVersions(pid, card){
+  const slot = card.querySelector('[data-slot="versions"]');
+  try{
+    const body = await pmFetch('/api/personas/' + encodeURIComponent(pid));
+    const SRC = {seed:'播种', manual:'手改', calibration:'校准归纳', file_import:'文件导入', rollback:'回滚'};
+    slot.innerHTML = (body.versions||[]).map(v => `<div class="pm-vitem">
+      <span class="vn"><a href="#" data-rb="${v.version}">v${v.version}</a></span>
+      <span class="vd">${escapeHtml(v.change_note || '—')}<span class="pm-src">${SRC[v.change_source]||v.change_source}</span></span>
+      <span class="vt">${escapeHtml((v.created_at||'').slice(5,16))}</span>
+    </div>`).join('') || '<div class="progress-tx" style="padding:10px">暂无版本记录</div>';
+
+    slot.querySelectorAll('[data-rb]').forEach(a => {
+      a.addEventListener('click', async (ev) => {
+        ev.preventDefault();
+        const v = a.dataset.rb;
+        if (!confirm(`回滚到 v${v}？\n\n回滚不会删除后面的版本，而是把 v${v} 的内容重新写一遍并产生一个更新的版本号，历史链路完整保留。`)) return;
+        try{
+          await pmFetch('/api/personas/' + encodeURIComponent(pid) + '/rollback', {
+            method:'POST', headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({version: Number(v)}),
+          });
+          toast('已回滚到 v' + v);
+          await loadPersonas();
+        }catch(e){ toast('回滚失败：' + e.message); }
+      });
+    });
+  }catch(e){ slot.innerHTML = `<div class="err-box">${escapeHtml(e.message)}</div>`; }
+}
+
+document.getElementById('pmRefreshBtn').addEventListener('click', loadPersonas);
+document.getElementById('pmNewBtn').addEventListener('click', async () => {
+  const name = prompt('新 Agent 的名字（例如「张涛」）：');
+  if (!name || !name.trim()) return;
+  try{
+    await pmFetch('/api/personas', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({name: name.trim(), emoji:'🙂', tagline:'（待填写）',
+                            personality:'', story:'', preferences:'', memory:'', mood:''}),
+    });
+    toast('已创建，展开卡片填写人设');
+    await loadPersonas();
+  }catch(e){
+    document.getElementById('pmError').innerHTML = `<div class="err-box">创建失败：${escapeHtml(e.message)}</div>`;
+  }
+});
+
+// ── 校准输入框（评测结果卡片下方，评测室 / 批量 / 历史三处共用） ────────
+function calibBoxHtml(personaId, resultId, humanScore){
+  if (!resultId) return '';
+  const opts = ['<option value="">实际应该打几分（可选）</option>']
+    .concat([1,2,3,4,5,6,7,8,9,10].map(n =>
+      `<option value="${n}"${humanScore==n?' selected':''}>实际应该 ${n} 分</option>`)).join('');
+  return `<div class="calib-box" data-calib="${escapeHtml(personaId)}" data-rid="${resultId}">
+    <div class="l" style="font-size:10px;color:var(--ev-tx-4);text-transform:uppercase;letter-spacing:.06em;font-family:var(--mono);margin-bottom:5px">校准这个 Agent</div>
+    <textarea placeholder="它哪里判错了？例如：这类安全事故她其实会格外紧张，不该因为看不懂术语就打低分"></textarea>
+    <div class="calib-row">
+      <select>${opts}</select>
+      <button class="btn small" data-act="submit-calib" type="button">提交校准</button>
+      <span class="progress-tx" style="margin:0">提交即生效（零成本），下次评测就带上</span>
+    </div>
+    <div data-slot="calib-msg"></div>
+  </div>`;
+}
+
+function wireCalibBoxes(root){
+  (root || document).querySelectorAll('[data-calib]').forEach(box => {
+    const btn = box.querySelector('[data-act="submit-calib"]');
+    if (!btn || btn.dataset.wired) return;
+    btn.dataset.wired = '1';
+    btn.addEventListener('click', async () => {
+      const comment = box.querySelector('textarea').value.trim();
+      const sel = box.querySelector('select').value;
+      const msg = box.querySelector('[data-slot="calib-msg"]');
+      if (!comment){ toast('先写一句校准意见'); return; }
+      btn.disabled = true;
+      msg.innerHTML = '<div class="progress-tx">提交中…</div>';
+      try{
+        const body = await pmFetch('/api/personas/' + encodeURIComponent(box.dataset.calib) + '/calibrate', {
+          method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({comment, result_id: Number(box.dataset.rid),
+                                suggested_score: sel ? Number(sel) : null}),
+        });
+        msg.innerHTML = `<div class="note" style="margin-top:8px"><span class="lbl">已生效</span>
+          已写入该 Agent 的校准记忆，下一次评测就会带上（零成本）。${sel ? '同时记为人工标注基准分，用于计算偏差 MAE。' : ''}
+          到「Persona 管理」可以把攒下的校准一次性归纳进人格/偏好。</div>`;
+        toast('校准已生效');
+      }catch(e){
+        btn.disabled = false;
+        msg.innerHTML = `<div class="err-box">${escapeHtml(e.message)}</div>`;
+      }
+    });
+  });
+}
+
+// ── 批量评测 ───────────────────────────────────────────────────────
+async function initBatchEval(){
+  const box = document.getElementById('bePersonaPicks');
+  try{
+    if (!PERSONAS_CACHE.length){
+      const body = await pmFetch('/api/personas?active_only=1&with_stats=1');
+      PERSONAS_CACHE = body.personas || [];
+    }
+    const active = PERSONAS_CACHE.filter(p => p.is_active);
+    box.innerHTML = active.map(p => `<label class="be-pick on" data-pid="${escapeHtml(p.id)}">
+      <input type="checkbox" checked>${p.emoji||'🙂'} ${escapeHtml(p.name)}</label>`).join('')
+      || '<span class="progress-tx">没有启用中的 Agent，请先到「Persona 管理」启用</span>';
+    box.querySelectorAll('.be-pick').forEach(l => {
+      l.addEventListener('click', (e) => {
+        e.preventDefault();
+        const cb = l.querySelector('input'); cb.checked = !cb.checked;
+        l.classList.toggle('on', cb.checked);
+        updateBeCostHint();
+      });
+    });
+    updateBeCostHint();
+  }catch(e){ box.innerHTML = `<span class="progress-tx">加载 Agent 失败：${escapeHtml(e.message)}</span>`; }
+}
+
+function bePickedIds(){
+  return Array.from(document.querySelectorAll('#bePersonaPicks .be-pick'))
+    .filter(l => l.querySelector('input').checked).map(l => l.dataset.pid);
+}
+
+function updateBeCostHint(){
+  const n = Math.max(1, Math.min(30, Number(document.getElementById('beLimit').value || 0)));
+  const m = bePickedIds().length;
+  // 单次 persona 评测的实测均价约 $0.007（3 个 persona 一轮约 $0.021，见评测室实跑）。
+  // 标成"约"，不假装是精确报价。
+  const est = (n * m * 0.007).toFixed(2);
+  document.getElementById('beCostHint').innerHTML =
+    `将产生 <b>${n} × ${m} = ${n*m}</b> 次 LLM 调用，预计花费约 <b>$${est}</b>（按实测单次约 $0.007 估算，仅供参考）。`;
+}
+document.getElementById('beLimit').addEventListener('input', updateBeCostHint);
+document.getElementById('beSource').addEventListener('change', updateBeCostHint);
+
+document.getElementById('beRunBtn').addEventListener('click', async () => {
+  const n = Math.max(1, Math.min(30, Number(document.getElementById('beLimit').value || 8)));
+  const picks = bePickedIds();
+  if (!picks.length){ toast('至少选一个 Agent'); return; }
+
+  const btn = document.getElementById('beRunBtn');
+  const err = document.getElementById('beError');
+  err.innerHTML = ''; document.getElementById('beResults').innerHTML = '';
+  btn.disabled = true;
+  document.getElementById('beSpinnerWrap').style.display = 'inline-flex';
+  document.getElementById('beSpinnerTx').textContent = `取事件列表…`;
+
+  try{
+    const sort = document.getElementById('beSource').value === 'importance' ? 'importance' : 'time';
+    const news = await apiGet('/api/news', {limit: n, sort});
+    const ids = (news.data || news.events || news.items || []).map(x => x.id).filter(Boolean).slice(0, n);
+    if (!ids.length) throw new Error('没取到事件（/api/news 返回为空）');
+
+    document.getElementById('beSpinnerTx').textContent =
+      `评测中：${ids.length} 条新闻 × ${picks.length} 个 Agent，串行跑，请耐心等待…`;
+    const body = await pmFetch('/api/tools/persona-eval-batch', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({event_ids: ids, persona_ids: picks, confirm_cost: true}),
+    });
+    renderBatchResults(body);
+    track('tool_run', {tool:'persona_eval_batch', n: ids.length, agents: picks.length});
+  }catch(e){
+    err.innerHTML = `<div class="err-box">批量评测失败：${escapeHtml(e.message)}</div>`;
+  }finally{
+    btn.disabled = false;
+    document.getElementById('beSpinnerWrap').style.display = 'none';
+  }
+});
+
+function renderBatchResults(body){
+  const P = body.personas || [];
+  let html = `<div class="kpi-row" style="margin-bottom:4px">
+    <div class="kpi"><div class="l">评测新闻数</div><div class="v">${(body.rows||[]).length}</div></div>
+    <div class="kpi"><div class="l">参与 Agent</div><div class="v">${P.length}</div></div>
+    <div class="kpi"><div class="l">本次成本</div><div class="v gold">$${(body.cost_usd||0).toFixed(4)}</div></div>
+  </div>`;
+
+  html += `<div class="card"><div class="section-head" style="margin-bottom:12px">
+    <h2 style="font-size:15px">各 Agent 在这一批里的平均分</h2>
+    <div class="sub">同一批新闻，均分差得越远说明这批内容的受众越窄。</div></div>
+    <div class="kpi-row" style="margin:0">
+    ${(body.summary||[]).map(s => `<div class="kpi">
+      <div class="l">${s.emoji||''} ${escapeHtml(s.name)}</div>
+      <div class="v gold">${s.avg_score != null ? s.avg_score : '—'}</div>
+      <div class="l" style="margin-top:3px;text-transform:none">评了 ${s.evaluated} 条</div>
+    </div>`).join('')}</div></div>`;
+
+  html += `<div class="card" style="margin-top:16px">
+    <div class="table-actions"><div class="section-head" style="margin:0">
+      <h2 style="font-size:15px">评分矩阵</h2>
+      <div class="sub">「生产分」是排序模型算出来的 importance_score，跟各 Agent 主观评分放一起看，就是排序策略的外部效度检查。</div>
+    </div></div>
+    <div class="table-scroll"><table class="bemtx"><thead><tr>
+      <th>新闻</th><th>生产分</th>
+      ${P.map(p => `<th>${p.emoji||''} ${escapeHtml(p.name)}</th>`).join('')}
+    </tr></thead><tbody>`;
+  (body.rows||[]).forEach(r => {
+    html += `<tr><td class="t">${escapeHtml(r.title || r.event_id)}</td>
+      <td><span style="font-family:var(--mono);color:var(--ev-tx-3)">${r.importance_score != null ? r.importance_score.toFixed(3) : '—'}</span></td>
+      ${P.map(p => {
+        const sc = r.scores ? r.scores[p.id] : null;
+        return `<td>${sc != null
+          ? `<span class="sc-chip" style="background:${SCORE_COLOR(sc)}">${sc}</span>`
+          : '<span style="color:var(--ev-tx-4)">失败</span>'}</td>`;
+      }).join('')}</tr>`;
+  });
+  html += `</tbody></table></div>`;
+  if ((body.failed||[]).length){
+    html += `<div class="err-box" style="margin-top:12px">${body.failed.length} 条取数失败：${escapeHtml(body.failed.map(f=>f.event_id).join(', '))}</div>`;
+  }
+  html += `<div class="note" style="margin-top:12px"><span class="lbl">已自动留档</span>
+    这一批的每条结果都已写入评测历史（batch <code>${escapeHtml((body.batch_uid||'').slice(0,8))}</code>），
+    到「06 评测历史」可以展开逐条看定性评估、补人工标注分、写校准。</div></div>`;
+  document.getElementById('beResults').innerHTML = html;
+}
+
+// ── 评测历史 ───────────────────────────────────────────────────────
+let EH_OFFSET = 0, EH_TOTAL = 0, EH_NAMES = {};
+
+async function loadEvalHistory(reset){
+  if (reset !== false) EH_OFFSET = 0;
+  const err = document.getElementById('ehError');
+  const list = document.getElementById('ehList');
+  err.innerHTML = ''; list.innerHTML = '<div class="progress-tx">加载中…</div>';
+
+  // Agent 过滤下拉：第一次进来时填充
+  const sel = document.getElementById('ehPersonaFilter');
+  if (sel.options.length <= 1){
+    try{
+      if (!PERSONAS_CACHE.length){
+        PERSONAS_CACHE = (await pmFetch('/api/personas?with_stats=1')).personas || [];
+      }
+      PERSONAS_CACHE.forEach(p => {
+        const o = document.createElement('option');
+        o.value = p.id; o.textContent = `${p.emoji||''} ${p.name}`;
+        sel.appendChild(o);
+      });
+    }catch(e){ /* 过滤器填不上不影响主列表，静默 */ }
+  }
+
+  const limit = Math.max(1, Math.min(200, Number(document.getElementById('ehLimit').value || 20)));
+  try{
+    const q = new URLSearchParams({limit, offset: EH_OFFSET});
+    if (sel.value) q.set('persona_id', sel.value);
+    const body = await pmFetch('/api/eval-runs?' + q.toString());
+    EH_TOTAL = body.total || 0; EH_NAMES = body.persona_names || {};
+
+    renderEhStats(sel.value);
+    list.innerHTML = (body.runs||[]).map(renderEhRun).join('') ||
+      '<div class="note">还没有评测记录。到「02 LLM 评测室」或「05 批量评测」跑一次，结果会自动落库到这里。</div>';
+    wireEhRuns();
+
+    const pager = document.getElementById('ehPager');
+    pager.style.display = EH_TOTAL > limit ? 'flex' : 'none';
+    document.getElementById('ehPageInfo').textContent =
+      `${EH_OFFSET + 1}–${Math.min(EH_OFFSET + limit, EH_TOTAL)} / 共 ${EH_TOTAL} 次`;
+    document.getElementById('ehPrev').disabled = EH_OFFSET <= 0;
+    document.getElementById('ehNext').disabled = EH_OFFSET + limit >= EH_TOTAL;
+  }catch(e){
+    list.innerHTML = '';
+    err.innerHTML = `<div class="err-box">读取评测历史失败：${escapeHtml(e.message)}</div>`;
+  }
+}
+
+async function renderEhStats(personaId){
+  const box = document.getElementById('ehStats');
+  if (!personaId){
+    // 全部 Agent 视角：给排序外部效度那张表
+    try{
+      const c = await pmFetch('/api/eval-analysis/correlation');
+      box.innerHTML = `<div class="card" style="margin-bottom:16px">
+        <div class="section-head" style="margin-bottom:12px">
+          <h2 style="font-size:15px">排序外部效度：Agent 主观评分 vs 生产 importance_score</h2>
+          <div class="sub">${escapeHtml(c.interpretation)}</div>
+        </div>
+        <div class="kpi-row" style="margin:0">
+        ${(c.correlations||[]).map(x => `<div class="kpi">
+          <div class="l">${escapeHtml(x.name)}</div>
+          <div class="v ${x.pearson_r != null ? 'gold' : ''}" style="${x.pearson_r == null ? 'font-size:13px;color:var(--ev-tx-4)' : ''}">${x.pearson_r != null ? 'r = ' + x.pearson_r : '样本不足'}</div>
+          <div class="l" style="margin-top:3px;text-transform:none">${x.sample_size} 个样本对</div>
+        </div>`).join('') || '<div class="progress-tx">还没有通过「库内事件」方式发起的评测，无法计算。</div>'}
+        </div></div>`;
+    }catch(e){ box.innerHTML = ''; }
+    return;
+  }
+  try{
+    const d = await pmFetch('/api/personas/' + encodeURIComponent(personaId));
+    const s = d.stats || {}, vc = d.version_comparison || [];
+    box.innerHTML = `<div class="card" style="margin-bottom:16px">
+      <div class="section-head" style="margin-bottom:12px">
+        <h2 style="font-size:15px">${d.persona.emoji||''} ${escapeHtml(d.persona.name)} · 当前 v${d.persona.version}</h2>
+        <div class="sub">MAE 是「Agent 打分」与「人工标注分」的平均绝对偏差，越小说明这个 Agent 越贴近真实判断。按版本切开看，就知道校准有没有起作用。</div>
+      </div>
+      <div class="kpi-row" style="margin:0 0 14px">
+        <div class="kpi"><div class="l">评测次数</div><div class="v">${s.eval_count||0}</div></div>
+        <div class="kpi"><div class="l">平均分</div><div class="v gold">${s.avg_score != null ? s.avg_score : '—'}</div></div>
+        <div class="kpi"><div class="l">人工标注</div><div class="v">${s.human_labeled||0}</div></div>
+        <div class="kpi"><div class="l">偏差 MAE</div><div class="v ${s.mae_vs_human!=null?'gold':''}" style="${s.mae_vs_human==null?'font-size:13px;color:var(--ev-tx-4)':''}">${s.mae_vs_human != null ? s.mae_vs_human : '未标注'}</div></div>
+        <div class="kpi"><div class="l">校准条数</div><div class="v">${s.calibration_count||0}${s.pending_calibrations?`<span style="font-size:11px;color:var(--ev-gold)"> (${s.pending_calibrations} 待归纳)</span>`:''}</div></div>
+      </div>
+      <div class="table-scroll"><table class="bemtx"><thead><tr>
+        <th>人设版本</th><th>评测数</th><th>平均分</th><th>已标注</th><th>偏差 MAE</th></tr></thead><tbody>
+        ${vc.map(v => `<tr><td>v${v.version}</td><td>${v.eval_count}</td>
+          <td>${v.avg_score != null ? v.avg_score : '—'}</td><td>${v.human_labeled}</td>
+          <td>${v.mae_vs_human != null ? `<b>${v.mae_vs_human}</b>` : '<span style="color:var(--ev-tx-4)">未标注</span>'}</td></tr>`).join('')
+          || '<tr><td colspan="5" style="color:var(--ev-tx-4)">暂无数据</td></tr>'}
+      </tbody></table></div></div>`;
+  }catch(e){ box.innerHTML = ''; }
+}
+
+function renderEhRun(run){
+  const MODE = {text:'粘贴文本', image:'截图', event_id:'库内事件'};
+  const ok = (run.results||[]).filter(r => r.error == null);
+  return `<div class="eh-run" data-uid="${escapeHtml(run.run_uid)}">
+    <div class="eh-run-head" data-act="toggle">
+      <span class="eh-time">${escapeHtml((run.created_at||'').slice(5,16))}</span>
+      <span class="eh-mode">${MODE[run.input_mode] || run.input_mode}</span>
+      ${run.batch_uid ? '<span class="eh-mode">批量</span>' : ''}
+      <span class="eh-title">${escapeHtml(run.news_title || '(无标题)')}</span>
+      ${run.importance_score != null ? `<span class="eh-time">生产分 ${Number(run.importance_score).toFixed(3)}</span>` : ''}
+      <span class="eh-scores">${ok.map(r =>
+        `<span class="sc-chip" style="background:${SCORE_COLOR(r.score)}" title="${escapeHtml(EH_NAMES[r.persona_id]||r.persona_id)}">${r.score}</span>`).join('')}</span>
+    </div>
+    <div class="eh-body">
+      ${(run.results||[]).map(r => renderEhResult(r)).join('')}
+      <div class="eval-actions" style="margin-top:12px">
+        <button class="btn small" data-act="del-run">删除这条记录</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+function renderEhResult(r){
+  const name = EH_NAMES[r.persona_id] || `${r.persona_id}（已删除的 Agent）`;
+  if (r.error){
+    return `<div class="eh-res"><div class="eh-res-head">
+      <span class="eh-res-name">${escapeHtml(name)}</span>
+      <span class="pm-vpill off">调用失败</span></div>
+      <div class="eh-blk">${escapeHtml(r.error)}</div></div>`;
+  }
+  return `<div class="eh-res"><div class="eh-res-head">
+      <span class="eh-res-name">${escapeHtml(name)}</span>
+      <span class="pm-vpill">人设 v${r.persona_version}</span>
+      <span class="sc-chip" style="background:${SCORE_COLOR(r.score)}">${r.score}</span>
+      <span class="pc-badge ${r.is_understandable ? 'yes' : 'no'}">${r.is_understandable ? '✓ 看得懂' : '✗ 看不懂'}</span>
+      ${r.human_score != null ? `<span class="pm-vpill builtin">人工标注 ${r.human_score} 分</span>` : ''}
+    </div>
+    <div class="eh-blk"><div class="l">定性评估</div>${escapeHtml(r.qualitative_assessment||'')}</div>
+    <div class="eh-blk"><div class="l">看懂/看不懂原因</div>${escapeHtml(r.understandable_reason||'')}</div>
+    <div class="eh-blk"><div class="l">优化建议</div>${escapeHtml(r.improvement_suggestion||'')}</div>
+    ${calibBoxHtml(r.persona_id, r.id, r.human_score)}
+  </div>`;
+}
+
+function wireEhRuns(){
+  document.querySelectorAll('#ehList .eh-run').forEach(el => {
+    el.querySelector('[data-act="toggle"]').addEventListener('click', () => {
+      el.classList.toggle('open');
+      if (el.classList.contains('open')) wireCalibBoxes(el);
+    });
+    el.querySelector('[data-act="del-run"]').addEventListener('click', async () => {
+      if (!confirm('删除这条评测记录？该记录参与的统计（均分、MAE）会相应变化。')) return;
+      try{
+        await pmFetch('/api/eval-runs/' + encodeURIComponent(el.dataset.uid), {method:'DELETE'});
+        toast('已删除');
+        loadEvalHistory(false);
+      }catch(e){ toast('删除失败：' + e.message); }
+    });
+  });
+}
+
+document.getElementById('ehRefreshBtn').addEventListener('click', () => loadEvalHistory(true));
+document.getElementById('ehPersonaFilter').addEventListener('change', () => loadEvalHistory(true));
+document.getElementById('ehExportBtn').addEventListener('click', () => {
+  const pid = document.getElementById('ehPersonaFilter').value;
+  window.open(toolUrl('/api/eval-runs/export.csv') + (pid ? '&persona_id=' + encodeURIComponent(pid) : ''), '_blank');
+});
+document.getElementById('ehPrev').addEventListener('click', () => {
+  EH_OFFSET = Math.max(0, EH_OFFSET - Number(document.getElementById('ehLimit').value || 20));
+  loadEvalHistory(false);
+});
+document.getElementById('ehNext').addEventListener('click', () => {
+  EH_OFFSET += Number(document.getElementById('ehLimit').value || 20);
+  loadEvalHistory(false);
+});
+
+// 把懒加载钩子注册进上面那张表。名字必须和各 <section> 的 data-onshow 一致。
+SUBTAB_HOOKS.loadPersonas    = loadPersonas;
+SUBTAB_HOOKS.initBatchEval   = initBatchEval;
+SUBTAB_HOOKS.loadEvalHistory = () => loadEvalHistory(true);
+SUBTAB_HOOKS.initEvalRoom    = initEvalRoom;
 
 // ══════════════════════════════════════════════════════════════════
 // AB 对比（新增）
