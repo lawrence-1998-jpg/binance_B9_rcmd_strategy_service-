@@ -57,7 +57,7 @@ from .timeutil import now_local
 
 logger = logging.getLogger(__name__)
 
-LLM_MODEL = "gpt-5.4"
+LLM_MODEL = "gpt-5.4"        # 网关切换尝试见 crawler/pipeline.py 同名常量的注释（已回退，未生效）
 LLM_BATCH_SIZE = 12          # 每次结构化调用打包的候选条数，控制单次响应体量
 LLM_MAX_RETRIES = 4
 

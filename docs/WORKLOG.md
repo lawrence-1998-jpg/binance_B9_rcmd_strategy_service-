@@ -229,6 +229,7 @@ enrich bridge 架构一句话：Mac（工作机，不保证在线）闲时经 `/
 | 54 | 真实评测：我方事件库 vs 线上 Binance App「Macro Insight」实际展示内容 | ✅ 用户提供 20 张线上信息流截图，人工转录 82 条卡片（2026-07-25~27），与我方同期 1023 条事件用 `text-embedding-3-small`（256维，同去重管线口径）做相似度匹配，Claude 逐条人工复核（未再调用 OpenAI 做判断/成文）。核心结论：成熟窗口（07-25+07-26）真实新闻召回率 54.4%；同期 S/A/B 级事件 152 条中 133 条（87.5%）未出现在线上展示内容里，含 2 条 S 级、6 条构成完整立法追踪线的 CLARITY 法案 A 级事件、4 起超 $4400 万的安全事故。副产品发现：按信源拆分召回率显示 Bitcoinworld（未接入，占线上流 45.6%）与 BeInCrypto（已接入但召回仅 41.2%，低于 Cointelegraph 的 78.6%，值得跟进）两处信源缺口；另发现我方库内 2 处疑似跨轮归并遗漏的近重复事件（"Lazarus $138M Bybit 洗钱"3行、"KB Kookmin/JPMorgan Kinexys"2行）。产出 PDF 报告 `docs/eval_reports/B9_vs_线上Macro_Insight_评测报告_20260727.pdf` |
 | 55 | 转发折叠：多个 KOL 单纯转发同一原文不再算独立信源 | ✅ Drew Zhu（Product）在评测追问时提出这个问题，Lawrence 明确"不算，只算非转载内容"。根因：`verification.analyze_sources()` 按账号名分机构（`resolve_source` 对陌生 KOL 返回 `x:{username}`），N 个不同账号转发/复制同一段原文时账号名互不相同，天然绕开了"按机构去重"，转发量能冒充信源广度、进而推高 `independent_source_count` 并可能把事件误判到 VERIFIED。修法：`verify_events()` 新增 `_load_tweet_texts()` 批量取本轮涉及推文的 `tweet_body`（复用 `attach_social_metrics` 的查询模式，零新增迁移——`tweet_body` 全文本来就存着），`analyze_sources()` 用 `x_search._normalized_key()`（复用其单次抓取内已有的"识别跨账号复制粘贴"逻辑）对同一事件内的 X 来源按正文聚类，每簇只保留权重最高的机构计入独立信源，其余记入新增的 `n_reposts_folded` 并打 `REPOST_FOLDED` flag。不传 `tweet_text_by_id` 时行为不变（老调用方零改动）。验证：4 个合成场景（纯转发折叠为1/全原创不折叠/不传参数保持老行为/混合场景选中最高权重机构）全部通过；扫描生产库确认转发现象真实存在（x_raw_posts 里有 7 条不同账号发布同一段正文的真实簇），仅因当前"单事件内≥2条X来源"的事件较少（67/1851）暂未在 news_events 里遇到会触发折叠的案例；用 5 条真实事件跑通完整 `verify_events()` 调用链无异常；QA 门禁 70/70 |
 | 56 | 产品 demo 通过，产出正式研发交接 PRD | ✅ 两份文档：`docs/prd/PRD-01-数据抓取.md`（面向数据开发：8 类信源清单+各渠道原始字段规范+X 转发去重与 `is_repost`/`repost_type` 标记要求+URL 去重规则）、`docs/prd/PRD-02-聚类与理解.md`（不含排序：LLM 结构化字段表+语义聚类阈值 0.82 的标定提醒+跨轮归并"事件id不变、标签值持续变化、增量表逻辑记录快照时间"的更新规则详解，直接对应 Drew Zhu 评审时提的"同一事件持续 update 应归到一个事件热度里"+转发折叠的验收标准）。两份都基于现有原型代码的真实字段/常量核对写成（sources.py 信源计数、pipeline.py LLM schema、dedup.py 阈值、storage.py 的 ON DUPLICATE KEY UPDATE 更新语义），不是凭空写的模板 |
+| 59 | 尝试切换生产环境到公司 LiteLLM 网关（阻塞：VM 连不通内网） | ⏸️ 见下方专节 |
 | 58 | 评测工具完整化：Agent 管理页 + 校准闭环 + 评测历史 + 三项主动补的能力 | ✅ 见下方专节 |
 | 57 | demo演示完毕，暂停 X API + 运行频率从每天2轮降为每2天1轮 | ✅ 新增 `X_FETCH_ENABLED` 环境变量开关（`crawler/main.py`，默认 `true`；VM `config/.env` 已设为 `false`），`fetch_x_sources()` 为 false 时直接跳过 KOL 时间线 + 全网搜索两条腿，返回空列表并记日志说明是"主动暂停"而非故障；`config/env.example` 补充说明注释。crontab 主流水线行从 `0 8,20 * * *` 改为 `0 8 */2 * *`（已备份老 crontab），免费源高频存档与周备份两行不变。验证：VM 上直接跑通 enabled=true/false 两种行为；策略产品工作台（04/05 tab 按需调用 OpenAI，不经过这个开关）逐项确认不受影响（systemctl active、首页 200、鉴权可达）；QA 门禁 70/70。**顺带修复**（未被要求但主动核查全站的连带影响）：`README.md` 调度表 + 首屏 kicker + 6 处散落在页面各处的"每天2轮/08:00·20:00"旧文案（流程图 SVG、调度横条、部署信息、pipeline 说明段、tab07 简介、API 文档字符串）；Dev Bill 成本表按新分摊基数重算（单轮 $14.17→$28.56、单日 $28.33→$14.28、单月 $850→$428.50，X 一项归零）。**故障排查**：部署后浏览器实测发现 `nextRunLabel()` 显示"下轮 7-29 20:00"——根因是最近一次记录的运行发生在 20:07（老排期切换前最后一次遗留记录），"+2天"计算把这个已不存在的 20:00 时段带进了新排期的展示；且中间一版修复仍经过 JS `Date` 对象的时区解析（`new Date(str+"+08:00")` 再 `.getUTCDate()`），在 UTC+8 凌晨时段（UTC 与 UTC+8 日期不同）有隐患。最终版改为直接从已是 UTC+8 挂钟字符串的 `run_at` 用正则摘出年月日数字做纯 `Date.UTC` 整数运算+2天，小时数在输出里硬编码为 `"08:00"`，不再从入参继承；`node -e` 单测 3 种场景（正常/凌晨边界/null）+ 浏览器实测确认显示"下轮 7-29 08:00"后部署 |
 
@@ -335,3 +336,74 @@ LLM 扮演的可信度几乎完全取决于背景细节密度，只写"谨慎的
 - QA 门禁新增第 7 组共 23 条用例（全部零成本），总计 **93/93 通过**
 - 验证完把测试数据全部清空并重新播种：校准记录里是我为跑通链路编的判断，不能留在
   产品里冒充产品负责人的意见；基于它归纳出的 v2 人设同样要回到干净的 v1 播种态
+
+# 十、尝试切换到公司 LiteLLM 网关（2026-07-28）—— WORKLOG #59 详节，⏸️ 未生效已回退
+
+Lawrence：「立刻把这个rec hub服务改造成 都用这个key来做，包括新闻的处理，都用
+这个key来做，而不是用本地claude的credit了...直接用最好的gpt模型 或者opus4.8」，
+并提供了公司 LiteLLM 网关的 key 与接入文档。
+
+## 做了什么
+
+1. **验证网关本身**：从本机（Mac）真实调用网关，确认可达、鉴权通过、模型清单
+   与文档一致。用真实 `response_format: json_schema, strict:true` 请求逐个测试
+   候选模型：`gpt-5.4`/`gpt-5.4-mini`/`gpt-5.6-luna`/`gpt-5.6-sol`/`gpt-5.6-terra`
+   全部支持 strict schema；**`claude-opus-4-8`（文档里唯一非 bedrock 前缀的
+   Claude，对应用户说的"opus4.8"）经 Bedrock 通道报错 `output_config.format:
+   Extra inputs are not permitted`——不支持这套代码从 pipeline 结构化到评测工具
+   全部依赖的 strict json_schema 模式**，排除。embeddings 端点验证
+   `text-embedding-3-small` 支持 `dimensions=256` 参数且输出单位向量，与现有
+   1300+ 条事件的向量空间兼容。
+2. **确认全仓路由早已 env 化**：`crawler/pipeline.py`/`sector_relevance.py`、
+   `api/eval_tools.py`/`persona_tools.py` 的 OpenAI client 构造统一读
+   `OPENAI_API_KEY`/`OPENAI_API_BASE`，理论上只改 `config/.env` 两行、代码零改动
+   即可切换（模型仍用 `gpt-5.4`，已在这套 schema 上验证过，5.6 三个变体连
+   网关自己的文档都写"疑似同代不同调优分支，具体差异待确认"，产线不动未验证
+   型号）。
+3. **实际切换后端到网关**：`config/.env` 改 `OPENAI_API_KEY`/`OPENAI_API_BASE`
+   指向网关，旧个人账号 key 注释保留做回滚；部署重启服务确认存活。
+
+## 发现的阻塞（关键）
+
+**从 VM 直接测试时，`litellm.devfdg.net` 直接 DNS 解析失败**（`Could not
+resolve host`）。追查发现：这个域名在能访问它的网络（比如本机 Mac）解析到的是
+`172.21.x.x` 一段私网 IP，背后是一个内部 ELB
+（`internal-k8s-backend-litellmi-...`）——**这个网关是 Binance 内网专用服务，
+根本不对公网开放**，不是防火墙拦截可以绕过的问题，是网络层面本来就连不通。
+这台跑生产 pipeline 和 Flask API 的机器是 GCP 上的公网 VM，不在 Binance 内网/
+VPN 里，永远连不上这个地址，除非：①网关方把服务开放给这台 VM 所在网段，或
+②把 pipeline 挪到能连通内网的机器上跑（这两者都不是我能单方面决定或操作的，
+需要 Lawrence 判断）。
+
+**已立即回退**：发现问题后第一时间把 `config/.env` 改回旧个人 OpenAI 账号 key，
+重启服务，用真实调用（`crawler/pipeline.py.enrich_one()` 跑一条测试新闻）+
+全量 QA 门禁（94/94，含付费用例）确认服务完全恢复正常——策略产品工作台全程
+没有对外呈现过故障状态。
+
+**连带撤销了"暂停本地 Claude 预处理桥"**：用户要"不用本地 claude credit"的
+前提是"改用公司网关"，既然网关切换没有生效、生产环境实际仍在用个人 OpenAI
+账号出钱，继续暂停本地预处理桥（`launchctl unload
+com.lawrence.b9-enrich-worker`）就只会让个人账号多花钱、没有任何对应好处——
+前提不成立时不该保留这个动作的后果，已 `launchctl load` 恢复。
+
+## 现状
+
+- 生产环境（pipeline + Flask API 全部工具）：**仍是原来的个人 OpenAI 账号**，
+  未受影响，一切如常
+- 网关 key/base 已完整写入 `config/.env`（注释状态，含到期日期 2026-08-03、
+  排障过程、回滚步骤），随时可在网络问题解决后一行切换启用
+- 本地 Claude 预处理桥：已恢复正常调度
+
+## 需要 Lawrence 决定的事
+
+1. 网关只对内网开放这件事是否符合预期？如果预期就是"仅供内网机器使用"，那
+   这台 GCP VM 上的生产服务大概率始终无法直接使用它，除非迁移运行环境或让
+   网关方开白名单
+2. `claude-opus-4-8` 即使网络问题解决，也需要先把本仓库里依赖 strict json
+   schema 的调用点（pipeline 结构化 + 评测工具全部接口）改造成 tool-calling
+   形式的结构化输出才能使用——这是一次单独的、有一定回归风险的工程改动，
+   不在这次"立刻切换"的范围内
+3. 网关的安全提示明确写"key 不要写进代码仓库或聊天记录明文留存"，但这个项目
+   一直以来的约定是 `config/.env` 直接提交进私有仓库（README/`.gitignore`
+   都有明确记录和理由）。这次沿用了项目既有约定，但这条冲突值得知会一声，
+   由 Lawrence 判断是否要为这个 key 破例走不同的存储方式

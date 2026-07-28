@@ -80,7 +80,7 @@ API_TOKENS = {
 }
 VALID_API_KEYS = {API_SECRET_KEY, *API_TOKENS.values()}
 
-MODEL = "gpt-5.4"
+MODEL = "gpt-5.4"          # 网关切换尝试见 crawler/pipeline.py 同名常量的注释（已回退，未生效）
 MAX_UPLOAD_BYTES = 512 * 1024      # 人设文件 512KB 上限，纯文本足够用了
 MAX_FIELD_CHARS = 8000             # 单个人设字段的长度上限，防止把整本小说塞进 prompt
 

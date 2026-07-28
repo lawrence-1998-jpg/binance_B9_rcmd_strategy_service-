@@ -35,6 +35,15 @@ from .verification import persist_verification, verify_events
 logger = logging.getLogger(__name__)
 
 LLM_MODEL = "gpt-5.4"
+# 2026-07-28：曾尝试切到公司 LiteLLM 网关（config/.env 有完整记录），已回退——
+# 网关地址 litellm.devfdg.net 解析到私网 IP（172.21.x.x，内部 ELB），只有在
+# Binance 内网/VPN 上的机器能连通，这台跑生产 pipeline 的 GCP VM 连不上（DNS
+# 都解析不出来，不是防火墙拦截，无法绕过）。现状：仍用直连 OpenAI 的个人账号
+# key。若要真正切网关，需要网关方把服务开放给公网/VM 所在网段，或者把 pipeline
+# 挪到能连通内网的机器上跑——这两者都不是"改几行 env"能解决的，需要用户判断。
+# 另外网关上的 claude-opus-4-8 实测经 Bedrock 通道不支持这里依赖的
+# response_format strict json_schema，即使网络问题解决，换模型前也需要先验证
+# schema 兼容性。
 # 降级模型：只给"信息已经结构化、不需要判断力"的条目用，不是给"低权威"条目用——
 # 低权威信源（匿名X贴、聚合搜索结果）恰恰是谣言甄别、事件分级最需要判断力的地方，
 # 权威度低不等于任务简单，两者不能划等号。真正简单的是 market_signal（行情异动，

@@ -109,6 +109,7 @@ def require_api_key(f):
 
 # ── 常量 ─────────────────────────────────────────────────────────────
 MODEL = "gpt-5.4"                     # 视觉 + 文本结构化统一用这一个模型（同厂商同型号原生支持图片输入，实测过）
+                                       # 网关切换尝试见 crawler/pipeline.py 同名常量的注释（已回退，未生效）
 MAX_IMAGES_PER_REQUEST = 20            # 单次 dedup-test 最多处理的图片数，超过直接拒绝
 MAX_IMAGE_BYTES = 8 * 1024 * 1024      # 单张图 8MB 上限，防止异常大文件拖垮请求
 ALLOWED_IMAGE_TYPES = {"image/png", "image/jpeg", "image/jpg", "image/webp", "image/gif"}
