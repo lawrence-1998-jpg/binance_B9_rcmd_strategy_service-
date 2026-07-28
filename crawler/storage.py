@@ -476,11 +476,29 @@ def record_run(conn, stats: dict, duration: float,
 #   3. prompt_hash 不匹配的缓存行直接不选 —— prompt 一旦迭代，旧缓存自动全部失效，
 #      不会出现"一半条目用旧口径、一半用新口径"的精神分裂数据
 
-def load_enrich_cache(conn, url_hashes: list[str], prompt_hash: str) -> dict:
-    """按 url_hash 批量取本地 Claude 预处理结果，返回 {url_hash: enriched_dict}。
+# 缓存是否要求 prompt_hash 完全一致才复用。
+#
+# 2026-07-28 改为默认**不要求**（Lawrence："改prompt和换模型后的数据结果混用就
+# 混用了，没所谓"，冷启阶段以铺满数据为先）。改之前的行为是严格匹配，代价在当天
+# 就实测到了：我调了一次 SYSTEM_PROMPT，hash 从 13c1dac7 变成 d9d04ce7，于是
+# Mac 侧刚用公司额度算好的 696 条缓存**一条都用不上**，同一批内容被 VM 用个人
+# OpenAI 账号又付费重算了一遍（那一轮 llm_cache_hits=0）。
+#
+# 放开的代价是如实的：库里会同时存在不同 prompt 版本、不同模型产出的结构化结果，
+# 字段口径可能有细微差异（比如新 prompt 才有的 market_scope，旧缓存里没有——
+# 这种缺字段的行会被 _valid_cached_enrichment 判为不合法而自动落回重算，
+# 所以不会产生"字段缺失的脏事件"，只会少省一点钱）。
+# 需要严格口径时（比如做正式评测要保证同一把尺子），把这个环境变量设成 false。
+CACHE_REQUIRE_PROMPT_MATCH = (
+    os.environ.get("B9_CACHE_REQUIRE_PROMPT_MATCH", "false").strip().lower() == "true")
 
-    只取 prompt_hash 与当前一致的行。任何异常都吞掉返回 {}——缓存是纯加速层，
-    绝不允许它的故障影响主流程。
+
+def load_enrich_cache(conn, url_hashes: list[str], prompt_hash: str) -> dict:
+    """按 url_hash 批量取预处理结果，返回 {url_hash: enriched_dict}。
+
+    是否要求 prompt_hash 一致由 CACHE_REQUIRE_PROMPT_MATCH 控制，默认不要求，
+    理由见该常量的注释。任何异常都吞掉返回 {}——缓存是纯加速层，绝不允许它的
+    故障影响主流程。
     """
     if not url_hashes:
         return {}
@@ -491,11 +509,20 @@ def load_enrich_cache(conn, url_hashes: list[str], prompt_hash: str) -> dict:
         for i in range(0, len(url_hashes), 500):
             chunk = url_hashes[i:i + 500]
             placeholders = ",".join(["%s"] * len(chunk))
-            cursor.execute(
-                f"""SELECT url_hash, enriched FROM llm_enrich_cache
-                    WHERE prompt_hash = %s AND url_hash IN ({placeholders})""",
-                (prompt_hash, *chunk),
-            )
+            if CACHE_REQUIRE_PROMPT_MATCH:
+                cursor.execute(
+                    f"""SELECT url_hash, enriched FROM llm_enrich_cache
+                        WHERE prompt_hash = %s AND url_hash IN ({placeholders})""",
+                    (prompt_hash, *chunk),
+                )
+            else:
+                # 同一 url 可能有多版缓存，取最新的一条
+                cursor.execute(
+                    f"""SELECT url_hash, enriched FROM llm_enrich_cache
+                        WHERE url_hash IN ({placeholders})
+                        ORDER BY created_at ASC""",
+                    tuple(chunk),
+                )
             for url_hash, enriched in cursor.fetchall():
                 try:
                     out[url_hash] = json.loads(enriched)

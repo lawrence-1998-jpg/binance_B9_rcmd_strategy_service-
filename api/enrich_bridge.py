@@ -103,8 +103,11 @@ def enrich_prompt():
 @require_api_key
 def enrich_pending():
     """领任务：staging 里未被 pipeline 消费、且当前口径下还没有缓存的条目。"""
+    # 2026-07-28：上限从 200 提到 1000。原来的 200 是按"Mac 用 claude CLI 逐条
+    # 处理、一次唤醒也就啃几十条"的旧节奏定的；现在 worker 走网关、29 RPM、
+    # 并发 12，一次唤醒能吃掉几百条，200 会让它领完就空转等下次唤醒。
     try:
-        limit = max(1, min(200, int(request.args.get("limit", 40))))
+        limit = max(1, min(1000, int(request.args.get("limit", 40))))
     except ValueError:
         limit = 40
     conn = _db()
@@ -114,6 +117,19 @@ def enrich_pending():
         cursor.execute(
             "DELETE FROM llm_enrich_cache WHERE created_at < NOW() - INTERVAL 7 DAY")
         conn.commit()
+        # 派活按**当前 prompt_hash** 过滤，而复用（storage.load_enrich_cache）
+        # 不按 hash 过滤——两边口径刻意不对称，这是想清楚之后的选择，别"统一"掉：
+        #
+        #   · 复用侧问的是"我现在能不能直接用"→ 任何算过的都行，字段不全的会被
+        #     _valid_cached_enrichment 挡掉自动回退，安全。
+        #   · 派活侧问的是"还有什么需要按当前口径算"→ 必须认当前 hash。
+        #
+        # 2026-07-28 我一度把派活侧也改成"有任何缓存就不派"，当场踩了坑：那天
+        # 给 schema 加了 market_scope 必填字段，旧缓存 400 条 SQL 上全命中、
+        # 字段校验却 0 条通过（缺 market_scope）。派活侧一旦不认 hash，这些条目
+        # 就永远不会被重新派出去补算，而复用侧又用不了它们——结果是每轮都稳定
+        # 回落到付费的 OpenAI 直连，且没有任何机制能自愈。改回按 hash 派活后，
+        # 这类条目会被重新派给 Mac 用公司额度补算，一轮之后就能被复用侧吃到。
         cursor.execute(
             """SELECT s.url_hash, s.source, s.title, s.url, s.summary,
                       s.published_at, s.lang, s.authority, s.type
@@ -123,7 +139,7 @@ def enrich_pending():
                 WHERE s.consumed_at IS NULL
                   AND s.fetched_at >= NOW() - INTERVAL 7 DAY
                   AND c.url_hash IS NULL
-             ORDER BY s.fetched_at DESC
+             ORDER BY s.fetched_at ASC
                 LIMIT %s""",
             (PROMPT_VERSION_HASH, limit),
         )

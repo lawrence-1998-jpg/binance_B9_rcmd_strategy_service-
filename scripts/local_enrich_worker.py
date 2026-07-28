@@ -264,14 +264,41 @@ def enrich_with_gateway(spec: dict, item: dict) -> dict | None:
     return None
 
 
+def _pid_alive(pid: int) -> bool:
+    try:
+        os.kill(pid, 0)          # 信号 0 只探测存在性，不真的发信号
+    except (ProcessLookupError, ValueError):
+        return False
+    except PermissionError:
+        return True              # 存在但不属于当前用户，保守当作活着
+    return True
+
+
 def acquire_lock() -> bool:
-    """防止上一轮还没跑完就被 launchd 再次唤醒叠加。"""
+    """防止上一轮还没跑完就被 launchd 再次唤醒叠加。
+
+    2026-07-29 修：原来只按 mtime 判新鲜度（2 小时），进程被 kill / launchctl
+    unload 掉之后锁文件会留在原地，导致此后 2 小时内每次唤醒都打印
+    "previous run still active" 直接跳过——worker 静默停摆两小时，日志看起来
+    还很正常。实际当天就踩到了：我 unload 重载 worker 换配置，之后连续三次
+    唤醒全被这把死锁挡掉。改成先看锁里记的 PID 还在不在，进程没了立刻接管，
+    mtime 只作为 PID 复用等极端情况的兜底。
+    """
     if os.path.exists(LOCK_FILE):
-        if time.time() - os.path.getmtime(LOCK_FILE) < LOCK_STALE_S:
+        holder = None
+        try:
+            holder = int(open(LOCK_FILE).read().strip())
+        except (OSError, ValueError):
+            pass
+        if holder is not None and not _pid_alive(holder):
+            log.warning(f"lock held by dead pid {holder}, taking over")
+            os.unlink(LOCK_FILE)
+        elif time.time() - os.path.getmtime(LOCK_FILE) < LOCK_STALE_S:
             log.info("previous run still active (lock fresh), skipping this wake")
             return False
-        log.warning("stale lock found, taking over")
-        os.unlink(LOCK_FILE)
+        else:
+            log.warning("stale lock found, taking over")
+            os.unlink(LOCK_FILE)
     with open(LOCK_FILE, "w") as f:
         f.write(str(os.getpid()))
     return True

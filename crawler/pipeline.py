@@ -24,7 +24,8 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
 from . import storage
-from .dedup import aggregate_events, build_fingerprint, fallback_id
+from .dedup import (COSINE_THRESHOLD, aggregate_events, build_fingerprint,
+                    embed_texts, fallback_id)
 from .market_cap import annotate_events as annotate_market_cap
 from .market_cap import persist_coin_metrics
 from .scoring import score_events
@@ -119,6 +120,67 @@ def prefilter_duplicates(items: list[dict], threshold: float = 0.85) -> list[dic
 
     result = [item for item, k in zip(url_deduped, keep) if k]
     logger.info(f"Prefilter: {len(items)} → {len(result)}")
+    return result
+
+
+def semantic_prefilter(items: list[dict], client, tracker=None,
+                       threshold: float = None) -> list[dict]:
+    """LLM **之前**的语义级粗去重（2026-07-28 新增）。
+
+    起因：Lawrence 要求"通过一些简单的预处理把一样的内容前置识别掉，不要所有的
+    东西都过模型，避免重复浪费"。上面的 `prefilter_duplicates` 用的是字符 n-gram
+    TF-IDF，实测在 800 条真实积压上只压掉 18%，而且把阈值从 0.85 一路降到 0.60
+    也只多压 3.6%——不是阈值没调好，是**字面相似度天然抓不住两类重复**：
+      · 跨语言："Metaplanet acquires Siiibo Securities" 与
+        "Metaplanet 收购 Siiibo Securities" 字面重合接近 0
+      · 同事件改写："日经指数因芯片股大跌超3%" 与 "日经跌3.6%，芯片股重挫"
+    embedding 两种都能抓（上面两例实测相似度 0.826 / 0.93）。
+
+    成本对比是这件事成立的关键：text-embedding-3-small 每条标题约 20 token，
+    1000 条约 $0.0004；而一次 LLM 结构化约 $0.011/条。**用 embedding 挡掉一条
+    重复，省下的钱是它自身成本的两万多倍**，所以这一步近似免费。
+
+    阈值复用 dedup.COSINE_THRESHOLD（0.82）——那是本项目在 855 条真实事件、
+    28 万配对上标定过的"同一事件"分界点（见 dedup.py 文件头），不另起一套。
+    实测 800 条积压：TF-IDF 后 656 条 → 本步后 594 条，总压缩率 18% → 25.7%，
+    抽样 6 组合并簇人工核对全部为真重复。
+
+    失败即放行：embedding 调用出错时原样返回，宁可多花 LLM 的钱也不丢召回
+    （与 dedup.embed_texts 的零矩阵降级语义不同——那边零向量互不归簇是安全的，
+    这里如果拿到零矩阵会让所有条目两两相似度为 0，反而不会误杀，但仍显式兜底）。
+    """
+    if len(items) <= 1:
+        return items
+    threshold = COSINE_THRESHOLD if threshold is None else threshold
+
+    try:
+        vectors = embed_texts([i.get("title", "") for i in items], client, tracker=tracker)
+    except Exception as e:
+        logger.warning(f"语义粗去重跳过（embedding 失败，原样放行不丢召回）：{e}")
+        return items
+    if getattr(vectors, "size", 0) == 0:
+        return items
+
+    sim = vectors @ vectors.T
+    keep = [True] * len(items)
+    folded = 0
+    for i in range(len(items)):
+        if not keep[i]:
+            continue
+        for j in range(i + 1, len(items)):
+            if not keep[j] or sim[i][j] <= threshold:
+                continue
+            # 与 prefilter_duplicates 同一口径：同一事件保留权威更高的信源
+            if items[j].get("authority", 0) > items[i].get("authority", 0):
+                keep[i] = False
+                folded += 1
+                break
+            keep[j] = False
+            folded += 1
+
+    result = [it for it, k in zip(items, keep) if k]
+    logger.info(f"语义粗去重（LLM 前）: {len(items)} → {len(result)}，"
+                f"折叠 {folded} 条重复，按 $0.011/条估算省下约 ${folded * 0.011:.2f}")
     return result
 
 
@@ -796,8 +858,11 @@ def run_pipeline() -> dict:
         # 2. X 推文落表（必须早于事件写库，H 因子要读回互动量）
         storage.write_x_posts(x_raw_posts, conn)
 
-        # 3. 粗去重（省 LLM 成本）
+        # 3. 粗去重（省 LLM 成本）：字面 TF-IDF → 语义 embedding 两道。
+        #    第二道是 2026-07-28 加的，抓的是第一道天然抓不住的跨语言/改写重复，
+        #    成本近似为零（见 semantic_prefilter 的说明）。
         deduped = prefilter_duplicates(raw_items)
+        deduped = semantic_prefilter(deduped, get_openai_client(), tracker=tracker)
         stats["deduped"] = len(deduped)
         lap("prefilter")
 
