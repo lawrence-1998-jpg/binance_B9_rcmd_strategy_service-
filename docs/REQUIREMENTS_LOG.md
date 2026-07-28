@@ -1,5 +1,16 @@
 # 原始需求留痕（按时间倒序）
 
+## 2026-07-28（Mac 挂公司 VPN，追问能否本地调网关替代 claude token）
+
+> 可以在本地 调这个接口跑吗？ 如果可以的话 我不想花claude的token了 而是用这个接口。本地有公司VPN网关，估计可以调通
+
+（针对上一条网关切换受阻的追问：VM 连不通网关，但 Mac 本机挂公司 VPN 能连通。
+落地：改造 `scripts/local_enrich_worker.py`，把本地 `claude -p` CLI 结构化换成
+直接调网关的 chat.completions（strict json schema，模型 gpt-5.4）。过程中实测
+撞到网关对这把 key 的硬限——30 请求/分钟，加了线程安全的滑动窗口限流器
+（`GATEWAY_RPM=25`，留 5 个余量）从源头限速，而不是靠"撞 429 重试"硬穿。
+干净重跑验证 46/46 全部成功、全程无 429。详见 WORKLOG #60。）
+
 ## 2026-07-28（申请到公司 LiteLLM 网关 key，要求全面切换）
 
 > 我跟公司申请到了一个key。立刻把这个rec hub服务改造成 都用这个key来做，包括新闻的处理，都用这个key来做，而不是用本地claude的credit了，他支持好几个模型。直接用最好的gpt模型 或者opus4.8

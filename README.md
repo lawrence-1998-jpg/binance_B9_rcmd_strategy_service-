@@ -97,7 +97,7 @@ api/              Flask 服务（每个 blueprint 自包含，便于多人并行
   server.py         主入口与新闻端点
   lab_tools.py      策略实验室  ·  eval_tools.py    评测工具
   sector_insight.py Sector 推荐 ·  history_tools.py 历史/埋点/反馈
-  enrich_bridge.py  本地 Claude 预处理桥  ·  notify.py  邮件通知
+  enrich_bridge.py  本地预处理桥  ·  notify.py  邮件通知
   persona_store.py  评测 Agent 数据层（无 Flask 依赖，被下面两个 blueprint 共用）
   persona_tools.py  Agent 管理 / 校准闭环 / 评测历史 / 外部效度分析
 web/              前端（纯 HTML，无构建）
@@ -160,9 +160,11 @@ ssh manus-vm "cd ~/crypto-news-crawler && set -a && source config/.env && set +a
 
 **成本**（详见工作台 07 tab）：云主机 $3/天 + OpenAI + X API。X 按**拉回推文条数**计费
 （$0.0021/条），成本旋钮是 `crawler/x_search.py` 的 `X_SEARCH_POST_BUDGET`。
-本地 Claude 预处理桥（`api/enrich_bridge.py` + `scripts/local_enrich_worker.py`）命中缓存
-的条目零 OpenAI 成本；**Mac 离线时全部 miss、自动回落 OpenAI，服务行为不受影响**
-（已用故障注入实测）。
+本地预处理桥（`api/enrich_bridge.py` + `scripts/local_enrich_worker.py`）命中缓存
+的条目不消耗 VM 侧 OpenAI 直连账号额度；2026-07-28 起结构化后端从本地 `claude` CLI
+改为公司 LiteLLM 网关（Mac 挂公司 VPN 才连得通，VM 连不通，见下方"已知限制"），
+费用走网关账户而非本机 Claude 订阅。**Mac 离线/网关不可达时全部 miss、自动回落
+VM 的 OpenAI 直连账号，服务行为不受影响**（已用故障注入实测）。
 
 ---
 

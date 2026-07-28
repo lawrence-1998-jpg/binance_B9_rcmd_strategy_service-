@@ -229,6 +229,7 @@ enrich bridge 架构一句话：Mac（工作机，不保证在线）闲时经 `/
 | 54 | 真实评测：我方事件库 vs 线上 Binance App「Macro Insight」实际展示内容 | ✅ 用户提供 20 张线上信息流截图，人工转录 82 条卡片（2026-07-25~27），与我方同期 1023 条事件用 `text-embedding-3-small`（256维，同去重管线口径）做相似度匹配，Claude 逐条人工复核（未再调用 OpenAI 做判断/成文）。核心结论：成熟窗口（07-25+07-26）真实新闻召回率 54.4%；同期 S/A/B 级事件 152 条中 133 条（87.5%）未出现在线上展示内容里，含 2 条 S 级、6 条构成完整立法追踪线的 CLARITY 法案 A 级事件、4 起超 $4400 万的安全事故。副产品发现：按信源拆分召回率显示 Bitcoinworld（未接入，占线上流 45.6%）与 BeInCrypto（已接入但召回仅 41.2%，低于 Cointelegraph 的 78.6%，值得跟进）两处信源缺口；另发现我方库内 2 处疑似跨轮归并遗漏的近重复事件（"Lazarus $138M Bybit 洗钱"3行、"KB Kookmin/JPMorgan Kinexys"2行）。产出 PDF 报告 `docs/eval_reports/B9_vs_线上Macro_Insight_评测报告_20260727.pdf` |
 | 55 | 转发折叠：多个 KOL 单纯转发同一原文不再算独立信源 | ✅ Drew Zhu（Product）在评测追问时提出这个问题，Lawrence 明确"不算，只算非转载内容"。根因：`verification.analyze_sources()` 按账号名分机构（`resolve_source` 对陌生 KOL 返回 `x:{username}`），N 个不同账号转发/复制同一段原文时账号名互不相同，天然绕开了"按机构去重"，转发量能冒充信源广度、进而推高 `independent_source_count` 并可能把事件误判到 VERIFIED。修法：`verify_events()` 新增 `_load_tweet_texts()` 批量取本轮涉及推文的 `tweet_body`（复用 `attach_social_metrics` 的查询模式，零新增迁移——`tweet_body` 全文本来就存着），`analyze_sources()` 用 `x_search._normalized_key()`（复用其单次抓取内已有的"识别跨账号复制粘贴"逻辑）对同一事件内的 X 来源按正文聚类，每簇只保留权重最高的机构计入独立信源，其余记入新增的 `n_reposts_folded` 并打 `REPOST_FOLDED` flag。不传 `tweet_text_by_id` 时行为不变（老调用方零改动）。验证：4 个合成场景（纯转发折叠为1/全原创不折叠/不传参数保持老行为/混合场景选中最高权重机构）全部通过；扫描生产库确认转发现象真实存在（x_raw_posts 里有 7 条不同账号发布同一段正文的真实簇），仅因当前"单事件内≥2条X来源"的事件较少（67/1851）暂未在 news_events 里遇到会触发折叠的案例；用 5 条真实事件跑通完整 `verify_events()` 调用链无异常；QA 门禁 70/70 |
 | 56 | 产品 demo 通过，产出正式研发交接 PRD | ✅ 两份文档：`docs/prd/PRD-01-数据抓取.md`（面向数据开发：8 类信源清单+各渠道原始字段规范+X 转发去重与 `is_repost`/`repost_type` 标记要求+URL 去重规则）、`docs/prd/PRD-02-聚类与理解.md`（不含排序：LLM 结构化字段表+语义聚类阈值 0.82 的标定提醒+跨轮归并"事件id不变、标签值持续变化、增量表逻辑记录快照时间"的更新规则详解，直接对应 Drew Zhu 评审时提的"同一事件持续 update 应归到一个事件热度里"+转发折叠的验收标准）。两份都基于现有原型代码的真实字段/常量核对写成（sources.py 信源计数、pipeline.py LLM schema、dedup.py 阈值、storage.py 的 ON DUPLICATE KEY UPDATE 更新语义），不是凭空写的模板 |
+| 60 | 本地 enrich worker 改用 LiteLLM 网关替代 claude CLI（Mac 挂 VPN 能连通） | ✅ 见下方专节 |
 | 59 | 尝试切换生产环境到公司 LiteLLM 网关（阻塞：VM 连不通内网） | ⏸️ 见下方专节 |
 | 58 | 评测工具完整化：Agent 管理页 + 校准闭环 + 评测历史 + 三项主动补的能力 | ✅ 见下方专节 |
 | 57 | demo演示完毕，暂停 X API + 运行频率从每天2轮降为每2天1轮 | ✅ 新增 `X_FETCH_ENABLED` 环境变量开关（`crawler/main.py`，默认 `true`；VM `config/.env` 已设为 `false`），`fetch_x_sources()` 为 false 时直接跳过 KOL 时间线 + 全网搜索两条腿，返回空列表并记日志说明是"主动暂停"而非故障；`config/env.example` 补充说明注释。crontab 主流水线行从 `0 8,20 * * *` 改为 `0 8 */2 * *`（已备份老 crontab），免费源高频存档与周备份两行不变。验证：VM 上直接跑通 enabled=true/false 两种行为；策略产品工作台（04/05 tab 按需调用 OpenAI，不经过这个开关）逐项确认不受影响（systemctl active、首页 200、鉴权可达）；QA 门禁 70/70。**顺带修复**（未被要求但主动核查全站的连带影响）：`README.md` 调度表 + 首屏 kicker + 6 处散落在页面各处的"每天2轮/08:00·20:00"旧文案（流程图 SVG、调度横条、部署信息、pipeline 说明段、tab07 简介、API 文档字符串）；Dev Bill 成本表按新分摊基数重算（单轮 $14.17→$28.56、单日 $28.33→$14.28、单月 $850→$428.50，X 一项归零）。**故障排查**：部署后浏览器实测发现 `nextRunLabel()` 显示"下轮 7-29 20:00"——根因是最近一次记录的运行发生在 20:07（老排期切换前最后一次遗留记录），"+2天"计算把这个已不存在的 20:00 时段带进了新排期的展示；且中间一版修复仍经过 JS `Date` 对象的时区解析（`new Date(str+"+08:00")` 再 `.getUTCDate()`），在 UTC+8 凌晨时段（UTC 与 UTC+8 日期不同）有隐患。最终版改为直接从已是 UTC+8 挂钟字符串的 `run_at` 用正则摘出年月日数字做纯 `Date.UTC` 整数运算+2天，小时数在输出里硬编码为 `"08:00"`，不再从入参继承；`node -e` 单测 3 种场景（正常/凌晨边界/null）+ 浏览器实测确认显示"下轮 7-29 08:00"后部署 |
@@ -407,3 +408,60 @@ com.lawrence.b9-enrich-worker`）就只会让个人账号多花钱、没有任�
    一直以来的约定是 `config/.env` 直接提交进私有仓库（README/`.gitignore`
    都有明确记录和理由）。这次沿用了项目既有约定，但这条冲突值得知会一声，
    由 Lawrence 判断是否要为这个 key 破例走不同的存储方式
+
+# 十一、本地 enrich worker 改用 LiteLLM 网关（2026-07-28）—— WORKLOG #60 详节
+
+Lawrence：「可以在本地调这个接口跑吗？如果可以的话我不想花claude的token了 而是
+用这个接口。本地有公司VPN网关，估计可以调通」——针对 WORKLOG #59 网关切换受阻
+（VM 连不通内网）之后的追问：VM 连不通，但 Mac 挂公司 VPN，理论上能连通同一个
+网关。
+
+## 验证 + 实现
+
+1. 从 Mac 直接 curl 网关（VPN 已连），确认可达——这就是 WORKLOG #59 里发现的
+   同一个内网地址，只是这次是从「在内网里的机器」发起，而不是从 GCP VM。
+2. 改造 `scripts/local_enrich_worker.py`：把 `enrich_with_claude()`（subprocess
+   调用本地 `claude -p` CLI，吃 Claude Max 订阅额度）替换成
+   `enrich_with_gateway()`（`urllib` 直接调网关的 `/v1/chat/completions`，用
+   VM 同一份 `response_format: json_schema strict:true`）。因为网关是 OpenAI
+   协议兼容端点、支持 strict schema，返回的就是合法 JSON 字符串，不再需要
+   claude CLI 那套"从自由文本里抠 JSON"的防御性解析（`extract_json()` 降级为
+   兜底，不是主路径）。删掉了整个 `find_claude()` 查找逻辑和 `subprocess`/
+   `shutil` 依赖。
+3. 模型选 `gpt-5.4`——WORKLOG #59 已经用真实 schema 测过它在这个网关上工作正常；
+   `claude-opus-4-8` 经 Bedrock 通道不支持这个模式，不在候选里。
+
+## 踩到的坑：网关对这把 key 硬限 30 请求/分钟
+
+第一次真实批量跑（76 条待处理条目，并发 6）几秒内就把 30 个请求打完，剩下的
+全部收到 429（响应体里明确写"Current limit: 30"）。这不是瞬时抖动，是稳定
+触发的硬顶——线程池不加约束地并发发请求，在网关这种强限流环境下必然撞上。
+
+**修法**：加一个线程安全的滑动窗口限流器（`RateLimiter`，纯标准库
+threading.Lock 实现），6 个 worker 线程发请求前统一先 `acquire()`，从源头把
+这个进程自己的请求压到 `GATEWAY_RPM=25`/分钟（网关限 30，留 5 个余量）。
+同时把"撞到 429 要不要重试"的逻辑简化：不在同一轮里重试（重试大概率还在同一
+个限流窗口内，纯浪费时间），直接放弃这条，下一次唤醒（15 分钟后）自然会从
+`/api/enrich/pending` 重新领到它——按 25/min 换算，理论吞吐上限是
+25×15=375 条/次唤醒，远超 `BATCH_SIZE=100`，即使某次唤醒没处理完全部
+也有充足冗余，不构成数据丢失（这条设计延续了本模块一贯的"miss 不影响正确性，
+只是没省到钱/慢一点"的容错哲学）。
+
+修完后干净重跑一次（46 条待处理，无外部干扰）：**46/46 全部成功，全程无 429**，
+限流器在处理到第 26 条附近正确地暂停等待配额（日志里能看到明显的等待间隔），
+证明这套节流是真实生效的，不是巧合。
+
+## 现状
+
+- `scripts/local_enrich_worker.py` 已改造完成并部署到实际运行位置
+  （`~/.b9/local_enrich_worker.py`），launchd 调度不变（每 15 分钟）
+- 累计已通过网关真实处理并写入 VM `llm_enrich_cache` 的条目：106 条
+  （`model='litellm-gateway/gpt-5.4'`），全部是真实 staging 积压条目，非测试
+  数据，无需清理
+- 记账口径改了：以前是零边际成本（Claude Max 订阅固定费），现在这部分费用
+  走网关的 1000 美元额度——仍然是"不吃个人 OpenAI 直连账号的钱"，但不再是
+  完全免费，日志里的"省下的钱"措辞已相应改为"走网关额度而非 VM 直连账号"，
+  不夸大实际收益
+- 网关 key 到期日 2026-08-03 仍然适用——到期后这条链路会开始失败，届时会
+  自动 miss 回落到 VM 的 OpenAI 直连账号（零功能损失），需要续期才能恢复
+  这部分省钱效果

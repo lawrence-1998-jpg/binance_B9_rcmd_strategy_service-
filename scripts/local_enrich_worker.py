@@ -1,21 +1,29 @@
 #!/usr/bin/env python3
 """
-本地 Claude 预处理 worker —— 跑在 Lawrence 的 Mac 上，不是 VM 上。
+本地预处理 worker —— 跑在 Lawrence 的 Mac 上，不是 VM 上。
 
-做什么：闲时从 VM 领取 staging 里还没处理的新闻条目，用本地 `claude` CLI
-（Claude Max 订阅，不产生 OpenAI API 费用）按 VM 下发的同一份 prompt 做
-结构化，结果回传 VM 的 llm_enrich_cache 表。VM 的 pipeline 跑到 LLM 环节时
-先查这张表，命中的条目零成本。
+做什么：闲时从 VM 领取 staging 里还没处理的新闻条目，按 VM 下发的同一份
+prompt/schema 做结构化，结果回传 VM 的 llm_enrich_cache 表。VM 的 pipeline
+跑到 LLM 环节时先查这张表，命中的条目不再消耗 VM 侧 OpenAI 直连账号的额度。
+
+结构化后端：2026-07-28 起改为公司 LiteLLM 网关（OpenAI 兼容 chat.completions
++ strict json_schema），此前是本地 `claude -p` CLI（Claude Max 订阅）。原因：
+Lawrence 明确要求不再消耗本机 Claude 订阅额度，且这台 Mac 挂公司 VPN 能连通
+网关（VM 侧连不通——网关是内网专用地址，见 crawler/pipeline.py 的
+LLM_MODEL 注释）。省钱账本也相应变化：以前是零边际成本（订阅费固定），
+现在结构化费用走网关那 1000 美元额度，不再是个人 OpenAI 直连账号出钱——
+仍然省钱，只是从"免费"变成"钱换了个账户出"，见 main() 里的日志措辞。
 
 为什么是 pull 模式：这台 Mac 是工作机，不保证开机、没有公网入口。所以只能
-Mac 主动拉（HTTP 出站），VM 永远不依赖 Mac 在线——Mac 关机的唯一后果是
-缓存 miss，pipeline 照常全量走 OpenAI，效果零损失，只是没省到钱。
+Mac 主动拉（HTTP 出站），VM 永远不依赖 Mac 在线——Mac 关机/网关不可达的
+唯一后果是缓存 miss，pipeline 照常全量走 VM 自己的 OpenAI 直连账号，效果零
+损失，只是没省到钱。
 
-调度：launchd 每 30 分钟唤醒一次（config/com.lawrence.b9-enrich-worker.plist）。
-单次最多处理 BATCH_SIZE 条；staging 每天新增约 900 条，48 次唤醒 × 40 条/次
+调度：launchd 每 15 分钟唤醒一次（config/com.lawrence.b9-enrich-worker.plist）。
+单次最多处理 BATCH_SIZE 条；staging 每天新增约 900 条，96 次唤醒 × 100 条/次
 的吞吐上限远超需求，Mac 每天在线几个小时就足够清空积压。
 
-纯标准库实现（urllib/subprocess），Mac 上不需要 pip install 任何东西。
+纯标准库实现（urllib），Mac 上不需要 pip install 任何东西。
 兼容到 python3.8（Mac 系统自带 python3 往往不是 3.10+，`X | None` 注解会在
 运行时求值爆掉，用 future import 把注解全部字符串化绕开）。
 """
@@ -26,8 +34,6 @@ import json
 import logging
 import os
 import re
-import shutil
-import subprocess
 import sys
 import threading
 import time
@@ -43,14 +49,54 @@ API_TOKEN = os.environ.get("B9_API_TOKEN", "***REMOVED***")
 # 单次唤醒 100 条 × 并发 6 约 4-5 分钟跑完，对日常使用无感。
 BATCH_SIZE = int(os.environ.get("B9_BATCH", "100"))
 CONCURRENCY = int(os.environ.get("B9_CONCURRENCY", "6"))
-CLAUDE_MODEL = os.environ.get("B9_CLAUDE_MODEL", "sonnet")
-CLAUDE_TIMEOUT_S = 240
+# 公司 LiteLLM 网关配置。key 直接给默认值是沿用本文件 API_TOKEN 那一行已有的
+# 做法（私有仓库，Mac 本地脚本，同一套安全模型），不为这一个值单独破例。
+# gpt-5.4 是实测过支持 strict json_schema 的模型（见 crawler/pipeline.py 的
+# LLM_MODEL 注释）——网关上的 claude-opus-4-8 经 Bedrock 通道不支持这个模式，
+# 换模型前必须先拿真实 schema 测过。
+GATEWAY_BASE = os.environ.get("B9_GATEWAY_BASE", "https://litellm.devfdg.net/v1")
+GATEWAY_KEY = os.environ.get("B9_GATEWAY_KEY", "***REMOVED***")
+GATEWAY_MODEL = os.environ.get("B9_GATEWAY_MODEL", "gpt-5.4")
+GATEWAY_TIMEOUT_S = 90
+# 2026-07-28 实测踩到的硬限：这把 key 被网关限 30 req/min（429 body 里的
+# "Current limit: 30"，"Limit resets at" 与请求时刻相差约 1 分钟，判定是
+# 滚动 60s 窗口）。CONCURRENCY=6 的线程池不加约束会在几秒内打满 30 个请求，
+# 剩下的条目全部 429——这不是"重试就好"的瞬时抖动，是稳定触发的硬顶，必须
+# 从源头限速，而不是指望重试穿过去。留 5 个余量按 25/min 走。
+GATEWAY_RPM = int(os.environ.get("B9_GATEWAY_RPM", "25"))
 LOCK_FILE = "/tmp/b9-enrich-worker.lock"
 LOCK_STALE_S = 2 * 3600
 
 logging.basicConfig(level=logging.INFO,
                     format="%(asctime)s [%(levelname)s] %(message)s")
 log = logging.getLogger("enrich-worker")
+
+
+class RateLimiter:
+    """滑动窗口限流，线程安全。ThreadPoolExecutor 的每个 worker 线程发请求前
+    先 acquire()——一旦最近 period_s 秒内已有 max_calls 次调用，阻塞到最早
+    那次调用滑出窗口为止。用来让并发线程从源头上"排队"而不是一拥而上撞 429。
+    """
+
+    def __init__(self, max_calls: int, period_s: float):
+        self.max_calls = max_calls
+        self.period_s = period_s
+        self._calls: list[float] = []
+        self._lock = threading.Lock()
+
+    def acquire(self) -> None:
+        while True:
+            with self._lock:
+                now = time.time()
+                self._calls = [t for t in self._calls if now - t < self.period_s]
+                if len(self._calls) < self.max_calls:
+                    self._calls.append(now)
+                    return
+                wait = self.period_s - (now - self._calls[0]) + 0.05
+            time.sleep(max(0.05, wait))
+
+
+_rate_limiter = RateLimiter(GATEWAY_RPM, 60.0)
 
 
 class Progress:
@@ -108,21 +154,6 @@ class Progress:
             sys.stdout.flush()
 
 
-def find_claude() -> str:
-    """launchd 环境的 PATH 极简，得自己找 claude 可执行文件。"""
-    candidates = [
-        shutil.which("claude"),
-        os.path.expanduser("~/.claude/local/claude"),
-        "/usr/local/bin/claude",
-        "/opt/homebrew/bin/claude",
-        os.path.expanduser("~/.local/bin/claude"),
-    ]
-    for c in candidates:
-        if c and os.path.isfile(c) and os.access(c, os.X_OK):
-            return c
-    raise FileNotFoundError("claude CLI not found — worker cannot run")
-
-
 def api(path: str, payload: dict | None = None) -> dict:
     url = f"{API_BASE}{path}{'&' if '?' in path else '?'}token={API_TOKEN}"
     data = json.dumps(payload).encode() if payload is not None else None
@@ -155,8 +186,16 @@ def extract_json(text: str) -> dict | None:
     return None
 
 
-def enrich_with_claude(claude_bin: str, spec: dict, item: dict) -> dict | None:
-    """单条结构化。失败重试一次，再失败返回 None（该条自然落回 OpenAI，无害）。"""
+def enrich_with_gateway(spec: dict, item: dict) -> dict | None:
+    """单条结构化，走公司 LiteLLM 网关。失败重试一次，再失败返回 None
+    （该条自然落回 VM 的 OpenAI 直连账号，无害）。
+
+    直接复用 VM 侧同一份 response_format（{"type":"json_schema","strict":true,
+    "schema":...}）——网关是 OpenAI 协议兼容端点，strict schema 保证返回的
+    content 就是一个合法 JSON 字符串，不像 claude -p 那样需要从自由文本里
+    抠 JSON。extract_json() 仍留作兜底（防御网关/模型任何未预期的包装），
+    不是主路径。
+    """
     user_content = (
         f"Source: {item.get('source', '')}\n"
         f"Title: {item.get('title', '')}\n"
@@ -164,29 +203,34 @@ def enrich_with_claude(claude_bin: str, spec: dict, item: dict) -> dict | None:
         f"URL: {item.get('url', '')}\n"
         f"Published: {item.get('published_at', '')}"
     )
-    prompt = (
-        spec["system_prompt"]
-        + "\n\n## OUTPUT FORMAT (STRICT)\n"
-        + "Respond with ONE JSON object only — no prose, no markdown fences. "
-        + "It MUST contain ALL of these keys with correct types: "
-        + ", ".join(spec["required_keys"])
-        + ". Follow this JSON schema exactly:\n"
-        + json.dumps(spec["schema"], ensure_ascii=False)
-        + "\n\n## INPUT\n" + user_content
-    )
+    body = json.dumps({
+        "model": GATEWAY_MODEL,
+        "messages": [
+            {"role": "system", "content": spec["system_prompt"]},
+            {"role": "user", "content": user_content},
+        ],
+        "response_format": {
+            "type": "json_schema",
+            "json_schema": {"name": "news_event", "strict": True, "schema": spec["schema"]},
+        },
+    }).encode()
+
     for attempt in range(2):
+        _rate_limiter.acquire()   # 从源头限速，见 GATEWAY_RPM 注释——不是靠 429 后重试穿过去
         try:
-            proc = subprocess.run(
-                [claude_bin, "-p", prompt,
-                 "--output-format", "json", "--model", CLAUDE_MODEL],
-                capture_output=True, text=True, timeout=CLAUDE_TIMEOUT_S,
-                cwd=os.path.expanduser("~"),  # 中性目录，避免带入任何项目上下文
+            req = urllib.request.Request(
+                f"{GATEWAY_BASE}/chat/completions", data=body,
+                headers={"Content-Type": "application/json",
+                        "Authorization": f"Bearer {GATEWAY_KEY}"},
+                method="POST",
             )
-            if proc.returncode != 0:
-                log.warning(f"claude exit {proc.returncode}: {proc.stderr[:200]}")
-                continue
-            wrapper = json.loads(proc.stdout)
-            enriched = extract_json(wrapper.get("result", ""))
+            with urllib.request.urlopen(req, timeout=GATEWAY_TIMEOUT_S) as resp:
+                wrapper = json.loads(resp.read().decode())
+            content = wrapper["choices"][0]["message"]["content"]
+            try:
+                enriched = json.loads(content)
+            except ValueError:
+                enriched = extract_json(content)   # 兜底，正常路径不会走到这
             if enriched is None:
                 log.warning(f"unparseable output (attempt {attempt + 1}) "
                             f"for {item.get('url', '')[:60]}")
@@ -199,10 +243,24 @@ def enrich_with_claude(claude_bin: str, spec: dict, item: dict) -> dict | None:
             if enriched.get("event_tier") not in ("S", "A", "B", "C", "D"):
                 continue
             return enriched
-        except subprocess.TimeoutExpired:
-            log.warning(f"claude timeout for {item.get('url', '')[:60]}")
-        except (ValueError, OSError) as e:
-            log.warning(f"claude call failed: {e}")
+        except urllib.error.HTTPError as e:
+            body_text = e.read().decode("utf-8", "replace")[:200]
+            if e.code == 429:
+                # 限流器把这个进程自己的请求压到了 GATEWAY_RPM/min，仍然撞到 429
+                # 大概率是这一分钟的配额被别的调用方（比如我手动测试）占用了。
+                # 同一轮里立刻重试大概率还是 429，纯粹浪费一个线程的时间——直接
+                # 放弃这条，下一次唤醒（15 分钟后）会重新从 /api/enrich/pending
+                # 领到它。这不算数据丢失：按 GATEWAY_RPM=25 换算，一次唤醒理论上
+                # 能处理 25×15=375 条，远超 BATCH_SIZE=100，吞吐有充足冗余。
+                log.info(f"rate limited, will retry next wake: {item.get('url', '')[:60]}")
+                return None
+            log.warning(f"gateway HTTP {e.code} for {item.get('url', '')[:60]}: {body_text}")
+            if e.code in (401, 402, 403):
+                break   # key 失效/欠费，重试也没用，直接放弃这条（下轮唤醒还会再试）
+        except urllib.error.URLError as e:
+            log.warning(f"gateway unreachable for {item.get('url', '')[:60]}: {e}")
+        except (ValueError, KeyError, TimeoutError) as e:
+            log.warning(f"gateway call failed: {e}")
     return None
 
 
@@ -223,7 +281,6 @@ def main() -> int:
     if not acquire_lock():
         return 0
     try:
-        claude_bin = find_claude()
         spec = api("/api/enrich/prompt")
         pending = api(f"/api/enrich/pending?limit={BATCH_SIZE}")
         items = pending.get("items") or []
@@ -234,7 +291,7 @@ def main() -> int:
             log.warning("prompt changed between calls, aborting this wake")
             return 0
         log.info(f"processing {len(items)} items "
-                 f"(prompt {spec['prompt_hash']}, model {CLAUDE_MODEL}, "
+                 f"(prompt {spec['prompt_hash']}, model {GATEWAY_MODEL} via gateway, "
                  f"concurrency {CONCURRENCY})")
 
         t0 = time.time()
@@ -244,7 +301,7 @@ def main() -> int:
         def run_one(it):
             """包一层只为测单条耗时并驱动进度显示。"""
             started = time.time()
-            enriched = enrich_with_claude(claude_bin, spec, it)
+            enriched = enrich_with_gateway(spec, it)
             progress.done(
                 ok=enriched is not None,
                 elapsed=time.time() - started,
@@ -259,14 +316,16 @@ def main() -> int:
                 if enriched is not None:
                     results.append({"url_hash": item["url_hash"],
                                     "enriched": enriched,
-                                    "model": f"claude-local/{CLAUDE_MODEL}"})
+                                    "model": f"litellm-gateway/{GATEWAY_MODEL}"})
         progress.finish()
 
         spent = time.time() - t0
-        # 省下的钱按 OpenAI 侧实测单价估：gpt-5.4 单条约 $0.0093（run 12 实测）
+        # 单条成本估算按 OpenAI 官方 gpt-5.4 单价（run 12 实测约 $0.0093/条）——
+        # 网关代理的也是同一个模型，价格数量级应该一致，但账真正走的是网关的
+        # 1000 美元额度，不是"省下"而是"换了个账户花"，措辞如实反映这一点。
         log.info(f"enriched {len(results)}/{len(items)} in {spent:.0f}s "
                  f"（单条均 {spent / max(1, len(items)):.1f}s，"
-                 f"约省 ${len(results) * 0.0093:.2f} OpenAI 费用）")
+                 f"约合 ${len(results) * 0.0093:.2f}，走网关额度而非 VM 直连账号）")
         submitted = 0
         for i in range(0, len(results), 20):
             chunk = results[i:i + 20]
