@@ -229,6 +229,7 @@ enrich bridge 架构一句话：Mac（工作机，不保证在线）闲时经 `/
 | 54 | 真实评测：我方事件库 vs 线上 Binance App「Macro Insight」实际展示内容 | ✅ 用户提供 20 张线上信息流截图，人工转录 82 条卡片（2026-07-25~27），与我方同期 1023 条事件用 `text-embedding-3-small`（256维，同去重管线口径）做相似度匹配，Claude 逐条人工复核（未再调用 OpenAI 做判断/成文）。核心结论：成熟窗口（07-25+07-26）真实新闻召回率 54.4%；同期 S/A/B 级事件 152 条中 133 条（87.5%）未出现在线上展示内容里，含 2 条 S 级、6 条构成完整立法追踪线的 CLARITY 法案 A 级事件、4 起超 $4400 万的安全事故。副产品发现：按信源拆分召回率显示 Bitcoinworld（未接入，占线上流 45.6%）与 BeInCrypto（已接入但召回仅 41.2%，低于 Cointelegraph 的 78.6%，值得跟进）两处信源缺口；另发现我方库内 2 处疑似跨轮归并遗漏的近重复事件（"Lazarus $138M Bybit 洗钱"3行、"KB Kookmin/JPMorgan Kinexys"2行）。产出 PDF 报告 `docs/eval_reports/B9_vs_线上Macro_Insight_评测报告_20260727.pdf` |
 | 55 | 转发折叠：多个 KOL 单纯转发同一原文不再算独立信源 | ✅ Drew Zhu（Product）在评测追问时提出这个问题，Lawrence 明确"不算，只算非转载内容"。根因：`verification.analyze_sources()` 按账号名分机构（`resolve_source` 对陌生 KOL 返回 `x:{username}`），N 个不同账号转发/复制同一段原文时账号名互不相同，天然绕开了"按机构去重"，转发量能冒充信源广度、进而推高 `independent_source_count` 并可能把事件误判到 VERIFIED。修法：`verify_events()` 新增 `_load_tweet_texts()` 批量取本轮涉及推文的 `tweet_body`（复用 `attach_social_metrics` 的查询模式，零新增迁移——`tweet_body` 全文本来就存着），`analyze_sources()` 用 `x_search._normalized_key()`（复用其单次抓取内已有的"识别跨账号复制粘贴"逻辑）对同一事件内的 X 来源按正文聚类，每簇只保留权重最高的机构计入独立信源，其余记入新增的 `n_reposts_folded` 并打 `REPOST_FOLDED` flag。不传 `tweet_text_by_id` 时行为不变（老调用方零改动）。验证：4 个合成场景（纯转发折叠为1/全原创不折叠/不传参数保持老行为/混合场景选中最高权重机构）全部通过；扫描生产库确认转发现象真实存在（x_raw_posts 里有 7 条不同账号发布同一段正文的真实簇），仅因当前"单事件内≥2条X来源"的事件较少（67/1851）暂未在 news_events 里遇到会触发折叠的案例；用 5 条真实事件跑通完整 `verify_events()` 调用链无异常；QA 门禁 70/70 |
 | 56 | 产品 demo 通过，产出正式研发交接 PRD | ✅ 两份文档：`docs/prd/PRD-01-数据抓取.md`（面向数据开发：8 类信源清单+各渠道原始字段规范+X 转发去重与 `is_repost`/`repost_type` 标记要求+URL 去重规则）、`docs/prd/PRD-02-聚类与理解.md`（不含排序：LLM 结构化字段表+语义聚类阈值 0.82 的标定提醒+跨轮归并"事件id不变、标签值持续变化、增量表逻辑记录快照时间"的更新规则详解，直接对应 Drew Zhu 评审时提的"同一事件持续 update 应归到一个事件热度里"+转发折叠的验收标准）。两份都基于现有原型代码的真实字段/常量核对写成（sources.py 信源计数、pipeline.py LLM schema、dedup.py 阈值、storage.py 的 ON DUPLICATE KEY UPDATE 更新语义），不是凭空写的模板 |
+| 62 | 当天二次修正：去掉加密限制 + 情绪门槛改用 tier + 提频到每小时 + SCMP 频道纠错 | ✅ 见下方专节 |
 | 61 | 美股/港股/日股/韩股/宏观新闻扩召回 + 情绪排序 + dxFeed 机构新闻源接入 | ✅ 见下方专节 |
 | 60 | 本地 enrich worker 改用 LiteLLM 网关替代 claude CLI（Mac 挂 VPN 能连通） | ✅ 见下方专节 |
 | 59 | 尝试切换生产环境到公司 LiteLLM 网关（阻塞：VM 连不通内网） | ⏸️ 见下方专节 |
@@ -603,3 +604,103 @@ dxFeed 真实新闻、CNBC 一条"美韩科技股联动创新高"、MarketWatch 
   尽管 KOSPI/日经崩盘被正确识别为"最大驱动因素"并列在横幅里。如果
   Lawrence 想要的是"只要今天有大新闻就应该整体大幅偏向"而不是"稀释在
   48 小时全部事件里的均值"，这里的窗口/权重需要重新调，现在的实现偏保守
+
+# 十二、当天二次修正：去掉加密限制 + 提频到每小时（2026-07-28 晚）—— WORKLOG #62
+
+Lawrence 看到线上结果后连提三点：①"不要再强限制加密新闻了！！！所有美股、日韩、
+港股、世界经济的新闻都应该要放出来"；②贴 CNBC 首页截图问"这几条为啥咱们都没有
+抓到"；③"用公司key扫描就不要2天1次了，改成1个小时1次"。另外追问了情绪横幅
+"这样大跌还是中性的嘛，为啥？"。
+
+## A. 情绪显示"中性"的根因（真 bug，不是阈值品味问题）
+
+门槛用错了字段。原实现是 `importance_score >= 0.35`，实测 48 小时窗口里 **782 条
+D 档事件的 importance_score 均值高达 0.317**，大量个体轻松越过 0.35——因为
+importance_score 是五因子加权总分，M（影响面）虽被夹在 D 档区间 0-0.14，但
+T/H/A/Q 四个因子不受 tier 约束，单独拉高照样把总分推过门槛。结果 460 条样本里
+绝大多数是"分数蒙混过关的次要事件"，把两条真正的 S 档崩盘稀释成噪音，
+mood_score 只有 -0.009 → 显示"中性"。
+
+改成用 `event_tier IN ('S','A')` 做门槛（importance_score 继续用作样本内部权重，
+但不再兼任"够不够格参与"的判据）。同一批数据：样本 460 → 18 条，
+mood_score -0.009 → **-0.154，显示"偏悲观"**，驱动因素正确列出 KOSPI/日经/
+美空袭伊朗三条。**教训：筛选门槛要用 LLM 对事件本身的判断（tier），不能用会被
+时效/热度污染的复合分。**
+
+## B. CNBC 那几条为什么没抓到——召回没问题，是管道积压
+
+逐层排查后确认召回链路完全正常：直接调 `fetch_rss('https://www.cnbc.com/id/
+100003114/...')` 当场拿到 30 条，**"AMD, Micron and Nvidia extend losses as chip
+stocks get clobbered" 和 "Blurred front lines: Trump to meet Zelenskyy" 两条都在
+结果里**，freshness 过滤 30 条一条没丢。
+
+真实原因是两个叠加：
+1. **管道积压 3468 条未消费**，而 pipeline 每 2 天才跑一轮——一条 CNBC 头条最长
+   要等 48 小时才会变成前端可见的事件。用户看到的"没抓到"，实际是"抓到了但还
+   排在队列里"。
+2. **就算处理到了也会被压制**：旧 prompt 的 GENERIC-TECH FIREWALL 会把这类新闻
+   打成 D 档。实测修复后同样两条：`AMD/Micron/Nvidia` → **us_stock B 档 M=0.48
+   情绪 -0.52**、`Trump-Zelenskyy` → **macro_policy B 档 M=0.46**，此前是 D 档
+   M≤0.20。
+
+## C. 去掉对非加密内容的残留限制
+
+1. `crawler/web_search.py`：主题相关性过滤原来按查询分类二选一（gm_* 判市场词、
+   其余判加密词）。这仍是限制——一条从 "Fed crypto" 查询里捞回的纯美股报道，
+   因标题没有加密词就被当 offtopic 丢掉（实测一轮丢 168 条，里面混着这类）。
+   改成 **加密词 OR 市场词任一命中即放行**，这道闸退回它本该做的事：挡跟金融
+   市场完全无关的水文，而不是给内容划范围。
+2. `crawler/pipeline.py` SYSTEM_PROMPT：新增 **CLASSIFY FIRST, THEN SCORE** 章节，
+   明确"先定 market_scope 再定 tier"，并写死"把芯片股/AI公司/关税/央行/财报/指数
+   类新闻误判成 market_scope=crypto 再因缺加密角度扣分，是本系统最坏的失败模式"；
+   原 GENERIC-TECH FIREWALL 拆成对所有 scope 生效的 **LOW-VALUE FILTER**
+   （低信息量才降档，与属于哪个市场无关）+ 仅对 crypto scope 的残留规则；
+   加密 D 档定义里删掉"generic tech/AI news without crypto path"。
+
+## D. 提频到每小时（含两个必须先补的防护）
+
+crontab：`0 8 */2 * *` → **`0 * * * *`**（主 pipeline 每小时整点）；stage_fetch
+`每2小时` → **`30 * * * *`**（每小时 :30，纯抓取零成本；CNBC-TopNews 这类高频源
+RSS 窗口只有 30 条约 2 小时的量，2 小时一次正好卡在滚屏丢失边缘）。
+
+提频前补的两道防护（不补会真出事）：
+- **单轮上限 400 条**（`staging.MAX_ITEMS_PER_RUN`，可用 `B9_PIPELINE_BATCH` 覆盖）。
+  原来没有上限——两天一轮时"一次吃掉攒下的全部"正是想要的，改每小时后同一行为
+  意味着 3468 条积压会在第一次触发时一口气进 LLM，单轮跑几小时、费用集中爆发，
+  且期间下个整点照常触发。取满上限时 **显式 WARNING 打出剩余积压和预计追平时间**，
+  不做静默截断。
+- **flock 单实例锁**（`run_pipeline.py`）。两天一轮时一轮跑 20 分钟不可能撞上下
+  一次；每小时之后只要某轮超 60 分钟就会叠跑，而 `consumed_at` 要到写库成功才
+  标记（见 staging.py 的说明），两个进程会读到同一批未消费条目 → 同内容结构化
+  两次 → 钱花两遍。拿不到锁直接退出，不排队不重试。
+
+## E. 成本口径（必须说清楚，用户的前提是"不花自己钱"）
+
+**VM 连不通公司 LiteLLM 网关**（内网专用，实测 `gateway:000` DNS 失败），所以
+VM 上的 pipeline 走的是 **Lawrence 个人 OpenAI 直连账号**。直接提频到每小时
+= 个人账号支出上升 24 倍，与"用公司key就不花自己钱"的前提直接冲突。
+
+已确认的可行解（用户随后确认"我电脑不关"）：靠已有的 enrich bridge 架构——
+Mac 挂公司 VPN 能连网关，`local_enrich_worker.py` 每 15 分钟拉 staging 待处理
+条目、用**公司网关**结构化、回写 `llm_enrich_cache`；VM pipeline 命中缓存的
+条目 **0 次 OpenAI 调用**。本次把 worker 的 `B9_BATCH` 从 100 提到 **300**
+（限流器 25 req/min × 15 分钟理论上限 375，留 20% 余量），吞吐 1200 条/小时，
+**刻意高于 pipeline 的 400 条/小时**——让免费那条腿始终跑在付费那条腿前面。
+Mac 离线时自动回落个人账号（零功能损失，但要花钱），这是唯一的依赖。
+
+## F. 顺带修掉的信源错误（自己上一轮埋的）
+
+SCMP 接的是 `rss/91`，看 URL 以为是商业频道，**实际是综合新闻频道**——上线第一轮
+就抓回大量"香港网红去世""山东夫妻坠井获救""补习中心负责人判囚"，全部要先付一遍
+LLM 结构化的钱才被判成 D 档丢掉。实测确认各频道 ID 后换成 `rss/92`（Business）
++ `rss/12`（Global Economy），换完抓回的是"港交所外汇基金上半年收益降37%"
+"中国反驳西方产能过剩论"这类真正对口的内容；已入库未消费的 50 条噪音直接删掉。
+**教训：接 RSS 不能只看 URL 猜频道，必须打开 `<title>` 确认。**
+
+## 验证
+
+- 两条 CNBC 目标头条走真实 `enrich_one()` 分类正确（us_stock/macro_policy，均 B 档）
+- `/api/market-mood` 返回 -0.154 偏悲观、18 条 S/A 样本、驱动因素正确
+- 新 SCMP 两个频道实测各 50 条，内容对口
+- QA 门禁 **97/97 全绿**
+- crontab 已生效，单实例锁与 400 条上限已部署

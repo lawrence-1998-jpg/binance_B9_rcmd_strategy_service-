@@ -26,6 +26,7 @@ X 不走存档：按用户明确要求，"除了 X 这种要 API 额度的接口
 """
 import hashlib
 import logging
+import os
 from datetime import datetime, timezone
 from .timeutil import now_local
 
@@ -85,6 +86,21 @@ def stage_items(items: list[dict], conn) -> dict:
     return {"new": new_count, "duplicate": duplicate_count}
 
 
+# 单轮消费上限（2026-07-28 加，配合 pipeline 从每2天1轮改为每小时1轮）。
+#
+# 改成每小时之前这里没有上限是安全的——两天才跑一次，一次把攒下的全吃掉正是
+# 想要的行为。改成每小时之后，无上限有两个真问题：
+#   1. 存量积压（当时 3468 条）会在第一次触发时被一口气送进 LLM，单轮跑几小时、
+#      费用集中爆发，且期间下一个整点的 cron 会照常触发造成叠跑；
+#   2. 任何一次抓取异常导致的积压堆积都会以同样方式放大。
+# 400 的取法：每轮 stage_fetch 实测新增约 180 条，400 给了 2 倍余量能持续追平
+# 增量，同时把积压按每小时 400 条的速度平滑消化（3468 条约 9 小时化完），
+# 而 Mac 侧 enrich worker 的吞吐是 1200 条/小时（25 req/min × 4 次唤醒），
+# 跑在前面把这些条目预处理成缓存命中——所以这个速度差是刻意的：让免费的
+# 那条腿始终领先于付费的那条腿。
+MAX_ITEMS_PER_RUN = int(os.environ.get("B9_PIPELINE_BATCH", "400"))
+
+
 def fetch_staged_items(conn, max_age_days: int = 7) -> list[dict]:
     """只读取（不标记）未消费的存档条目，返回可直接送入 pipeline 的 item 列表。
 
@@ -106,8 +122,9 @@ def fetch_staged_items(conn, max_age_days: int = 7) -> list[dict]:
            FROM raw_items_staging
            WHERE consumed_at IS NULL
              AND fetched_at >= NOW() - INTERVAL %s DAY
-           ORDER BY fetched_at ASC""",
-        (max_age_days,),
+           ORDER BY fetched_at ASC
+           LIMIT %s""",
+        (max_age_days, MAX_ITEMS_PER_RUN),
     )
     rows = cursor.fetchall()
     cursor.close()
@@ -115,6 +132,17 @@ def fetch_staged_items(conn, max_age_days: int = 7) -> list[dict]:
     if not rows:
         logger.info("Staging: no unconsumed items")
         return []
+
+    if len(rows) >= MAX_ITEMS_PER_RUN:
+        # 触顶要显式说出来：否则"每轮都恰好 400 条"看起来像正常水位，
+        # 实际是积压在涨而这轮只啃掉了一部分（静默截断 = 看起来覆盖全了但没有）。
+        cur2 = conn.cursor()
+        cur2.execute("SELECT COUNT(*) FROM raw_items_staging WHERE consumed_at IS NULL")
+        backlog = cur2.fetchone()[0]
+        cur2.close()
+        logger.warning(
+            f"Staging: 本轮取满上限 {MAX_ITEMS_PER_RUN} 条，未消费积压仍有 {backlog} 条"
+            f"（按每小时 {MAX_ITEMS_PER_RUN} 条消化，约需 {backlog // MAX_ITEMS_PER_RUN + 1} 小时追平）")
 
     items = [{
         "_staging_id": r["id"],   # 供 mark_staged_consumed 回标；下游不消费此键

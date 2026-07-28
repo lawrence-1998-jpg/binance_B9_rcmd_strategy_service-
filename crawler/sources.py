@@ -105,7 +105,14 @@ RSS_SOURCES_GLOBAL_MARKETS = [
     ("https://www.cnbc.com/id/15839069/device/rss/rss.html",  "CNBC-Investing", "en", 5),
     ("https://feeds.content.dowjones.io/public/rss/mw_topstories", "MarketWatch", "en", 5),
     ("https://asia.nikkei.com/rss/feed/nar",                  "NikkeiAsia",     "en", 5),
-    ("https://www.scmp.com/rss/91/feed/",                     "SCMP-Business",  "en", 4),
+    # 2026-07-28 当天修正：最初接的是 rss/91，看名字以为是商业频道，实际是 SCMP 的
+    # **综合新闻**频道——上线后第一轮就抓回大量"香港网红去世""山东夫妻坠井获救"
+    # "补习中心负责人判囚"这类社会新闻，全部要付一遍 LLM 结构化的钱才被判成 D 档
+    # 丢掉。换成 rss/92（Business）+ rss/12（Global Economy）两个真正对口的频道。
+    # 教训：接 RSS 时不能只看 URL 猜频道，必须打开 <title> 确认（这次实测
+    # rss/91=News、92=Business、12=Global Economy、2=Hong Kong、4=China、3=Asia）。
+    ("https://www.scmp.com/rss/92/feed/",                     "SCMP-Business",  "en", 4),
+    ("https://www.scmp.com/rss/12/feed/",                     "SCMP-GlobalEcon", "en", 4),
     ("https://www.koreaherald.com:443/rss/020000000000.xml",  "KoreaHerald",    "en", 3),
 ]
 

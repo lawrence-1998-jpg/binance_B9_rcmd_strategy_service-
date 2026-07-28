@@ -9,9 +9,22 @@
 
 ## 设计取舍
 
-1. **只用高重要性事件计入情绪**（MOOD_MIN_IMPORTANCE），长尾低分事件（个股小道消息、
-   常规数据播报）不该左右"大盘情绪"这种粗粒度判断——一条 C/D 档的推文情绪不该和
-   "日经暴跌4%"这种 S 档事件在情绪聚合里权重相当。
+1. **只用 S/A 档事件计入情绪**（MOOD_TIERS），且用 event_tier 而不是
+   importance_score 做筛选门槛——这是 2026-07-28 上线当天就发现并改掉的一个真实
+   错误：最初用 `importance_score >= 0.35` 当门槛，实测发现 48 小时窗口里有
+   782 条 D 档事件（LLM 判定"次要"）的 importance_score 均值高达 0.317，部分
+   个体轻松超过 0.35——因为 importance_score 是五因子加权总分，M（影响面）虽然
+   被夹在 D 档区间（0-0.14），但 T（时效）/H（热度）/A（权威）/Q（质量）四个
+   因子不受 tier 约束，单独拉高照样能把总分推过 0.35。结果是"重要性分蒙混过关
+   的次要事件"占了情绪样本的大多数（460 条里的绝大部分），把两条真正的 S 档
+   崩盘事件稀释成了统计噪音（KOSPI/日经暴跌当天算出的 mood_score 只有 -0.009，
+   被前端渲染成"中性"，用户直接质疑"这样大跌还是中性？"）。
+   改用 event_tier IN ('S','A') 做门槛后，同一天的样本从 460 条收窄到 18 条，
+   mood_score 变成 -0.154（偏悲观）——这才是"大盘情绪"这个概念该问的问题：
+   "最近发生的大事整体是什么方向"，不是"所有沾边的内容加权平均是什么方向"。
+   importance_score 仍然用作样本内部的权重（越重要的 S/A 档事件影响力越大），
+   只是不再兼任"够不够格参与计算"的门槛——这两件事必须分开，门槛要看 LLM 对
+   事件本身重要性的判断（tier），不能看会被时效/热度污染的复合分。
 
 2. **不碰 crawler/scoring.py 的五因子公式**。情绪对齐加成（mood_alignment_multiplier）
    只在 API 查询/展示时应用于排序，绝不写回 news_events.importance_score——那个字段
@@ -30,9 +43,10 @@
 # 这种看起来像故障的空窗。
 MOOD_LOOKBACK_HOURS = 48
 
-# 只统计 B 档及以上（Macro Insight 的 M 值区间对应 importance_score 大致同尺度）
-# 的事件，理由见模块头部说明。
-MOOD_MIN_IMPORTANCE = 0.35
+# 只统计 LLM 判定为 S/A 档的事件——用 tier 而不是 importance_score 做门槛，
+# 理由见模块头部说明 1（复合分会被时效/热度/权威因子污染，tier 是 LLM 对事件
+# 本身重要性的直接判断，不受这些因子干扰）。
+MOOD_TIERS = ("S", "A")
 
 # (下界（含）, 中文标签, 英文标签, 前端配色语义)
 _MOOD_BUCKETS = [
@@ -58,18 +72,18 @@ def mood_bucket(mood_score: float) -> tuple[str, str, str]:
 
 def compute_market_mood(events: list[dict]) -> dict:
     """events：近 MOOD_LOOKBACK_HOURS 小时内的事件字典列表，每条至少含
-    sentiment_score / importance_score，展示用的话再带上 id/title_zh/market_scope。
+    sentiment_score / importance_score / event_tier，展示用的话再带上
+    id/title_zh/market_scope。
 
-    返回的 mood_score 是重要性加权平均情绪，范围 [-1, 1]。
+    返回的 mood_score 是 S/A 档事件按 importance_score 加权的平均情绪，范围 [-1, 1]。
     """
     scored = [e for e in events
              if e.get("sentiment_score") is not None
-             and (e.get("importance_score") or 0) >= MOOD_MIN_IMPORTANCE]
+             and e.get("event_tier") in MOOD_TIERS]
     if not scored:
         return {
             "available": False,
-            "reason": f"近 {MOOD_LOOKBACK_HOURS} 小时内没有 importance_score >= "
-                      f"{MOOD_MIN_IMPORTANCE} 的事件参与计算",
+            "reason": f"近 {MOOD_LOOKBACK_HOURS} 小时内没有 {'/'.join(MOOD_TIERS)} 档事件参与计算",
             "sample_size": 0,
         }
 
@@ -90,7 +104,7 @@ def compute_market_mood(events: list[dict]) -> dict:
         "label_zh": zh, "label_en": en, "color": color,
         "sample_size": len(scored),
         "lookback_hours": MOOD_LOOKBACK_HOURS,
-        "min_importance": MOOD_MIN_IMPORTANCE,
+        "tiers": list(MOOD_TIERS),
         "top_events": [
             {"id": e.get("id"), "title_zh": e.get("title_zh"),
              "sentiment_score": e.get("sentiment_score"),

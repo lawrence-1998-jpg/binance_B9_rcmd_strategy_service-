@@ -291,7 +291,7 @@ For market_scope=crypto items, use the crypto-specific ladder:
 - A (M 0.60-0.84): institutional entry/exit (ETF flows, corporate treasury), major legislation progress, ETH critical breakout, top-exchange listing of a major asset, large-scale hack (>$50M)
 - B (M 0.35-0.59): top-project major events (upgrade/tokenomics change/major partnership), mainstream coin sharp moves, notable smart-money moves tracked on-chain, sector-level catalysts (Launchpool new period, Megadrop, major airdrop), meme coin frenzy with real volume, mid-scale exploits
 - C (M 0.15-0.34): mid-project events, on-chain data anomalies, small listings, routine ecosystem updates
-- D (M 0.0-0.14): personnel changes, generic tech/AI news without crypto path, promotional/PR content, price-prediction opinion pieces
+- D (M 0.0-0.14): personnel changes, promotional/PR content, price-prediction opinion pieces. (An item that is really about equities/macro belongs in another market_scope with its own ladder — do NOT dump it here just because it lacks a crypto angle; see CLASSIFY FIRST below.)
 
 For market_scope=us_stock/hk_stock/jp_stock/kr_stock/macro_policy items, use this SEPARATE
 ladder — score by magnitude of impact on THAT market / on global sentiment, not by crypto
@@ -316,15 +316,34 @@ transmission (the GENERIC-TECH FIREWALL below does NOT apply to these items):
 5. On-chain security: hacks, exploits, rugs, oracle attacks → A if >$50M, B if >$5M
 6. Regulatory variables: SEC/CFTC actions, ETF decisions, national crypto policy → S/A per scale
 
-## GENERIC-TECH FIREWALL — applies ONLY to market_scope=crypto items
-This firewall exists to stop crypto-framed content from over-claiming relevance to unrelated
-tech/stock news. It does NOT apply when market_scope is us_stock/hk_stock/jp_stock/kr_stock/
-macro_policy — those items are scored on the SEPARATE ladder above, on their own merits, precisely
-because this product now treats mainstream market news as first-class content, not crypto-adjacent
-color commentary. Do not force sector_tags/coins onto them; empty arrays are correct unless the
-item genuinely names a crypto asset or protocol.
+## CLASSIFY FIRST, THEN SCORE — order matters, do not skip this
+Decide `market_scope` BEFORE deciding `event_tier`. A story about chip stocks, AI companies,
+tariffs, central banks, earnings, or an equity index is us_stock / hk_stock / jp_stock /
+kr_stock / macro_policy — it is NOT "a crypto item with no crypto angle". Misclassifying such
+a story as market_scope=crypto and then penalising it for lacking a crypto angle is the single
+worst failure mode of this system: it silently buries exactly the mainstream-market news the
+product now exists to surface. When in doubt between crypto and a market scope, pick the market
+scope — the product wants this content.
 
-For market_scope=crypto items only: generic AI/big-tech/stock-market news WITHOUT a clear crypto transmission path (requires ≥2 inference hops to affect crypto) → event_tier=D, score_market_impact ≤0.20. Examples: AI company fundraising, chip earnings, generic macro commentary. EXCEPTION: news about crypto-listed AI tokens (WLD, FET, TAO...), bStocks-relevant equities (tokenized stocks on Binance), or explicit crypto-market spillover keeps normal tiering.
+Mainstream market news is FIRST-CLASS content here, not crypto-adjacent color commentary.
+Score it on the non-crypto ladder above, on its own merits. Do not force sector_tags/coins
+onto it; empty arrays are the correct output unless the item genuinely names a crypto asset
+or protocol. Never assign a low tier to a genuinely significant market/macro story merely
+because it has no crypto transmission path — significance to ITS OWN market is the criterion.
+
+## LOW-VALUE FILTER — applies to ALL scopes
+Regardless of market_scope, these get event_tier=D, score_market_impact ≤0.20:
+opinion/commentary with no new facts, evergreen explainers, PR/promotional content,
+price-prediction pieces, and content with no market relevance at all (sports, entertainment,
+local human-interest). This is about the item being LOW-INFORMATION, never about which market
+it belongs to.
+
+For market_scope=crypto items specifically, one extra rule: an item framed as crypto news that
+actually just recycles generic AI/big-tech/equity news with no crypto transmission path is D —
+but first re-check whether it should simply have been classified as us_stock/macro_policy
+instead (per CLASSIFY FIRST above); that is usually the right answer. EXCEPTION: news about
+crypto-listed AI tokens (WLD, FET, TAO...), bStocks-relevant equities (tokenized stocks on
+Binance), or explicit crypto-market spillover keeps normal tiering.
 
 ## SECTOR-BOUNDARY rules (for `sector_tags`) — TAG ONLY WHAT IS GENUINELY RELATED
 Over-tagging is the single most damaging failure mode of this system: a wrong sector tag

@@ -204,15 +204,16 @@ def _get_market_mood() -> dict:
 
     db = get_db()
     cursor = db.cursor()
+    tier_placeholders = ", ".join(["%s"] * len(market_mood.MOOD_TIERS))
     cursor.execute(
-        "SELECT id, title_zh, importance_score, sentiment_score, market_scope "
-        "FROM news_events WHERE time_get_data >= NOW() - INTERVAL %s HOUR "
-        "AND sentiment_score IS NOT NULL AND importance_score >= %s",
-        (market_mood.MOOD_LOOKBACK_HOURS, market_mood.MOOD_MIN_IMPORTANCE),
+        f"SELECT id, title_zh, importance_score, sentiment_score, market_scope, event_tier "
+        f"FROM news_events WHERE time_get_data >= NOW() - INTERVAL %s HOUR "
+        f"AND sentiment_score IS NOT NULL AND event_tier IN ({tier_placeholders})",
+        (market_mood.MOOD_LOOKBACK_HOURS, *market_mood.MOOD_TIERS),
     )
     events = [
         {"id": r[0], "title_zh": r[1], "importance_score": r[2],
-         "sentiment_score": r[3], "market_scope": r[4]}
+         "sentiment_score": r[3], "market_scope": r[4], "event_tier": r[5]}
         for r in cursor.fetchall()
     ]
     cursor.close()

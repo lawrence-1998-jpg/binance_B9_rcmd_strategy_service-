@@ -4284,8 +4284,8 @@ function renderMood(m){
       '</div>'+
       '<div class="mood-bar"><i style="width:'+pct+'%;background:'+c.fg+'"></i></div>'+
       (top?'<div class="mood-evs">驱动因素：'+top+'</div>':'')+
-      '<div class="mood-note">基于 '+m.sample_size+' 条 importance_score ≥ '+m.min_importance+
-        ' 的事件按重要性加权（币圈 + 美股/港股/日股/韩股/宏观混合计算）。此判断会给排序里同向的内容一个有界加成，让首屏更能反映当下的市场氛围。</div>'+
+      '<div class="mood-note">基于 '+m.sample_size+' 条 '+((m.tiers||[]).join('/'))+
+        ' 档事件按重要性加权（币圈 + 美股/港股/日股/韩股/宏观混合计算，只看 LLM 判定为真正重大的事件，不含常规/次要新闻）。此判断会给排序里同向的内容一个有界加成，让首屏更能反映当下的市场氛围。</div>'+
     '</div>';
 }
 

@@ -275,9 +275,16 @@ _MARKET_KEYWORDS_RE = re.compile(
     re.IGNORECASE,
 )
 
-# gm_* 分类走市场关键词判定；其余（含新老 macro_*/mkt_*/brk_*/reg_*/gov_*）
-# 维持原来的加密关键词判定，行为不变。
-_MARKET_CATEGORIES = {"us_stock", "hk_stock", "jp_stock", "kr_stock", "macro_policy"}
+# 2026-07-28（当天二次修正）：Lawrence 明确"不要再强限制加密新闻了！！！所有美股、
+# 日韩、港股、世界经济的新闻都应该要放出来"。原来的做法是按查询分类二选一——gm_*
+# 组判市场词、其余判加密词——这仍然是一种限制：一条从 "Fed crypto" 查询里捞回来的
+# 纯美股报道（长尾域名），因为标题里没有加密关键词就被当 offtopic 丢掉了，而它恰恰
+# 是产品现在想要的内容。实测一轮 offtopic 丢了 168 条，里面就混着这类。
+#
+# 改成：**任一** 关键词集命中即放行（加密 OR 市场），不再按查询分类切换。这道闸的
+# 定位从"判断是不是加密内容"退回它本来该做的事——"挡掉跟金融市场完全无关的水文"
+# （体育、娱乐、本地社会新闻这类长尾站点的噪音），而不是给内容划范围。
+_RELEVANT_KEYWORDS_RES = (_CRYPTO_KEYWORDS_RE, _MARKET_KEYWORDS_RE)
 
 
 def _domain_of(url: str) -> str:
@@ -546,13 +553,11 @@ def _dedup_and_filter(items: list[dict], now: datetime | None = None,
             continue
 
         # 主题相关性：只筛长尾默认档域名，白名单域名直接放行（理由见常量定义处）。
-        # gm_* 查询组（全球主流市场）判市场关键词，其余判加密关键词——两组
-        # 查询词的"相关"含义本来就不同，用同一个正则会把 gm_* 组全部误杀。
+        # 加密词 OR 市场词任一命中即放行，不按查询分类切换——见 _RELEVANT_KEYWORDS_RES
+        # 的说明，这道闸只挡"跟金融市场完全无关的水文"，不给内容划范围。
         if item.get("authority") == AUTHORITY_DEFAULT:
             blob = f"{title} {item.get('summary', '')}"
-            pattern = (_MARKET_KEYWORDS_RE if item.get("_category") in _MARKET_CATEGORIES
-                      else _CRYPTO_KEYWORDS_RE)
-            if not pattern.search(blob):
+            if not any(rx.search(blob) for rx in _RELEVANT_KEYWORDS_RES):
                 stats["drop_offtopic"] += 1
                 continue
 
