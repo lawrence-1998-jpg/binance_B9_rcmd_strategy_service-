@@ -28,6 +28,10 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from crawler import scoring  # noqa: E402  （用它的 SCORING_VERSION 常量，不重复定义一份）
 
 BASE = "http://localhost:8080"
 TOKEN = "***REMOVED***"
@@ -460,6 +464,46 @@ def qa_market_expansion():
 
     st, _ = http("/api/market-mood", token=None)
     check(g, "/api/market-mood 无 token 应 401", st == 401, f"status={st}")
+
+    # ── 打分口径一致性（2026-07-29 事故后新增的红线用例）───────────────
+    #
+    # 事故：改完排序公式之后顺手反算了一遍全库，发现 3174 行里只有 402 行（13%）
+    # 的 importance_score 是按当时的现行七因子公式算的，其余是旧五因子或某个
+    # 中间版本——公式改了三次，老行从来没有重算过。这个故障在构造上是隐形的：
+    # 错的分仍然是 [0,1] 的浮点数，仍然能排序，页面照常渲染，不报错不告警。
+    # 靠人是发现不了的，必须是一条能拦截发布的断言。
+    #
+    # 断言本身很直接：scoring_version 落后于 crawler/scoring.SCORING_VERSION
+    # 的行，就是没有按当前公式重算过的行，数量必须是 0。这条红了，说明要么
+    # 是刚改过公式但忘了跑 scripts/rescore_factors.py，要么是 write_events 的
+    # UPSERT 漏刷了 scoring_version（历史上 score_breadth 就漏刷过一次）。
+    g3 = "打分口径"
+    rows = sql("SELECT COUNT(*) FROM news_events "
+              f"WHERE scoring_version < {scoring.SCORING_VERSION} "
+              "AND score_market_impact IS NOT NULL")
+    stale_formula_n = int(rows[0][0]) if rows and rows[0] else -1
+    check(g3, f"库内无打分版本落后于当前公式(v{scoring.SCORING_VERSION})的行",
+          stale_formula_n == 0, f"命中 {stale_formula_n} 条 —— 需要跑 scripts/rescore_factors.py")
+
+    # 光有版本号还不够——版本号本身可能被错误地标高（比如 migration 里手滑
+    # 标了 2 但其实没跑重算）。所以再核对一遍**数值真的对得上**当前公式，
+    # 抽样而不是全量（全库逐行算一遍对 QA gate 来说太重，抽样已经够暴露"标记
+    # 与实际不符"这类问题）。
+    rows = sql("""
+        SELECT COUNT(*) FROM (
+          SELECT importance_score,
+                 ROUND(0.26*score_market_impact + 0.16*score_breadth + 0.16*score_timeliness
+                     + 0.14*score_punch + 0.10*score_hotness + 0.10*score_authority
+                     + 0.08*score_quality, 3) AS recalculated
+          FROM news_events
+          WHERE scoring_version = {v} AND score_market_impact IS NOT NULL
+          ORDER BY updated_at DESC LIMIT 300
+        ) t
+        WHERE ABS(importance_score - recalculated) > 0.01
+    """.format(v=scoring.SCORING_VERSION))
+    mismatch_n = int(rows[0][0]) if rows and rows[0] else -1
+    check(g3, f"抽样 300 条：标记为 v{scoring.SCORING_VERSION} 的行分数与当前公式吻合",
+          mismatch_n == 0, f"不吻合 {mismatch_n}/300 条 —— 权重可能改了但版本号没跟着变")
 
     # ── 时效性（2026-07-29 线上事故后新增的红线用例）─────────────────
     #

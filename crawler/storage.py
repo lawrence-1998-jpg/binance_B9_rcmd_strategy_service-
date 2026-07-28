@@ -18,6 +18,8 @@ from datetime import datetime, timedelta, timezone
 import mysql.connector
 import numpy as np
 
+from . import scoring
+
 from .dedup import (
     COSINE_THRESHOLD, TIME_WINDOW_HOURS,
     blob_to_embedding, embedding_to_blob, hours_between,
@@ -263,7 +265,7 @@ INSERT INTO news_events (
     sectors, coins, news_type, market_scope, breadth_level, event_tier,
     score_market_impact, score_breadth, score_punch, punch_magnitude_pct,
     score_timeliness, score_hotness,
-    score_authority, score_quality, importance_score,
+    score_authority, score_quality, importance_score, scoring_version,
     credibility_score, is_rumor, rumor_reason,
     sources, source_names, source_count, is_verified, language_origin,
     cluster_id, merged_sources_count,
@@ -271,7 +273,7 @@ INSERT INTO news_events (
 ) VALUES (
     %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,
     %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,
-    %s,%s,%s,%s,%s,%s,%s,%s
+    %s,%s,%s,%s,%s,%s,%s,%s,%s
 )
 ON DUPLICATE KEY UPDATE
     -- 标题与正文刻意不更新：同一事件跨轮重复抓到时，LLM 每次改写措辞略有不同，
@@ -287,19 +289,34 @@ ON DUPLICATE KEY UPDATE
     score_hotness        = VALUES(score_hotness),
     -- 冲击力要刷新：跨轮归并会合并 sources，权威共振子项随之变化
     score_punch          = VALUES(score_punch),
-    -- 广度只**填空**不覆盖（COALESCE 而非 VALUES）。2026-07-29 实测踩到的坑：
-    -- migration 014 之前入库的行，breadth_level/score_breadth 天生是 NULL；
-    -- 它们被后续轮次归并时，这条 UPDATE 刷新了 punch 却漏了 breadth，于是
-    -- 永远补不上——145 条这样的行（含 14 条 S/A 档，全在 7 天展示窗口内）在
-    -- 策略实验室重算时走 compute_breadth 的兜底 BREADTH_DEFAULT=0.15
-    -- （single_asset，五档里最低），一个 0.16 权重的因子被静默按地板计，
-    -- 跨市场级事件最多少拿 0.136 基础分，足够把它挤出首屏。
-    -- 用 COALESCE 而不是 VALUES 是为了不违反上面"内容字段不覆盖"的约定：
-    -- NULL→有值是补空缺，不是改写已展示的卡片。
-    breadth_level        = COALESCE(breadth_level, VALUES(breadth_level)),
-    score_breadth        = COALESCE(score_breadth, VALUES(score_breadth)),
-    punch_magnitude_pct  = COALESCE(punch_magnitude_pct, VALUES(punch_magnitude_pct)),
+    -- 广度必须**每次都刷新**（VALUES，不是 COALESCE）。这里改过一次又改回来，
+    -- 记录下两次都踩的坑，防止以后再犯同一对错误里的任何一个：
+    --
+    -- 第一版（migration 014 刚上线时）：这三列压根不在 UPDATE 子句里，MySQL
+    -- 对没提到的列什么都不做。于是 014 之前入库、breadth 天生 NULL 的 145 行
+    -- 被跨轮归并碰过之后也永远补不上——一个 0.16 权重的因子被 compute_breadth
+    -- 的兜底 BREADTH_DEFAULT=0.15（五档最低）静默顶替，足够把跨市场级事件
+    -- 挤出首屏。当时的修法是加上这三列，但改成了 COALESCE（只填空不覆盖）。
+    --
+    -- 第二版（几小时后，同一天）：COALESCE 引入了一个更隐蔽的不一致——
+    -- importance_score 依然是每次都刷新（VALUES），用的是**这一轮** LLM
+    -- 重新分类出来的新 B；但 score_breadth 本身却被 COALESCE 成**老值**。
+    -- 于是 importance_score 用一个被丢弃的输入算出来，跟它自己同一行里的
+    -- score_breadth 对不上——这正是 scripts/qa_suite.py 新增的"打分口径一致性"
+    -- 断言要抓的那类问题，而这个断言部署后的第一个生产轮次自己就撞上了
+    -- （121 行）。COALESCE 的动机是"不覆盖已展示内容"，但那个约定只对标题/
+    -- 正文这类主观措辞成立——数值型因子如果真的换了分类（LLM 判断广度变了），
+    -- 分数就应该跟着变，跟 score_punch/score_timeliness/score_hotness 一个道理。
+    -- 一次性回填已经把老的 145 行缺口填平（scoring_version=2 覆盖全表），
+    -- COALESCE 存在的理由不再成立，所以退回 VALUES。
+    breadth_level        = VALUES(breadth_level),
+    score_breadth        = VALUES(score_breadth),
+    punch_magnitude_pct  = VALUES(punch_magnitude_pct),
     importance_score     = VALUES(importance_score),
+    -- 2026-07-29 新增（见 migration 015）。这行必须跟 importance_score 一起刷，
+    -- 否则会重演同一个 bug 的变体：分刷新了，版本号没刷新，"这行是哪个版本算的"
+    -- 又变回一次反算猜测，而不是一次 WHERE 查询。
+    scoring_version      = VALUES(scoring_version),
     updated_at           = CURRENT_TIMESTAMP
 """
 
@@ -343,6 +360,7 @@ def write_events(events: list[dict], conn) -> int:
                 scores.get("score_authority", 0.0),
                 scores.get("score_quality", 0.0),
                 scores.get("importance_score", 0.0),
+                scores.get("scoring_version", scoring.SCORING_VERSION),
                 event.get("credibility_score", 0.5),
                 bool(event.get("is_rumor", False)),
                 event.get("rumor_reason", ""),

@@ -206,10 +206,10 @@ def rescore(conn) -> int:
         wcur.execute("""
             UPDATE news_events
                SET score_breadth=%s, score_punch=%s, punch_magnitude_pct=%s,
-                   importance_score=%s
+                   importance_score=%s, scoring_version=%s
              WHERE id=%s
         """, (round(B, 4), round(punch["score"], 4), punch["magnitude_pct"],
-              round(total, 4), r["id"]))
+              round(total, 4), scoring.SCORING_VERSION, r["id"]))
         updated += 1
         if idx % 500 == 0:
             conn.commit()
