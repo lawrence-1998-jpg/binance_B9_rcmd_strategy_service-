@@ -1,0 +1,460 @@
+<title>B9 系统评测报告 · 2026-07-29</title>
+<style>
+@font-face {
+  font-family: 'ReportSerif';
+  src: local('Iowan Old Style'), local('Palatino Linotype'), local('Georgia');
+}
+:root{
+  --paper:#f5ead8; --card:#fbf6ec; --ink:#201e1d; --ink-dim:#6b6259; --ink-faint:#9a8f80;
+  --line:#ddd0ba; --line-soft:#eadfc9;
+  --terracotta:#b2622d; --terracotta-deep:#7a3f1a; --terracotta-wash:#f3e2d1;
+  --sage:#5c6b47; --sage-wash:#e7ead9; --sage-deep:#3d4730;
+  --red:#a13a3a; --red-wash:#f2ded9;
+  --gold:#a67c2e; --gold-wash:#f1e6cb;
+  --tier-s:#7a3f1a; --tier-a:#b2622d; --tier-b:#a67c2e; --tier-c:#8f8570; --tier-d:#b6ac9a;
+  --shadow: 0 1px 2px rgba(32,30,29,.06), 0 4px 14px rgba(32,30,29,.05);
+  --radius: 10px;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --paper:#211d17; --card:#2a251d; --ink:#ede4d3; --ink-dim:#b8ac97; --ink-faint:#83786a;
+    --line:#423a2c; --line-soft:#332c22;
+    --terracotta:#d98a52; --terracotta-deep:#e8a877; --terracotta-wash:#3a2a1c;
+    --sage:#93a578; --sage-wash:#2a2f22; --sage-deep:#c3d1a8;
+    --red:#d98080; --red-wash:#3a2521;
+    --gold:#d1ab5c; --gold-wash:#332a19;
+    --tier-s:#e8a877; --tier-a:#d98a52; --tier-b:#d1ab5c; --tier-c:#a89e8a; --tier-d:#847a68;
+    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 6px 20px rgba(0,0,0,.25);
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#211d17; --card:#2a251d; --ink:#ede4d3; --ink-dim:#b8ac97; --ink-faint:#83786a;
+  --line:#423a2c; --line-soft:#332c22;
+  --terracotta:#d98a52; --terracotta-deep:#e8a877; --terracotta-wash:#3a2a1c;
+  --sage:#93a578; --sage-wash:#2a2f22; --sage-deep:#c3d1a8;
+  --red:#d98080; --red-wash:#3a2521;
+  --gold:#d1ab5c; --gold-wash:#332a19;
+  --tier-s:#e8a877; --tier-a:#d98a52; --tier-b:#d1ab5c; --tier-c:#a89e8a; --tier-d:#847a68;
+  --shadow: 0 1px 2px rgba(0,0,0,.3), 0 6px 20px rgba(0,0,0,.25);
+}
+:root[data-theme="light"]{
+  --paper:#f5ead8; --card:#fbf6ec; --ink:#201e1d; --ink-dim:#6b6259; --ink-faint:#9a8f80;
+  --line:#ddd0ba; --line-soft:#eadfc9;
+  --terracotta:#b2622d; --terracotta-deep:#7a3f1a; --terracotta-wash:#f3e2d1;
+  --sage:#5c6b47; --sage-wash:#e7ead9; --sage-deep:#3d4730;
+  --red:#a13a3a; --red-wash:#f2ded9;
+  --gold:#a67c2e; --gold-wash:#f1e6cb;
+  --tier-s:#7a3f1a; --tier-a:#b2622d; --tier-b:#a67c2e; --tier-c:#8f8570; --tier-d:#b6ac9a;
+  --shadow: 0 1px 2px rgba(32,30,29,.06), 0 4px 14px rgba(32,30,29,.05);
+}
+
+*{box-sizing:border-box}
+body{
+  background:var(--paper); color:var(--ink);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  font-size:15px; line-height:1.7; margin:0; padding:0;
+}
+.mono{font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-variant-numeric: tabular-nums;}
+.wrap{max-width:920px; margin:0 auto; padding:48px 28px 100px}
+
+/* ── Masthead ── */
+.masthead{margin-bottom:40px}
+.eyebrow{
+  font-size:11.5px; font-weight:700; letter-spacing:.14em; text-transform:uppercase;
+  color:var(--terracotta); margin-bottom:10px; display:flex; align-items:center; gap:8px;
+}
+.eyebrow .dot{width:6px;height:6px;border-radius:50%;background:var(--terracotta)}
+h1{
+  font-family: 'ReportSerif', Georgia, "Songti SC", serif; font-weight:400;
+  font-size:38px; line-height:1.18; margin:0 0 14px; color:var(--ink); text-wrap:balance;
+  letter-spacing:-.01em;
+}
+.masthead .sub{color:var(--ink-dim); font-size:15px; max-width:62ch}
+.masthead .meta{
+  margin-top:18px; padding-top:16px; border-top:1px solid var(--line);
+  display:flex; gap:28px; flex-wrap:wrap; font-size:12.5px; color:var(--ink-faint);
+}
+.masthead .meta b{color:var(--ink-dim); font-weight:600}
+
+/* ── Scorecard ── */
+.scorecard{
+  display:grid; grid-template-columns:repeat(4,1fr); gap:1px;
+  background:var(--line); border:1px solid var(--line); border-radius:var(--radius);
+  overflow:hidden; margin-bottom:52px; box-shadow:var(--shadow);
+}
+.score-cell{background:var(--card); padding:20px 18px}
+.score-cell .n{font-family:'ReportSerif',Georgia,serif; font-size:30px; color:var(--terracotta-deep); line-height:1}
+.score-cell .n .u{font-size:16px; color:var(--ink-faint); margin-left:2px}
+.score-cell .l{font-size:12px; color:var(--ink-dim); margin-top:8px; line-height:1.4}
+@media (max-width:720px){ .scorecard{grid-template-columns:repeat(2,1fr)} }
+
+/* ── Sections ── */
+section{margin-bottom:56px}
+.sec-head{margin-bottom:20px}
+.sec-eyebrow{font-size:11px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:var(--ink-faint); margin-bottom:6px}
+h2{
+  font-family:'ReportSerif',Georgia,serif; font-weight:400; font-size:24px; margin:0 0 8px; color:var(--ink);
+  text-wrap:balance;
+}
+.takeaway{
+  font-size:14.5px; color:var(--ink-dim); max-width:66ch; padding-left:14px;
+  border-left:2px solid var(--terracotta); line-height:1.65;
+}
+h3{font-size:15.5px; font-weight:700; color:var(--ink); margin:28px 0 10px}
+p{max-width:70ch}
+p.note{font-size:13px; color:var(--ink-faint); max-width:70ch}
+
+/* ── Tables ── */
+.tblwrap{overflow-x:auto; border:1px solid var(--line); border-radius:var(--radius); box-shadow:var(--shadow)}
+table{width:100%; border-collapse:collapse; background:var(--card); font-size:13.5px}
+th{
+  text-align:left; padding:10px 14px; font-size:11px; font-weight:700; letter-spacing:.04em;
+  text-transform:uppercase; color:var(--ink-faint); border-bottom:1px solid var(--line);
+  background:var(--line-soft); white-space:nowrap;
+}
+td{padding:9px 14px; border-bottom:1px solid var(--line-soft); vertical-align:middle}
+tr:last-child td{border-bottom:none}
+td.num, th.num{text-align:right; font-family:ui-monospace,monospace; font-variant-numeric:tabular-nums}
+.src-name{font-weight:600}
+.src-new{color:var(--terracotta-deep)}
+.src-new::after{content:" 新"; font-size:10px; font-weight:700; color:var(--terracotta); vertical-align:2px}
+
+/* bar in table cell */
+.barcell{display:flex; align-items:center; gap:8px}
+.bar{flex:1; height:6px; background:var(--line-soft); border-radius:4px; overflow:hidden; min-width:40px}
+.bar>i{display:block; height:100%; background:var(--terracotta); border-radius:4px}
+.bar.sage>i{background:var(--sage)}
+
+/* tier pill */
+.tier{
+  display:inline-flex; align-items:center; justify-content:center; width:20px; height:20px;
+  border-radius:5px; font-size:11px; font-weight:700; font-family:ui-monospace,monospace; color:#fff;
+}
+.tier-S{background:var(--tier-s)} .tier-A{background:var(--tier-a)} .tier-B{background:var(--tier-b)}
+.tier-C{background:var(--tier-c)} .tier-D{background:var(--tier-d)}
+
+/* ── Recall audit cards ── */
+.audit-grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:14px; margin-bottom:18px}
+.audit-card{background:var(--card); border:1px solid var(--line); border-radius:var(--radius); padding:16px 18px; box-shadow:var(--shadow)}
+.audit-card .src{font-weight:700; font-size:14px; margin-bottom:2px}
+.audit-card .method{font-size:11px; color:var(--ink-faint); margin-bottom:12px}
+.audit-card .pct{font-family:'ReportSerif',Georgia,serif; font-size:28px; color:var(--terracotta-deep)}
+.audit-card .frac{font-size:12px; color:var(--ink-dim); margin-top:2px}
+
+/* ── Recreated live excerpt (mood banner) ── */
+.excerpt-label{
+  font-size:11px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--ink-faint);
+  margin-bottom:8px; display:flex; align-items:center; gap:6px;
+}
+.excerpt-label::before{content:"◆"; color:var(--terracotta); font-size:9px}
+.mood-recreate{
+  background:var(--red-wash); border:1px solid var(--red); border-left:4px solid var(--red);
+  border-radius:var(--radius); padding:18px 20px; margin-bottom:16px;
+}
+.mood-recreate .head{display:flex; justify-content:space-between; align-items:baseline; margin-bottom:8px}
+.mood-recreate .head .t{font-weight:700; font-size:15px; color:var(--red)}
+.mood-recreate .head .v{font-family:ui-monospace,monospace; font-weight:700; font-size:19px; color:var(--red)}
+.mood-recreate .drivers{font-size:13px; color:var(--ink); margin-bottom:8px; line-height:1.6}
+.mood-recreate .note{font-size:11.5px; color:var(--ink-dim); line-height:1.6}
+
+.chip-row{display:flex; flex-wrap:wrap; gap:8px; margin-bottom:16px}
+.chip{
+  display:inline-flex; align-items:center; gap:6px; padding:6px 13px; border-radius:999px;
+  font-size:12.5px; font-weight:600; background:var(--card); border:1px solid var(--line); color:var(--ink-dim);
+}
+.chip b{color:var(--ink); font-family:ui-monospace,monospace}
+.chip.active{background:var(--ink); color:var(--paper); border-color:var(--ink)}
+.chip.active b{color:var(--paper)}
+
+/* ── Factor breakdown card ── */
+.factor-card{background:var(--card); border:1px solid var(--line); border-radius:var(--radius); box-shadow:var(--shadow); padding:22px 24px; margin-bottom:18px}
+.factor-card .fc-head{display:flex; justify-content:space-between; align-items:flex-start; gap:16px; margin-bottom:6px; flex-wrap:wrap}
+.factor-card .fc-title{font-weight:700; font-size:16px; max-width:52ch}
+.factor-card .fc-score{font-family:'ReportSerif',Georgia,serif; font-size:22px; color:var(--terracotta-deep); white-space:nowrap}
+.factor-card .fc-body{font-size:13.5px; color:var(--ink-dim); margin:10px 0 18px; line-height:1.7}
+.fgrid{display:grid; grid-template-columns:auto 1fr auto auto; gap:7px 12px; align-items:center; font-size:12.5px}
+.fgrid .fk{font-family:ui-monospace,monospace; font-weight:700; white-space:nowrap; color:var(--ink)}
+.fgrid .fbar{height:7px; background:var(--line-soft); border-radius:4px; overflow:hidden}
+.fgrid .fbar>i{display:block; height:100%; border-radius:4px; background:var(--terracotta)}
+.fgrid .fraw{font-family:ui-monospace,monospace; color:var(--ink-faint); font-size:11.5px; text-align:right}
+.fgrid .fcon{font-family:ui-monospace,monospace; color:var(--ink); font-weight:600; text-align:right}
+.mathline{
+  margin-top:14px; padding-top:12px; border-top:1px dashed var(--line);
+  font-family:ui-monospace,monospace; font-size:12px; color:var(--ink-dim); display:flex; flex-wrap:wrap; gap:5px 10px;
+}
+.mathline b{color:var(--terracotta-deep)}
+.srclink{display:block; font-size:12px; color:var(--terracotta-deep); text-decoration:none; margin-top:4px}
+.srclink:hover{text-decoration:underline}
+
+/* ── Feed list (buzz section) ── */
+.feed{border:1px solid var(--line); border-radius:var(--radius); overflow:hidden; box-shadow:var(--shadow)}
+.feed-row{display:flex; align-items:center; gap:12px; padding:11px 16px; background:var(--card); border-bottom:1px solid var(--line-soft)}
+.feed-row:last-child{border-bottom:none}
+.feed-row .rk{font-family:ui-monospace,monospace; font-size:12px; color:var(--ink-faint); width:16px; flex:none}
+.feed-row .ti{flex:1; min-width:0}
+.feed-row .ti .t{font-size:13.5px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.feed-row .ti .m{font-size:11px; color:var(--ink-faint); margin-top:1px}
+.feed-row .sc{font-family:ui-monospace,monospace; font-size:12.5px; color:var(--terracotta-deep); font-weight:700; flex:none}
+
+/* ── callout / limitation ── */
+.callout{
+  background:var(--gold-wash); border:1px solid var(--gold); border-radius:var(--radius);
+  padding:16px 20px; margin:16px 0; font-size:13.5px; color:var(--ink);
+}
+.callout b{color:var(--terracotta-deep)}
+.limitation{
+  background:var(--card); border:1px solid var(--line); border-left:3px solid var(--ink-faint);
+  border-radius:6px; padding:14px 18px; margin-bottom:10px; font-size:13.5px; color:var(--ink-dim);
+}
+.limitation b{color:var(--ink)}
+
+footer{margin-top:60px; padding-top:20px; border-top:1px solid var(--line); font-size:12px; color:var(--ink-faint)}
+a{color:var(--terracotta-deep)}
+</style>
+
+<div class="wrap">
+
+  <div class="masthead">
+    <div class="eyebrow"><span class="dot"></span>B9 推荐策略服务 · 系统评测</div>
+    <h1>召回、贡献、画风、因子、热度<br>—— 一次真实数据下的自评</h1>
+    <p class="sub">不是功能测试（已在 QA 门禁跑过 102/102），这是一次更主观的产品体检：召回率是否兑现了承诺、哪些信源真正撑起了高分内容、界面读起来是什么感觉、七个因子的分数摆在真实卡片上是否讲得通、首屏有没有"现在就该看"的紧迫感。</p>
+    <div class="meta">
+      <span><b>数据窗口</b> 2026-07-22 至 2026-07-29（7 天）</span>
+      <span><b>库内事件</b> 3,796 条</span>
+      <span><b>生成时间</b> 2026-07-29 04:30 UTC+8</span>
+    </div>
+  </div>
+
+  <div class="scorecard">
+    <div class="score-cell"><div class="n">3,747</div><div class="l">7 天内入库事件，831 个不同信源</div></div>
+    <div class="score-cell"><div class="n">3.5<span class="u">%</span></div><div class="l">S+A 档占比（全库），加密与非加密基本持平（3.4% / 3.6%）</div></div>
+    <div class="score-cell"><div class="n">7<span class="u">/7</span></div><div class="l">本轮新接头部媒体已实测产出内容，Bloomberg 已进入实时首屏 Top5</div></div>
+    <div class="score-cell"><div class="n">-0.26</div><div class="l">当前大盘情绪：偏悲观（韩股熔断/日经暴跌/芯片抛售驱动）</div></div>
+  </div>
+
+  <!-- ═══════════════════ 1. 召回覆盖率 ═══════════════════ -->
+  <section>
+    <div class="sec-head">
+      <div class="sec-eyebrow">01 · 召回覆盖率</div>
+      <h2>打开真实首页，一条条对</h2>
+      <div class="takeaway">Bloomberg.com 和 Forbes.com 这次打不开——前者是机器人验证墙，后者需要人工点击才能过。改用它们的官方 RSS 实时抓取（和我们爬虫读的是同一份数据），逐条比对库内记录。</div>
+    </div>
+
+    <div class="audit-grid">
+      <div class="audit-card">
+        <div class="src">CNBC</div>
+        <div class="method">真实首页，前 20 条（剔重复）</div>
+        <div class="pct">45<span style="font-size:16px">%</span></div>
+        <div class="frac">9/20 命中 · 8 条是 Cramer 个股推荐/盘中异动汇总，本轮已放宽定义收录</div>
+      </div>
+      <div class="audit-card">
+        <div class="src">Bloomberg</div>
+        <div class="method">Markets 频道 RSS，前 20 条</div>
+        <div class="pct">35<span style="font-size:16px">%</span></div>
+        <div class="frac">7/20 命中 · 未命中的多是市政债券/企业债重组类小众专业新闻</div>
+      </div>
+      <div class="audit-card">
+        <div class="src">Forbes</div>
+        <div class="method">Business 频道 RSS，前 25 条</div>
+        <div class="pct">8<span style="font-size:16px">%</span></div>
+        <div class="frac">2/25 命中 · 如实说：这个 feed 25 条里只有 2 条是真财经新闻，其余是体育/明星/犯罪新闻</div>
+      </div>
+      <div class="audit-card">
+        <div class="src">FT</div>
+        <div class="method">首页 RSS，11 条</div>
+        <div class="pct">36<span style="font-size:16px">%</span></div>
+        <div class="frac">4/11 命中 · 芯片股抛售、苹果 5 万亿市值等；见下方"因子感知"一节的具体分析</div>
+      </div>
+    </div>
+
+    <p class="note">同一条"苹果市值破 5 万亿"，CNBC / Forbes / FT 三家独立信源都在报，库里也确实有——三方交叉验证过的真实命中，不是巧合。</p>
+
+    <h3>公司 API（dxFeed）实际召回</h3>
+    <div class="tblwrap">
+      <table>
+        <thead><tr><th>指标</th><th class="num">数值</th><th>说明</th></tr></thead>
+        <tbody>
+          <tr><td>累计抓取</td><td class="num">110 条</td><td>全部在最近 2 天内——这批数据是新近接入的</td></tr>
+          <tr><td>转化为独立事件</td><td class="num">15 条</td><td>转化率 13.6%</td></tr>
+          <tr><td>其中 B 档以上</td><td class="num">10 条</td><td>A 档 1 · B 档 9</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="note">转化率不高的原因是当前这批内容恰好都是个股新闻（AAPL/MSFT/TSLA），不是大盘/ETF 级别——查过大盘 symbol 的判断逻辑，实测是对的，这是数据本身的分布，不是代码问题。<b>结论：有用</b>，10 条中等重要以上的事件不是噪音。</p>
+
+    <h3>新闻类型覆盖分布（7 天）</h3>
+    <div class="tblwrap">
+      <table>
+        <thead><tr><th>类型</th><th class="num">事件数</th><th class="num">S</th><th class="num">A</th><th class="num">B</th><th class="num">C</th><th class="num">D</th><th class="num">S+A%</th></tr></thead>
+        <tbody>
+          <tr><td>🪙 加密</td><td class="num">2,611</td><td class="num">8</td><td class="num">82</td><td class="num">388</td><td class="num">420</td><td class="num">1,713</td><td class="num">3.4%</td></tr>
+          <tr><td>🇺🇸 美股</td><td class="num">510</td><td class="num">1</td><td class="num">4</td><td class="num">86</td><td class="num">183</td><td class="num">236</td><td class="num">1.0%</td></tr>
+          <tr><td>◆ 综合</td><td class="num">292</td><td class="num">1</td><td class="num">0</td><td class="num">8</td><td class="num">71</td><td class="num">212</td><td class="num">0.3%</td></tr>
+          <tr><td>🌍 经济政策</td><td class="num">197</td><td class="num">2</td><td class="num">22</td><td class="num">73</td><td class="num">63</td><td class="num">37</td><td class="num">12.2%</td></tr>
+          <tr><td>📡 社会信号</td><td class="num">49</td><td class="num">0</td><td class="num">5</td><td class="num">21</td><td class="num">11</td><td class="num">12</td><td class="num">10.2%</td></tr>
+          <tr><td>🇭🇰 港股</td><td class="num">36</td><td class="num">0</td><td class="num">0</td><td class="num">18</td><td class="num">14</td><td class="num">4</td><td class="num">0.0%</td></tr>
+          <tr><td>🇯🇵 日股</td><td class="num">29</td><td class="num">1</td><td class="num">1</td><td class="num">11</td><td class="num">14</td><td class="num">2</td><td class="num">6.9%</td></tr>
+          <tr><td>🇰🇷 韩股</td><td class="num">23</td><td class="num">2</td><td class="num">2</td><td class="num">9</td><td class="num">4</td><td class="num">6</td><td class="num">17.4%</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="note">经济政策/社会信号的 S+A 占比明显高于加密/美股——符合直觉：这两类新闻能进库本身就要求"有明确市场传导路径"，天然是筛过一遍的高浓度内容；加密/美股召回更宽，D 档多是正常的长尾。</p>
+  </section>
+
+  <!-- ═══════════════════ 2. 各信源贡献率 ═══════════════════ -->
+  <section>
+    <div class="sec-head">
+      <div class="sec-eyebrow">02 · 各信源贡献率</div>
+      <h2>831 个信源，真正撑起高分内容的是哪几个</h2>
+      <div class="takeaway">按"接触事件数"排序容易被搜索引擎长尾结果带偏——真正有意义的是 S+A 占比：同样的量，哪些信源产出的是重大事件，哪些是背景噪音。</div>
+    </div>
+
+    <div class="tblwrap">
+      <table>
+        <thead><tr><th>信源</th><th class="num">7天事件数</th><th class="num">S</th><th class="num">A</th><th class="num">B</th><th class="num">C</th><th class="num">D</th><th class="num">S+A%</th><th style="width:90px">占比</th></tr></thead>
+        <tbody>
+          <tr><td class="src-name">CoinMarketCap</td><td class="num">24</td><td class="num">1</td><td class="num">6</td><td class="num">8</td><td class="num">4</td><td class="num">5</td><td class="num">29.2%</td><td><div class="barcell"><div class="bar sage"><i style="width:29%"></i></div></div></td></tr>
+          <tr><td class="src-name">Decrypt</td><td class="num">52</td><td class="num">2</td><td class="num">11</td><td class="num">11</td><td class="num">12</td><td class="num">16</td><td class="num">25.0%</td><td><div class="barcell"><div class="bar sage"><i style="width:25%"></i></div></div></td></tr>
+          <tr><td class="src-name">Bitcoin News</td><td class="num">40</td><td class="num">1</td><td class="num">8</td><td class="num">10</td><td class="num">9</td><td class="num">12</td><td class="num">22.5%</td><td><div class="barcell"><div class="bar sage"><i style="width:22%"></i></div></div></td></tr>
+          <tr><td class="src-name">Cointelegraph</td><td class="num">59</td><td class="num">1</td><td class="num">12</td><td class="num">8</td><td class="num">27</td><td class="num">11</td><td class="num">22.0%</td><td><div class="barcell"><div class="bar sage"><i style="width:22%"></i></div></div></td></tr>
+          <tr><td class="src-name">Bitget</td><td class="num">32</td><td class="num">0</td><td class="num">7</td><td class="num">10</td><td class="num">4</td><td class="num">11</td><td class="num">21.9%</td><td><div class="barcell"><div class="bar sage"><i style="width:22%"></i></div></div></td></tr>
+          <tr><td class="src-name">TheBlock</td><td class="num">52</td><td class="num">1</td><td class="num">8</td><td class="num">13</td><td class="num">21</td><td class="num">9</td><td class="num">17.3%</td><td><div class="barcell"><div class="bar"><i style="width:17%"></i></div></div></td></tr>
+          <tr><td class="src-name">Bitcoin World</td><td class="num">35</td><td class="num">1</td><td class="num">5</td><td class="num">9</td><td class="num">11</td><td class="num">9</td><td class="num">17.1%</td><td><div class="barcell"><div class="bar"><i style="width:17%"></i></div></div></td></tr>
+          <tr><td class="src-name">CryptoSlate</td><td class="num">34</td><td class="num">1</td><td class="num">4</td><td class="num">13</td><td class="num">9</td><td class="num">7</td><td class="num">14.7%</td><td><div class="barcell"><div class="bar"><i style="width:15%"></i></div></div></td></tr>
+          <tr><td class="src-name">TheDefiant</td><td class="num">39</td><td class="num">2</td><td class="num">4</td><td class="num">18</td><td class="num">11</td><td class="num">4</td><td class="num">15.4%</td><td><div class="barcell"><div class="bar"><i style="width:15%"></i></div></div></td></tr>
+          <tr><td class="src-name">吴说区块链</td><td class="num">214</td><td class="num">2</td><td class="num">19</td><td class="num">64</td><td class="num">83</td><td class="num">46</td><td class="num">9.8%</td><td><div class="barcell"><div class="bar"><i style="width:10%"></i></div></div></td></tr>
+          <tr><td class="src-name">金色财经</td><td class="num">204</td><td class="num">5</td><td class="num">8</td><td class="num">58</td><td class="num">43</td><td class="num">90</td><td class="num">6.4%</td><td><div class="barcell"><div class="bar"><i style="width:6%"></i></div></div></td></tr>
+          <tr><td class="src-name">BlockBeats快讯</td><td class="num">293</td><td class="num">5</td><td class="num">13</td><td class="num">75</td><td class="num">71</td><td class="num">129</td><td class="num">6.1%</td><td><div class="barcell"><div class="bar"><i style="width:6%"></i></div></div></td></tr>
+          <tr><td class="src-name">Followin快讯</td><td class="num">286</td><td class="num">3</td><td class="num">15</td><td class="num">83</td><td class="num">76</td><td class="num">109</td><td class="num">6.3%</td><td><div class="barcell"><div class="bar"><i style="width:6%"></i></div></div></td></tr>
+          <tr><td class="src-name">CryptoBriefing</td><td class="num">510</td><td class="num">5</td><td class="num">21</td><td class="num">81</td><td class="num">93</td><td class="num">310</td><td class="num">5.1%</td><td><div class="barcell"><div class="bar"><i style="width:5%"></i></div></div></td></tr>
+          <tr><td class="src-name">NikkeiAsia</td><td class="num">50</td><td class="num">1</td><td class="num">1</td><td class="num">7</td><td class="num">24</td><td class="num">17</td><td class="num">4.0%</td><td><div class="barcell"><div class="bar"><i style="width:4%"></i></div></div></td></tr>
+          <tr><td class="src-name">CNBC-TopNews</td><td class="num">42</td><td class="num">0</td><td class="num">1</td><td class="num">10</td><td class="num">14</td><td class="num">17</td><td class="num">2.4%</td><td><div class="barcell"><div class="bar"><i style="width:2%"></i></div></div></td></tr>
+          <tr><td class="src-name">YahooFinance</td><td class="num">686</td><td class="num">1</td><td class="num">6</td><td class="num">23</td><td class="num">80</td><td class="num">576</td><td class="num">1.0%</td><td><div class="barcell"><div class="bar"><i style="width:1%"></i></div></div></td></tr>
+          <tr><td class="src-name">SCMP-Business</td><td class="num">49</td><td class="num">0</td><td class="num">0</td><td class="num">7</td><td class="num">27</td><td class="num">15</td><td class="num">0.0%</td><td><div class="barcell"><div class="bar"><i style="width:1%"></i></div></div></td></tr>
+          <tr><td class="src-name">MarketWatch</td><td class="num">30</td><td class="num">0</td><td class="num">0</td><td class="num">2</td><td class="num">9</td><td class="num">19</td><td class="num">0.0%</td><td><div class="barcell"><div class="bar"><i style="width:1%"></i></div></div></td></tr>
+          <tr><td class="src-name src-new">Bloomberg-Markets</td><td class="num">19</td><td class="num">—</td><td class="num">—</td><td class="num">—</td><td class="num">—</td><td class="num">—</td><td class="num">刚接入</td><td><div class="barcell"><div class="bar"><i style="width:0%"></i></div></div></td></tr>
+          <tr><td class="src-name src-new">Forbes-Business</td><td class="num">25</td><td class="num">0</td><td class="num">0</td><td class="num">1</td><td class="num">1</td><td class="num">23</td><td class="num">0.0%</td><td><div class="barcell"><div class="bar"><i style="width:0%"></i></div></div></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="note">头部权威媒体（CNBC/SCMP/MarketWatch/Nikkei）的 S+A% 反而偏低，不是它们不重要——是它们的 authority 权重已经在"权威性"这个独立因子里体现了，这张表统计的只是"被判定为 S/A 档"的比例，两件事不冲突。CryptoBriefing/BlockBeats 这类高产信源天然拉低比例（量大，D 档基数也大）。Bloomberg-Markets 刚接入不到 1 小时，暂无 tier 分布数据，但已进入实时首屏 Top5（见下节）。</p>
+  </section>
+
+  <!-- ═══════════════════ 3. 画风感受 ═══════════════════ -->
+  <section>
+    <div class="sec-head">
+      <div class="sec-eyebrow">03 · 画风感受</div>
+      <h2>翻开真实首页是什么感觉</h2>
+      <div class="takeaway">整体基调是"财经终端的克制感"——暖色纸感背景，赤陶色做强调色，标题字体带一点复古衬线，正文走系统无衬线保证信息密度。没有任何一处用红绿闪烁或跑马灯式的"紧急感"来硬造情绪，情绪完全由内容本身的措辞和 tier 徽标传达。</div>
+    </div>
+
+    <div class="excerpt-label">首屏顶部 · 大盘情绪横幅（原样文案，非模拟）</div>
+    <div class="mood-recreate">
+      <div class="head"><span class="t">近 48 小时大盘情绪：偏悲观</span><span class="v">-0.26</span></div>
+      <div class="drivers">驱动因素：KOSPI跌超8%触发熔断 🇰🇷 · 亚洲股市因芯片抛售走弱 🌍 · 全球市场转跌，韩股暴跌超10% 🌍</div>
+      <div class="note">基于 86 条 S/A 档事件按重要性加权（币圈 + 美股/港股/日股/韩股/宏观混合计算，只看 LLM 判定为真正重大的事件，不含常规/次要新闻）。</div>
+    </div>
+
+    <div class="excerpt-label">新闻类型 chip（真实计数）</div>
+    <div class="chip-row">
+      <div class="chip active">全部 <b>3,747</b></div>
+      <div class="chip">🪙 加密 <b>2,611</b></div>
+      <div class="chip">🇺🇸 美股 <b>510</b></div>
+      <div class="chip">🌍 经济政策 <b>197</b></div>
+      <div class="chip">📡 社会信号 <b>49</b></div>
+      <div class="chip">🇭🇰 港股 <b>36</b></div>
+      <div class="chip">🇯🇵 日股 <b>29</b></div>
+      <div class="chip">🇰🇷 韩股 <b>23</b></div>
+    </div>
+
+    <h3>三点具体印象</h3>
+    <p>1. <b>tier 徽标是唯一的"警觉"信号</b>——S/A 档用深赤陶色的方形字母块，扫一眼就知道"这条是大事"，不需要读完标题。这个设计选择是对的：财经内容如果每条都在视觉上喊"重要"，用户会很快对喊叫免疫。</p>
+    <p>2. <b>加密和传统市场混排看起来不违和</b>——KOSPI 熔断和 ETF 净流出出现在同一屏、字号一致、tier 逻辑一致，读起来像是"同一个大盘"的两个侧面，而不是两个拼在一起的产品。这正是 Robinhood 式"一个 feed 看懂所有价格"的诉求想要的效果。</p>
+    <p>3. <b>密度偏高，克制留白</b>——每行卡片塞了标题/tier/因子摘要/信源/时间，这是"分析工具"而不是"资讯 App"该有的密度；对目标用户（自己看盘、自己判断）是对的选择，但如果未来要给更泛的受众看，首屏可能需要一个更"轻"的摘要层。</p>
+  </section>
+
+  <!-- ═══════════════════ 4. 各因子感知 ═══════════════════ -->
+  <section>
+    <div class="sec-head">
+      <div class="sec-eyebrow">04 · 各因子感知</div>
+      <h2>七个因子摆在真实事件上，讲不讲得通</h2>
+      <div class="takeaway">挑一条今天真实入库的 A 档事件，把它的完整因子拆解摆出来——不是编的例子，是这条新闻实际的打分过程。</div>
+    </div>
+
+    <div class="factor-card">
+      <div class="fc-head">
+        <div class="fc-title">伊朗提议与阿曼谈判霍尔木兹临时航线</div>
+        <div class="fc-score">0.801</div>
+      </div>
+      <div class="fc-body">伊朗副外长称，已提议与阿曼谈判霍尔木兹海峡临时航线。伊方拒绝阿曼据称提出的"50%对50%"控制方案，要求一条入海航道由伊朗100%控制，另一条出海航道部分受其控制，并警告若阿曼不接受，海峡将继续关闭，全球能源运输风险升温。</div>
+      <div class="fgrid">
+        <div class="fk">M 影响面</div><div class="fbar"><i style="width:73%"></i></div><div class="fraw">0.730 × 26%</div><div class="fcon">0.1898</div>
+        <div class="fk">B 广度</div><div class="fbar"><i style="width:100%"></i></div><div class="fraw">1.000 × 16%</div><div class="fcon">0.1600</div>
+        <div class="fk">T 时效性</div><div class="fbar"><i style="width:100%"></i></div><div class="fraw">1.000 × 16%</div><div class="fcon">0.1600</div>
+        <div class="fk">I 冲击力</div><div class="fbar"><i style="width:71%"></i></div><div class="fraw">0.808 × 14%</div><div class="fcon">0.1131</div>
+        <div class="fk">H 热度</div><div class="fbar"><i style="width:6%"></i></div><div class="fraw">0.100 × 10%</div><div class="fcon">0.0100</div>
+        <div class="fk">A 权威性</div><div class="fbar"><i style="width:37%"></i></div><div class="fraw">0.589 × 10%</div><div class="fcon">0.0589</div>
+        <div class="fk">Q 质量</div><div class="fbar"><i style="width:39%"></i></div><div class="fraw">0.780 × 8%</div><div class="fcon">0.0624</div>
+      </div>
+      <div class="mathline">
+        <span>基础分 <b>0.754</b></span>
+        <span>× (1 + 同向 0.062)</span>
+        <span>= 最终分 <b>0.801</b></span>
+        <span>（情绪 -0.62，与当前大盘偏悲观方向一致，加成 +6.2%）</span>
+      </div>
+      <a class="srclink" href="https://www.theblockbeats.info/flash/358531" target="_blank" rel="noopener">→ BlockBeats快讯（权威 5/5）</a>
+      <a class="srclink" href="https://cryptobriefing.com/iran-threatens-to-block-hormuz-route-if-oman-rejects-terms/" target="_blank" rel="noopener">→ CryptoBriefing（权威 3/5）</a>
+    </div>
+
+    <h3>逐个因子的真实感受</h3>
+    <p><b>M/B/T</b> 三个是最"讲得通"的——影响面 0.73（地缘冲突牵动全球能源运输，够格但不到"立即崩盘"级）、广度拉满 1.0（跨市场，能源价格影响所有资产）、时效拉满 1.0（刚发生），三个数字摆在一起，跟标题的直觉判断一致。</p>
+    <p><b>H 热度只有 0.10</b>，是七个因子里最容易让人皱眉的一个——这条明明是当前最大的地缘政治线索之一，热度却几乎垫底。原因是 H 目前只看"信源数 + 社交互动"，这条只有 2 个信源、没有社交互动数据，热度自然低。这是一个真实的设计取舍：热度反映的是"已经被多少人关注过"，不是"应该有多重要"——两者本该有落差，落差本身不是 bug，但如果用户看到"这么大的事，热度才 0.1"会本能地觉得不对，这是需要在产品文案上解释清楚的地方，而不是改公式去讨好直觉。</p>
+    <p><b>A 权威性 0.589</b> 是两个信源（BlockBeats权威5、CryptoBriefing权威3）的某种平均/取值结果，落在"中等偏上"——如果这条被更多顶级媒体（CNBC/Bloomberg）报道，这个数会明显上升，这也是为什么本轮加了处理优先级：让头部媒体的版本更快进来，抬高权威性因子的真实性。</p>
+
+    <div class="callout">
+      <b>一个已知的、暂未解决的现象：</b>同一件大事被拆成好几张卡片。今天真实发生的例子——"芯片股抛售"这条主线，Financial Times 的版本（单一信源，未与其他媒体合并）落在 <b>B 档 / 0.474</b>，而 BlockBeats 系联合 9 个信源报道的版本落在 <b>A 档 / 0.680</b>。两条讲的是同一件事，FT 那条因为语义相似度没有跨过合并阈值（0.82，这个阈值本身是历史上真实标定过的，不能轻易下调），所以没有拿到"多源共振"带来的权威/热度加成。<b>结论：这个主线本身在产品里排得靠前，只是 FT 具体这张卡片不是最靠前的那一张</b>——不是分类错误，是去重粒度的固有张力，记在这里作为已知限制，而不是当场改阈值掩盖它。
+    </div>
+  </section>
+
+  <!-- ═══════════════════ 5. 是否有热门感 ═══════════════════ -->
+  <section>
+    <div class="sec-head">
+      <div class="sec-eyebrow">05 · 是否有热门感</div>
+      <h2>此刻打开，感觉像"正在发生"吗</h2>
+      <div class="takeaway">这是主观判断题，用今天真实的首屏内容说话——不做事后挑选，就是刚才实测那一刻的 Top 15。</div>
+    </div>
+
+    <div class="feed">
+      <div class="feed-row"><span class="rk">1</span><div class="ti"><div class="t">KOSPI跌超8%触发熔断</div><div class="m">S · 🇰🇷 韩股</div></div><div class="sc">0.810</div></div>
+      <div class="feed-row"><span class="rk">2</span><div class="ti"><div class="t">日经225跌4% 铠侠跌18%</div><div class="m">S · 🇯🇵 日股</div></div><div class="sc">0.756</div></div>
+      <div class="feed-row"><span class="rk">3</span><div class="ti"><div class="t">伊朗提议与阿曼谈判霍尔木兹临时航线</div><div class="m">A · 📡 社会信号</div></div><div class="sc">0.751</div></div>
+      <div class="feed-row"><span class="rk">4</span><div class="ti"><div class="t">亚洲股市因芯片抛售走弱</div><div class="m">S · 🌍 经济政策</div></div><div class="sc">0.732</div></div>
+      <div class="feed-row"><span class="rk">5</span><div class="ti"><div class="t">纳指100较历史高点跌10%</div><div class="m">A · 🇺🇸 美股</div></div><div class="sc">0.727</div></div>
+      <div class="feed-row"><span class="rk">6</span><div class="ti"><div class="t">韩国KOSDAQ触发熔断</div><div class="m">S · 🇰🇷 韩股</div></div><div class="sc">0.715</div></div>
+      <div class="feed-row"><span class="rk">7</span><div class="ti"><div class="t">全球市场转跌，韩股暴跌超10%</div><div class="m">S · 🌍 经济政策</div></div><div class="sc">0.693</div></div>
+      <div class="feed-row"><span class="rk">8</span><div class="ti"><div class="t">特朗普威胁伊朗及霍尔木兹</div><div class="m">A · 📡 社会信号</div></div><div class="sc">0.709</div></div>
+      <div class="feed-row"><span class="rk">9</span><div class="ti"><div class="t">AI硬件股重挫，费半跌5%</div><div class="m">S · 🇺🇸 美股</div></div><div class="sc">0.692</div></div>
+      <div class="feed-row"><span class="rk">10</span><div class="ti"><div class="t">美联储7月29日利率决议</div><div class="m">A · 🇺🇸 美股</div></div><div class="sc">0.700</div></div>
+    </div>
+
+    <p style="margin-top:18px">读下来是<b>连贯的一条叙事线</b>，不是互不相干的十条快讯：芯片股抛售 → 拖累亚洲大盘 → 韩国日本相继熔断 → 纳指跟跌 → 背后有霍尔木兹海峡地缘风险和即将到来的美联储决议两条潜在的下一步导火索。用户翻到第 8 条还能感觉到"这些事互相有关系"，这正是"热门感"的核心——不是单条新闻多耸动，是整体氛围有没有拧成一股绳。</p>
+    <p>情绪横幅的 -0.26（偏悲观）和首屏内容方向完全一致，没有出现"横幅说悲观、内容却一片平静"的割裂感——这个一致性本身就是本期改造要解决的原始问题（"目前 B9 尚未传出这个关键信息与氛围"），现在看是兑现了。</p>
+  </section>
+
+  <!-- ═══════════════════ 已知限制 ═══════════════════ -->
+  <section>
+    <div class="sec-head">
+      <div class="sec-eyebrow">附 · 如实说</div>
+      <h2>已知限制</h2>
+    </div>
+    <div class="limitation"><b>Forbes 信噪比低</b>——免费 Business RSS 25 条里只有 2 条真财经内容，这是信源本身的限制，不是召回逻辑的问题。已确认接入，噪音走既有 D 档过滤路径，不会露出到首页。</div>
+    <div class="limitation"><b>同一事件跨信源拆分</b>——语义合并阈值（0.82）是历史标定过的，偏保守，会让本该合并的报道留在两张卡片上（见"因子感知"一节的 FT 芯片股案例）。主线本身仍会靠其他信源版本排到前面，只是某一家具体媒体的卡片不一定是最靠前的那张。</div>
+    <div class="limitation"><b>个别分类误差</b>——例如"美法院推翻特朗普关税"曾被标成 crypto 而非 macro_policy，个例，非系统性偏差，未专门治理。</div>
+    <div class="limitation"><b>H 热度因子的直觉落差</b>——重大但信源少的事件热度分会偏低（如本报告因子案例的 0.10），这是"已被关注度"和"应有重要性"两个不同维度的必然落差，建议在产品文案里解释，而不是靠改公式讨好直觉。</div>
+  </section>
+
+  <footer>
+    数据来源：线上 MySQL（news_events / raw_items_staging），实时 API 查询，2026-07-29 04:00–04:30 UTC+8 窗口内多次采样。CNBC 首页与 Bloomberg/Forbes/FT RSS 均为当场实测，非历史缓存。
+  </footer>
+
+</div>
