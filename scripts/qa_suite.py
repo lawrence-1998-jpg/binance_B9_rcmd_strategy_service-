@@ -80,7 +80,7 @@ def sql(query: str) -> list[list[str]]:
 
 # ══════════════════════════════════════════════════════════════════
 def qa_services():
-    print("\n[1/6] 服务与调度")
+    print("\n[1/8] 服务与调度")
     g = "服务"
     for svc in ("crypto-news-api", "mysql", "cron", "b9-https-tunnel"):
         st = subprocess.run(["systemctl", "is-active", svc],
@@ -100,7 +100,7 @@ def qa_services():
 
 
 def qa_auth():
-    print("\n[2/6] 鉴权（花钱的接口尤其不能裸奔）")
+    print("\n[2/8] 鉴权（花钱的接口尤其不能裸奔）")
     g = "鉴权"
     st, _ = http("/health", token=None)
     check(g, "/health 无需鉴权可访问", st == 200, f"status={st}")
@@ -126,7 +126,7 @@ def qa_auth():
 
 
 def qa_endpoints():
-    print("\n[3/6] 只读接口与页面")
+    print("\n[3/8] 只读接口与页面")
     g = "接口"
     st, d = http("/api/news?limit=3")
     ok = st == 200 and isinstance(d, dict) and d.get("data") and "meta" in d
@@ -183,7 +183,7 @@ def qa_endpoints():
 
 
 def qa_write_paths():
-    print("\n[4/6] 写入类功能（含自清理）")
+    print("\n[4/8] 写入类功能（含自清理）")
     g = "写入"
     # 历史记录 CRUD
     st, saved = http("/api/history/save", "POST",
@@ -227,7 +227,7 @@ def qa_write_paths():
 
 
 def qa_data_integrity():
-    print("\n[5/6] 数据正确性（不变量，不依赖当天内容）")
+    print("\n[5/8] 数据正确性（不变量，不依赖当天内容）")
     g = "数据"
     n = sql("SELECT COUNT(*) FROM news_events")
     check(g, "事件库非空", n and int(n[0][0]) > 0, f"count={n}")
@@ -265,7 +265,7 @@ def qa_data_integrity():
 
 
 def qa_tools(run_paid: bool):
-    print("\n[6/7] 交互工具（用户真正会点的东西）")
+    print("\n[6/8] 交互工具（用户真正会点的东西）")
     g = "工具"
     st, d = http("/api/tools/reweight", "POST",
                  {"weights": {"M": 35, "T": 20, "H": 15, "A": 15, "Q": 15},
@@ -322,7 +322,7 @@ def qa_persona():
     和「批量评测」这里只断言**成本刹车生效**（缺参数必须被拒），不真跑。
     CRUD 用例自清理，跑完不留脏数据。
     """
-    print("\n[7/7] 评测 Agent 管理与校准闭环")
+    print("\n[7/8] 评测 Agent 管理与校准闭环")
     g = "Persona"
 
     st, d = http("/api/personas?with_stats=1")
@@ -405,6 +405,39 @@ def qa_persona():
         check(g, f"{p} 无 token 应 401", st == 401, f"status={st}")
 
 
+def qa_market_expansion():
+    """美股/港股/日股/韩股/宏观新闻扩召回 + 大盘情绪（2026-07-28 新增）。"""
+    print("\n[8/8] 全球市场扩召回与大盘情绪")
+    g = "市场扩召回"
+
+    st, d = http("/api/market-mood")
+    check(g, "/api/market-mood 可用", st == 200 and isinstance(d, dict) and "available" in d,
+          f"status={st}")
+
+    st, d = http("/api/news?market_scope=crypto&limit=1")
+    check(g, "market_scope=crypto 筛选可用", st == 200 and isinstance(d, dict), f"status={st}")
+
+    # A 股不该出现在新抓的事件里——这是老板明确的排除要求，退化成"漏挡"必须被
+    # 抓到。只查 filter_a_share() 上线之后（2026-07-28）新入库的事件：这条规则
+    # 是"以后不要"，不是"把历史里提过 A 股的事件全部清掉"，历史存量（比如
+    # 2026-07-26 的"12家企业启动A股上市辅导"）不在这次改造范围内。
+    #
+    # 用 BINARY 精确匹配而不是普通 LIKE：utf8mb4_unicode_ci 排序规则的字符等价
+    # 判定会把"Cathie Wood买入Meta股票"这类完全不含"A股"的标题误判成命中
+    # （实测普通 LIKE 命中 7 条，BINARY 精确匹配只有 4 条，且全部是 2026-07-28
+    # 之前的历史数据）——这是本条用例自己的一次真实踩坑，记录在这里防止
+    # 以后又用普通 LIKE 重新引入这个误报。
+    rows = sql("SELECT COUNT(*) FROM news_events WHERE created_at >= '2026-07-28' "
+              "AND (BINARY title_zh LIKE '%A股%' OR BINARY title_zh LIKE '%沪指%' "
+              "OR BINARY title_zh LIKE '%上证综指%')")
+    a_share_count = int(rows[0][0]) if rows and rows[0] else -1
+    check(g, "2026-07-28 起新入库事件无 A 股相关标题（filter_a_share 生效）",
+          a_share_count == 0, f"命中 {a_share_count} 条")
+
+    st, _ = http("/api/market-mood", token=None)
+    check(g, "/api/market-mood 无 token 应 401", st == 401, f"status={st}")
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--no-paid", action="store_true", help="跳过会真花钱的用例")
@@ -422,6 +455,7 @@ def main() -> int:
     qa_data_integrity()
     qa_tools(run_paid=not args.no_paid)
     qa_persona()
+    qa_market_expansion()
 
     failed = [r for r in results if not r[2]]
     print("\n" + "=" * 68)

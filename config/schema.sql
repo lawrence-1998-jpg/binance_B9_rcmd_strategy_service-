@@ -65,6 +65,10 @@ CREATE TABLE IF NOT EXISTS news_events (
                                                 -- 「真相关才打」的量化：relevance < 0.55 的不进 sectors 列，
                                                 -- 但仍留在这里供调阈值与 badcase 复盘
     impact_horizon          VARCHAR(16),        -- immediate/short_term/medium_term/long_term
+    -- ── v1.6 市场归属（迁移 013，2026-07-28）───────────────────────────
+    market_scope         VARCHAR(20) DEFAULT 'crypto',  -- crypto/us_stock/hk_stock/jp_stock/
+                                                         -- kr_stock/macro_policy/general
+                                                         -- 与 news_type（事件性质）正交，不要合并
     -- 真实性校验（migration 004；2026-07-26 review 发现基线漏收，补齐——
     -- 否则用本文件引导的新库会让 /api/news 的 EVENT_COLUMNS 白名单直接 500）
     verification_status     VARCHAR(16)  DEFAULT NULL,  -- VERIFIED/PROBABLE/UNVERIFIED/DISPUTED
@@ -76,6 +80,7 @@ CREATE TABLE IF NOT EXISTS news_events (
     updated_at           DATETIME     DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     INDEX idx_date (date),
     INDEX idx_news_type (news_type),
+    INDEX idx_market_scope (market_scope),
     INDEX idx_importance (importance_score DESC),
     INDEX idx_event_tier (event_tier),
     INDEX idx_is_rumor (is_rumor),

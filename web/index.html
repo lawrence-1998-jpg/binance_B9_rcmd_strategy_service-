@@ -362,6 +362,18 @@ select:focus,input:focus{outline:none;border-color:var(--indigo);box-shadow:0 0 
 .fchip button{background:none;border:0;color:var(--gold-deep);padding:0 2px;font-size:13px;line-height:1;opacity:.65}
 .fchip button:hover{opacity:1}
 
+/* ── 大盘情绪横幅（2026-07-28）──────────────────────────────────────── */
+.mood-banner{border:1px solid;border-radius:14px;padding:16px 20px;margin-bottom:20px}
+.mood-head{display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.mood-label{font-size:16px;font-weight:700;letter-spacing:-.01em}
+.mood-score{font-family:var(--mono);font-size:15px;font-weight:700;opacity:.85}
+.mood-bar{height:6px;border-radius:3px;background:rgba(0,0,0,.08);margin-top:10px;overflow:hidden}
+.mood-bar i{display:block;height:100%;border-radius:3px;opacity:.85;transition:width .3s}
+.mood-evs{margin-top:10px;font-size:12.5px;line-height:1.7;opacity:.9}
+.mood-ev{font-weight:600}
+.mood-sep{opacity:.5;margin:0 2px}
+.mood-note{margin-top:8px;font-size:11px;line-height:1.6;opacity:.65}
+
 /* ── Table ──────────────────────────────────────────────────────────── */
 .empty-state{padding:40px 20px;text-align:center;color:var(--ink-3);font-size:13px}
 .tbl-wrap{
@@ -1984,11 +1996,16 @@ footer{border-top:1px solid var(--rule);padding:26px 0 40px;font-size:12px;color
   </div>
 
 
+  <!-- 大盘情绪横幅（crawler/market_mood.py，2026-07-28 新增）。刻意放在整个 tab
+       最顶上、筛选器之前——"排序结果尤其是首几刷要有冲击力"，情绪判断本身就该是
+       用户进这个 tab 第一眼看到的东西，而不是滚动到表格里才慢慢品出来。 -->
+  <div id="moodBanner" style="display:none"></div>
+
   <div class="sec-head" id="sec-view" style="display:flex;align-items:flex-end;gap:24px;flex-wrap:wrap">
     <div style="flex:1;min-width:260px">
       <span class="eyebrow">Data</span>
       <h2>真实数据展示</h2>
-      <p class="sub">全部字段来自线上 MySQL。筛选条件变化即重新请求 API，表格与 App 模拟器共用同一份结果。</p>
+      <p class="sub">全部字段来自线上 MySQL。筛选条件变化即重新请求 API，表格与 App 模拟器共用同一份结果。币圈与美股/港股/日股/韩股/宏观新闻混排同一个列表——真实用户同时关心大盘和币价。</p>
     </div>
     <div class="switch" role="group" aria-label="视图切换">
       <button id="v-table" aria-pressed="true">表格视图</button>
@@ -2006,6 +2023,8 @@ footer{border-top:1px solid var(--rule);padding:26px 0 40px;font-size:12px;color
         <select id="f-tier"><option value="">全部级别</option><option value="S">S · 极重大</option><option value="A">A · 重大</option><option value="B">B · 重要</option><option value="C">C · 一般</option><option value="D">D · 次要</option></select></div>
       <div class="field"><label for="f-type">新闻类型 Type</label>
         <select id="f-type"><option value="">全部类型</option><option value="macro">macro · 宏观</option><option value="policy">policy · 政策监管</option><option value="market">market · 市场行情</option><option value="project">project · 项目动态</option><option value="security">security · 安全事件</option><option value="other">other · 其他</option></select></div>
+      <div class="field"><label for="f-market">市场 Market</label>
+        <select id="f-market"><option value="">全部市场</option><option value="crypto">🪙 加密</option><option value="us_stock">🇺🇸 美股</option><option value="hk_stock">🇭🇰 港股</option><option value="jp_stock">🇯🇵 日股</option><option value="kr_stock">🇰🇷 韩股</option><option value="macro_policy">🌍 宏观政策</option><option value="general">综合</option></select></div>
       <div class="field"><label for="f-rumor">是否谣言 Rumor</label>
         <select id="f-rumor"><option value="">不限</option><option value="0">仅非谣言</option><option value="1">仅谣言标记</option></select></div>
       <div class="field"><label for="f-source">信源 Source</label><select id="f-source"><option value="">全部信源</option></select></div>
@@ -3827,13 +3846,28 @@ function fillSchedBar(runs){
    TAB 2
    ══════════════════════════════════════════════════════════════════════ */
 var state={offset:0,limit:50,total:0,rows:[],seq:0,view:"table"};
-var FL={run_at:"轮次",sector:"板块",event_tier:"级别",news_type:"类型",is_rumor:"谣言",source:"信源"};
+var FL={run_at:"轮次",sector:"板块",event_tier:"级别",news_type:"类型",market_scope:"市场",is_rumor:"谣言",source:"信源"};
 var FID={run_at:"#f-run",sector:"#f-sector",event_tier:"#f-tier",
-         news_type:"#f-type",is_rumor:"#f-rumor",source:"#f-source"};
+         news_type:"#f-type",market_scope:"#f-market",is_rumor:"#f-rumor",source:"#f-source"};
+
+// market_scope → 展示用的 emoji + 中文短标签。crypto 不需要单独强调（本来就是
+// 主体），只给非 crypto 的几个市场配色区分度更高的徽标，一眼能看出"这条不是
+// 币圈新闻"——这正是本次改造要的效果：混排里一眼分得出市场，但又不分裂成两个列表。
+var MARKET_BADGE={
+  us_stock:{e:"🇺🇸",t:"美股",c:"#2E7D32"}, hk_stock:{e:"🇭🇰",t:"港股",c:"#C62828"},
+  jp_stock:{e:"🇯🇵",t:"日股",c:"#AD1457"}, kr_stock:{e:"🇰🇷",t:"韩股",c:"#1565C0"},
+  macro_policy:{e:"🌍",t:"宏观政策",c:"#6A1B9A"}, general:{e:"◆",t:"综合",c:"#455A64"},
+};
+function marketBadge(scope){
+  var b=MARKET_BADGE[scope];
+  if(!b) return "";
+  return '<span class="tag" style="background:'+b.c+'12;color:'+b.c+';border-color:'+b.c+'40;font-weight:700">'+b.e+' '+b.t+'</span>';
+}
 
 function readFilters(){
   return {run_at:$("#f-run").value, sector:$("#f-sector").value,
           event_tier:$("#f-tier").value, news_type:$("#f-type").value,
+          market_scope:$("#f-market").value,
           is_rumor:$("#f-rumor").value, source:$("#f-source").value};
 }
 /* 生产轮次节点的展示写法：08:00 是早间轮、20:00 是晚间轮（UTC+8，与线上 cron 一致）。
@@ -3927,7 +3961,7 @@ function renderRows(){
         '<div class="bar" style="margin-top:7px"><i style="width:'+Math.round(score*100)+'%"></i></div></td>'+
       '<td class="c-title"><div class="t-zh">'+esc(r.title_zh||r.title_en||"(无标题)")+flags+'</div>'+
         '<div class="t-en">'+esc(r.title_en||"")+'</div></td>'+
-      '<td class="c-tags">'+secs+coins+'<div style="margin-top:5px"><span class="tag neu">'+esc(r.news_type||"—")+'</span></div></td>'+
+      '<td class="c-tags">'+marketBadge(r.market_scope)+secs+coins+'<div style="margin-top:5px"><span class="tag neu">'+esc(r.news_type||"—")+'</span></div></td>'+
       '<td class="c-src"><div class="src-list">'+srcTx+'</div>'+
         '<div class="tm" style="margin-top:4px">'+(r.source_count||srcs.length||0)+' 源 · 互动 '+nf(r.social_interactions||0)+'</div></td>'+
       '<td class="c-time"><div class="tm"><span class="d">'+t.d+'</span></div><div class="tm">'+t.t+'</div>'+
@@ -4044,7 +4078,7 @@ function toggleDetail(tr,r){
     '<div class="d-sec"><div class="d-h">元数据</div><dl class="kv">'+
       '<dt>event id</dt><dd>'+esc(r.id)+'</dd>'+
       '<dt>cluster</dt><dd>'+esc(r.cluster_id||"—")+'</dd>'+
-      '<dt>级别 / 类型</dt><dd>'+esc(r.event_tier||"—")+' · '+esc(r.news_type||"—")+'</dd>'+
+      '<dt>级别 / 类型 / 市场</dt><dd>'+esc(r.event_tier||"—")+' · '+esc(r.news_type||"—")+' · '+(MARKET_BADGE[r.market_scope]?MARKET_BADGE[r.market_scope].e+' '+MARKET_BADGE[r.market_scope].t:'🪙 加密')+'</dd>'+
       '<dt>板块</dt><dd>'+esc((r.sectors||[]).join(", ")||"—")+'</dd>'+
       '<dt>币种</dt><dd>'+esc((r.coins||[]).join(", ")||"—")+'</dd>'+
       '<dt>可信度</dt><dd>'+(r.credibility_score!=null?Number(r.credibility_score).toFixed(2):"—")+'</dd>'+
@@ -4074,7 +4108,8 @@ function renderPhone(){
       var srcs=r.source_names||[];
       var src=srcs.length?esc(srcs[0])+(srcs.length>1?' 等'+srcs.length+'源':''):'—';
       var t=fmtTime(r.time_event||r.time_get_data);
-      return '<div class="ph-item"><div class="t">'+esc(r.title_zh||r.title_en||"(无标题)")+'</div>'+
+      var mb=MARKET_BADGE[r.market_scope];
+      return '<div class="ph-item"><div class="t">'+(mb?mb.e+' ':'')+esc(r.title_zh||r.title_en||"(无标题)")+'</div>'+
         '<div class="m">'+src+'<span class="sp">·</span>'+t.d+'</div></div>';
     }).join("")+'<div style="height:26px"></div>';
   }
@@ -4192,14 +4227,14 @@ function loadData(){
       console.warn("加载生产轮次失败，观测时间筛选降级为全部轮次：", e && e.message);
     });
   }
-  ["#f-run","#f-sector","#f-tier","#f-type","#f-rumor","#f-source","#f-sort","#f-limit"].forEach(function(id){
+  ["#f-run","#f-sector","#f-tier","#f-type","#f-market","#f-rumor","#f-source","#f-sort","#f-limit"].forEach(function(id){
     $(id).addEventListener("change",function(){ state.offset=0; fetchRows(); });
   });
   var kt;
   $("#f-kw").addEventListener("input",function(){ clearTimeout(kt); kt=setTimeout(function(){ renderRows(); renderPhone(); },180); });
   $("#f-refresh").addEventListener("click",fetchRows);
   $("#f-reset").addEventListener("click",function(){
-    ["#f-run","#f-sector","#f-tier","#f-type","#f-rumor","#f-source","#f-kw"].forEach(function(id){ $(id).value=""; });
+    ["#f-run","#f-sector","#f-tier","#f-type","#f-market","#f-rumor","#f-source","#f-kw"].forEach(function(id){ $(id).value=""; });
     $("#f-sort").value="importance"; $("#f-limit").value="50";
     state.offset=0; fetchRows();
   });
@@ -4219,6 +4254,39 @@ function loadData(){
     renderSourceCatalog();
   });
   fetchRows();
+  fetchMood();
+}
+
+// 大盘情绪横幅：GET /api/market-mood 一次，渲染成横幅。5 分钟服务端缓存
+// （见 api/server.py _MOOD_CACHE），前端不用自己再做节流。
+var MOOD_COLOR={green:{bg:"#E8F5E9",fg:"#1B5E20",bd:"#A5D6A7"},
+                red:{bg:"#FFEBEE",fg:"#B71C1C",bd:"#EF9A9A"},
+                neutral:{bg:"var(--paper-2)",fg:"var(--ink-2)",bd:"var(--line)"}};
+function fetchMood(){
+  apiGet("/api/market-mood",{}).then(renderMood).catch(function(e){
+    console.warn("大盘情绪加载失败（不影响主列表）：",e&&e.message);
+  });
+}
+function renderMood(m){
+  var box=$("#moodBanner");
+  if(!m||!m.available){ box.style.display="none"; return; }
+  var c=MOOD_COLOR[m.color]||MOOD_COLOR.neutral;
+  var pct=Math.round((m.mood_score+1)/2*100); // -1..1 → 0..100 给条形图用
+  var top=(m.top_events||[]).map(function(e){
+    return '<span class="mood-ev">'+esc(e.title_zh||"")+(MARKET_BADGE[e.market_scope]?(' '+MARKET_BADGE[e.market_scope].e):'')+'</span>';
+  }).join(' <span class="mood-sep">·</span> ');
+  box.style.display="block";
+  box.innerHTML=
+    '<div class="mood-banner" style="background:'+c.bg+';border-color:'+c.bd+';color:'+c.fg+'">'+
+      '<div class="mood-head">'+
+        '<span class="mood-label">近 '+m.lookback_hours+' 小时大盘情绪：'+esc(m.label_zh)+'</span>'+
+        '<span class="mood-score">'+(m.mood_score>0?'+':'')+m.mood_score.toFixed(2)+'</span>'+
+      '</div>'+
+      '<div class="mood-bar"><i style="width:'+pct+'%;background:'+c.fg+'"></i></div>'+
+      (top?'<div class="mood-evs">驱动因素：'+top+'</div>':'')+
+      '<div class="mood-note">基于 '+m.sample_size+' 条 importance_score ≥ '+m.min_importance+
+        ' 的事件按重要性加权（币圈 + 美股/港股/日股/韩股/宏观混合计算）。此判断会给排序里同向的内容一个有界加成，让首屏更能反映当下的市场氛围。</div>'+
+    '</div>';
 }
 
 /* ══════════════════════════════════════════════════════════════════════
@@ -4234,6 +4302,7 @@ var ENDPOINTS=[
      ["sector","string","板块标签精确匹配，如 DeFi / RWA / Infrastructure"],
      ["source","string","信源名匹配，中文需 URL 编码；末尾加 * 做前缀匹配"],
      ["news_type","string","macro / policy / market / project / security / other"],
+     ["market_scope","string","crypto / us_stock / hk_stock / jp_stock / kr_stock / macro_policy / general（2026-07-28 新增，市场归属）"],
      ["event_tier","string","事件级别 S / A / B / C / D"],
      ["is_rumor","0|1","谣言过滤。不筛选时请整个省略该参数"],
      ["date_from","YYYY-MM-DD","事件日期下界（含）"],

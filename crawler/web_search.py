@@ -147,6 +147,44 @@ GOOGLE_NEWS_QUERIES: list[tuple[str, str, str, str, str]] = [
     ("gov_en_dao_vote","governance", '"DAO vote"',                   "en", "when:1d"),
     ("gov_en_elip_rfc","governance", "ELIP OR RFC protocol upgrade",  "en", "when:1d"),
     ("gov_zh_proposal","governance", "DAO 治理提案",                  "zh", "when:1d"),
+
+    # ── 全球主流市场（2026-07-28 新增）───────────────────────────────
+    # 起因：老板明确指示——B9 只爬币圈新闻不够，美股/港股/日股/韩股/世界主要
+    # 经济新闻（对股市、资产、价格有直接影响、能调动情绪的东西）必须接，
+    # "用户买的是价格不是价值"。同一批事件要跟币圈内容混排进同一个 Macro
+    # Insight 排序，不是另开一个列表——服务的是同时关心大盘和币价的真实用户
+    # （对标 Robinhood）。**明确不做 A 股**：下面没有一条查询词是冲着沪深/
+    # 上证/创业板去的，且有 crawler/main.py 的 filter_a_share() 兜底。
+    #
+    # 查询词覆盖：美股大盘（S&P/纳指/道指）+ 美联储/CPI/非农（美国宏观政策，
+    # 这几条和 macro_* 组有重叠但那组强制带 crypto 关键词，这里不加，专门捞
+    # 纯股市/宏观内容）+ 港股 + 日股 + 韩股 + 世界经济政策/关税/央行。
+    # 中文查询走 zh locale 主要捞新浪财经/华尔街见闻/香港经济日报这类中文
+    # 财经媒体的转述，英文查询走 en locale 捞 CNBC/Reuters/Bloomberg 这些
+    # 一手报道，两边都留。
+    ("gm_en_wallst",    "us_stock",  "Wall Street stocks",           "en", "when:6h"),
+    ("gm_en_sp500",     "us_stock",  "S&P 500 Dow Nasdaq",           "en", "when:6h"),
+    ("gm_en_fed",       "us_stock",  "Federal Reserve interest rate", "en", "when:1d"),
+    ("gm_en_cpi",       "us_stock",  "US inflation CPI jobs report", "en", "when:1d"),
+    ("gm_en_earnings",  "us_stock",  "earnings stock market",        "en", "when:1d"),
+    ("gm_zh_usstock",   "us_stock",  "美股 大盘",                    "zh", "when:6h"),
+    ("gm_zh_fed",       "us_stock",  "美联储 利率决议",               "zh", "when:1d"),
+
+    ("gm_en_hkstock",   "hk_stock",  "Hong Kong stocks Hang Seng",   "en", "when:1d"),
+    ("gm_zh_hkstock",   "hk_stock",  "港股 恒生指数",                 "zh", "when:1d"),
+
+    ("gm_en_jpstock",   "jp_stock",  "Japan stocks Nikkei",          "en", "when:1d"),
+    ("gm_zh_jpstock",   "jp_stock",  "日股 日经指数",                 "zh", "when:1d"),
+    ("gm_en_boj",       "jp_stock",  "Bank of Japan yen",            "en", "when:1d"),
+
+    ("gm_en_krstock",   "kr_stock",  "Korea stocks Kospi",           "en", "when:1d"),
+    ("gm_zh_krstock",   "kr_stock",  "韩股 KOSPI",                   "zh", "when:1d"),
+
+    ("gm_en_tariff",    "macro_policy", "tariff trade global economy", "en", "when:1d"),
+    ("gm_en_centralbank","macro_policy","central bank policy global",  "en", "when:1d"),
+    ("gm_en_recession", "macro_policy", "global markets selloff recession", "en", "when:1d"),
+    ("gm_zh_tariff",    "macro_policy", "关税 全球经济",                "zh", "when:1d"),
+    ("gm_zh_macro",     "macro_policy", "全球股市 大跌",                "zh", "when:1d"),
 ]
 
 # ── ddgs 补充查询（仅英文，见模块头部选型说明）──────────────────────
@@ -168,20 +206,28 @@ DDGS_NEWS_QUERIES: list[tuple[str, str, str]] = [
 _TIER_5 = {
     "coindesk.com", "theblock.co", "reuters.com", "bloomberg.com",
     "wsj.com", "ft.com", "apnews.com",
+    # 2026-07-28 新增：全球主流市场媒体，国际公认头部，见 sources.py
+    # RSS_SOURCES_GLOBAL_MARKETS 同批说明
+    "cnbc.com", "marketwatch.com", "nikkei.com", "asia.nikkei.com",
 }
 _TIER_4 = {
-    "cointelegraph.com", "decrypt.co", "blockworks.co", "cnbc.com",
+    "cointelegraph.com", "decrypt.co", "blockworks.co",
     "forbes.com", "finance.yahoo.com", "yahoo.com", "businessinsider.com",
-    "marketwatch.com", "techcrunch.com", "thedefiant.io",
+    "techcrunch.com", "thedefiant.io",
     "panewslab.com", "chaincatcher.com", "wublock123.com",
     "techflowpost.com", "theblockbeats.info", "jinse.com", "followin.io",
     "foresightnews.pro", "coincu.com",
+    # 2026-07-28 新增
+    "scmp.com", "cnn.com", "cnbctv18.com",
 }
 _TIER_3 = {
     "benzinga.com", "u.today", "dailyhodl.com", "cryptoglobe.com",
     "ambcrypto.com", "financemagnates.com", "investing.com",
     "seekingalpha.com", "barrons.com", "nasdaq.com", "cryptorank.io",
     "fxstreet.com", "thestreet.com", "cryptoslate.com", "watcher.guru",
+    # 2026-07-28 新增：区域市场媒体，二线但独立采编，见 sources.py 同批说明
+    "koreaherald.com", "koreatimes.co.kr", "japantimes.co.jp",
+    "channelnewsasia.com", "straitstimes.com",
 }
 AUTHORITY_DEFAULT = 2  # 没见过的长尾域名，保守给分
 
@@ -214,6 +260,24 @@ _CRYPTO_KEYWORDS_RE = re.compile(
     r"稳定币|链上|代币|交易所|矿工|挖矿|狗狗币|瑞波币|马斯克币",
     re.IGNORECASE,
 )
+
+# 2026-07-28 新增：全球主流市场查询词（gm_* 组）关键词相关性判定。
+# 这组查询词本身就不含加密关键词（"Wall Street stocks"/"日经指数"这类），
+# 用 _CRYPTO_KEYWORDS_RE 判它们的相关性必然全部误杀为 offtopic——两个正则
+# 服务的是完全不同的查询组，_dedup_and_filter 里按 `_category` 分流判定，
+# 不是互相替代。
+_MARKET_KEYWORDS_RE = re.compile(
+    r"stock|equit|shares?|nasdaq|dow jones|s&p|nikkei|kospi|hang seng|"
+    r"federal reserve|\bfed\b|interest rate|inflation|\bcpi\b|tariff|"
+    r"central bank|recession|earnings|market sell-?off|"
+    r"股市|大盘|股票|美股|港股|日股|韩股|恒生|日经|纳斯达克|道琼斯|标普|"
+    r"美联储|利率|加息|降息|通胀|关税|央行|经济衰退|财报",
+    re.IGNORECASE,
+)
+
+# gm_* 分类走市场关键词判定；其余（含新老 macro_*/mkt_*/brk_*/reg_*/gov_*）
+# 维持原来的加密关键词判定，行为不变。
+_MARKET_CATEGORIES = {"us_stock", "hk_stock", "jp_stock", "kr_stock", "macro_policy"}
 
 
 def _domain_of(url: str) -> str:
@@ -481,10 +545,14 @@ def _dedup_and_filter(items: list[dict], now: datetime | None = None,
             stats["drop_no_title"] += 1
             continue
 
-        # 主题相关性：只筛长尾默认档域名，白名单域名直接放行（理由见常量定义处）
+        # 主题相关性：只筛长尾默认档域名，白名单域名直接放行（理由见常量定义处）。
+        # gm_* 查询组（全球主流市场）判市场关键词，其余判加密关键词——两组
+        # 查询词的"相关"含义本来就不同，用同一个正则会把 gm_* 组全部误杀。
         if item.get("authority") == AUTHORITY_DEFAULT:
             blob = f"{title} {item.get('summary', '')}"
-            if not _CRYPTO_KEYWORDS_RE.search(blob):
+            pattern = (_MARKET_KEYWORDS_RE if item.get("_category") in _MARKET_CATEGORIES
+                      else _CRYPTO_KEYWORDS_RE)
+            if not pattern.search(blob):
                 stats["drop_offtopic"] += 1
                 continue
 

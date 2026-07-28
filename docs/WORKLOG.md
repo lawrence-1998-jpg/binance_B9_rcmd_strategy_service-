@@ -229,6 +229,7 @@ enrich bridge 架构一句话：Mac（工作机，不保证在线）闲时经 `/
 | 54 | 真实评测：我方事件库 vs 线上 Binance App「Macro Insight」实际展示内容 | ✅ 用户提供 20 张线上信息流截图，人工转录 82 条卡片（2026-07-25~27），与我方同期 1023 条事件用 `text-embedding-3-small`（256维，同去重管线口径）做相似度匹配，Claude 逐条人工复核（未再调用 OpenAI 做判断/成文）。核心结论：成熟窗口（07-25+07-26）真实新闻召回率 54.4%；同期 S/A/B 级事件 152 条中 133 条（87.5%）未出现在线上展示内容里，含 2 条 S 级、6 条构成完整立法追踪线的 CLARITY 法案 A 级事件、4 起超 $4400 万的安全事故。副产品发现：按信源拆分召回率显示 Bitcoinworld（未接入，占线上流 45.6%）与 BeInCrypto（已接入但召回仅 41.2%，低于 Cointelegraph 的 78.6%，值得跟进）两处信源缺口；另发现我方库内 2 处疑似跨轮归并遗漏的近重复事件（"Lazarus $138M Bybit 洗钱"3行、"KB Kookmin/JPMorgan Kinexys"2行）。产出 PDF 报告 `docs/eval_reports/B9_vs_线上Macro_Insight_评测报告_20260727.pdf` |
 | 55 | 转发折叠：多个 KOL 单纯转发同一原文不再算独立信源 | ✅ Drew Zhu（Product）在评测追问时提出这个问题，Lawrence 明确"不算，只算非转载内容"。根因：`verification.analyze_sources()` 按账号名分机构（`resolve_source` 对陌生 KOL 返回 `x:{username}`），N 个不同账号转发/复制同一段原文时账号名互不相同，天然绕开了"按机构去重"，转发量能冒充信源广度、进而推高 `independent_source_count` 并可能把事件误判到 VERIFIED。修法：`verify_events()` 新增 `_load_tweet_texts()` 批量取本轮涉及推文的 `tweet_body`（复用 `attach_social_metrics` 的查询模式，零新增迁移——`tweet_body` 全文本来就存着），`analyze_sources()` 用 `x_search._normalized_key()`（复用其单次抓取内已有的"识别跨账号复制粘贴"逻辑）对同一事件内的 X 来源按正文聚类，每簇只保留权重最高的机构计入独立信源，其余记入新增的 `n_reposts_folded` 并打 `REPOST_FOLDED` flag。不传 `tweet_text_by_id` 时行为不变（老调用方零改动）。验证：4 个合成场景（纯转发折叠为1/全原创不折叠/不传参数保持老行为/混合场景选中最高权重机构）全部通过；扫描生产库确认转发现象真实存在（x_raw_posts 里有 7 条不同账号发布同一段正文的真实簇），仅因当前"单事件内≥2条X来源"的事件较少（67/1851）暂未在 news_events 里遇到会触发折叠的案例；用 5 条真实事件跑通完整 `verify_events()` 调用链无异常；QA 门禁 70/70 |
 | 56 | 产品 demo 通过，产出正式研发交接 PRD | ✅ 两份文档：`docs/prd/PRD-01-数据抓取.md`（面向数据开发：8 类信源清单+各渠道原始字段规范+X 转发去重与 `is_repost`/`repost_type` 标记要求+URL 去重规则）、`docs/prd/PRD-02-聚类与理解.md`（不含排序：LLM 结构化字段表+语义聚类阈值 0.82 的标定提醒+跨轮归并"事件id不变、标签值持续变化、增量表逻辑记录快照时间"的更新规则详解，直接对应 Drew Zhu 评审时提的"同一事件持续 update 应归到一个事件热度里"+转发折叠的验收标准）。两份都基于现有原型代码的真实字段/常量核对写成（sources.py 信源计数、pipeline.py LLM schema、dedup.py 阈值、storage.py 的 ON DUPLICATE KEY UPDATE 更新语义），不是凭空写的模板 |
+| 61 | 美股/港股/日股/韩股/宏观新闻扩召回 + 情绪排序 + dxFeed 机构新闻源接入 | ✅ 见下方专节 |
 | 60 | 本地 enrich worker 改用 LiteLLM 网关替代 claude CLI（Mac 挂 VPN 能连通） | ✅ 见下方专节 |
 | 59 | 尝试切换生产环境到公司 LiteLLM 网关（阻塞：VM 连不通内网） | ⏸️ 见下方专节 |
 | 58 | 评测工具完整化：Agent 管理页 + 校准闭环 + 评测历史 + 三项主动补的能力 | ✅ 见下方专节 |
@@ -465,3 +466,140 @@ threading.Lock 实现），6 个 worker 线程发请求前统一先 `acquire()`�
 - 网关 key 到期日 2026-08-03 仍然适用——到期后这条链路会开始失败，届时会
   自动 miss 回落到 VM 的 OpenAI 直连账号（零功能损失），需要续期才能恢复
   这部分省钱效果
+
+# 十一、全球市场扩召回 + 情绪排序 + dxFeed 接入（2026-07-28）—— WORKLOG #61 详节
+
+老板经 Lawrence 转达：B9 只爬币圈新闻不够，美股/港股/日股/韩股/世界主要经济
+新闻（对股市/资产/价格有直接影响、能调动情绪的）必须接，"用户买的是价格不是
+价值"；明确排除 A 股；排序要做情绪对齐（大盘悲观时同向内容该更突出）；权威
+主流财经媒体要加权；币圈和主流资本内容要混排成一个列表，服务同时关心大盘和
+币价的真实用户（对标 Robinhood）；内容理解加一个市场归属的新标签维度。
+导火索是 PM 群聊里的真实案例：日经跌超4%、KOSPI熔断当天，B9 相关页面完全没有
+体现这个氛围。
+
+## 根因诊断（这一步比想象中关键）
+
+召回本身其实**已经**抓到了这类内容——币圈媒体（吴说/TechFlow深潮/BlockBeats）
+本来就会报道"日经跌4%"这类大盘异动作为市场背景。真正的问题在
+`crawler/pipeline.py` 的 GENERIC-TECH FIREWALL：这条规则专门把"没有清晰加密
+传导路径的通用科技/大盘新闻"打成 D 档、`score_market_impact≤0.20`——这是老
+系统"只服务加密用户"时代的合理设计，但现在产品要求把这类内容当**一等公民**
+处理，同一条规则就变成了系统性压制。不是漏召，是召回了但被主动雪藏。
+
+## 做了什么
+
+**召回扩面**（`crawler/web_search.py` + `crawler/sources.py` + `crawler/main.py`）：
+- `RSS_SOURCES_GLOBAL_MARKETS` 新增 7 个源：CNBC（TopNews/Economy/Investing 三个
+  频道）、MarketWatch、Nikkei Asia、SCMP-Business、Korea Herald——全部实测
+  HTTP 200 的真实 RSS，不是猜的 URL
+- `GOOGLE_NEWS_QUERIES` 新增 20 条 `gm_*` 查询覆盖美股大盘/美联储/CPI、港股、
+  日股、韩股、关税与全球宏观政策，中英各半
+- 域名权威分级新增：cnbc.com/marketwatch.com/nikkei.com 升入最高档（对齐
+  Reuters/Bloomberg），scmp.com/cnn.com 与 koreaherald.com 等区域媒体分别入档
+- **修了一个新查询组会被误杀的坑**：`_dedup_and_filter` 原有的"主题相关性"
+  过滤只认加密关键词，`gm_*` 这批查询词本来就不含加密词汇，会被判定
+  offtopic 整批丢弃。新增 `_MARKET_KEYWORDS_RE`，按 `_category` 分流两套
+  关键词判定，不是共用一套
+- `crawler/main.py` 新增 `filter_a_share()`：标题命中沪指/上证综指/深证成指/
+  创业板/A股等关键词直接丢弃，应用在全部信源合并之后、freshness 过滤之前
+- **dxFeed News 接入**（`crawler/dxfeed_news.py`，独立小节见下）
+
+**新增 market_scope 标签**（migration 013）：crypto/us_stock/hk_stock/
+jp_stock/kr_stock/macro_policy/general，与已有的 `news_type`（事件性质）正交
+——一条"美联储加息"新闻 news_type=macro、market_scope=us_stock，两者独立。
+`crawler/pipeline.py` 的 LLM schema/prompt、`crawler/storage.py` 写入、
+`api/server.py` 的 `EVENT_COLUMNS`/`market_scope` 筛选参数同步更新。
+
+**system prompt 从"加密新闻分析师"扩成"全球市场分析师"**（这是本次风险最高
+的改动）：
+- 新增 MARKET SCOPE 分类章节，含"A股即使漏进来也不要打标"的兜底说明
+- **GENERIC-TECH FIREWALL 明确限定"仅适用于 market_scope=crypto 的事件"**，
+  这是修复 PM 那个 bug 的关键一行
+- 新增一套独立的 S/A/B/C/D 分级标准给非加密市场事件用（大盘单日跌幅
+  ≥4%=S、≥2%=A，等等），不与加密的分级标准混用
+- `score_authority` 的"顶级媒体"举例加入 Reuters/Bloomberg/CNBC/WSJ/FT/
+  Nikkei Asia/MarketWatch
+- `sentiment`/`sentiment_score` 的口径从"对加密市场的方向性影响"扩展为
+  "对相关市场自身的方向性影响"，并标注这个字段会喂给全站的大盘情绪聚合
+
+**情绪排序**（`crawler/market_mood.py` + `api/server.py`，新模块）：
+- 计算近 48 小时内 importance_score≥0.35 的事件（币圈+宏观混合）按重要性
+  加权的情绪均值，产出"极度乐观/偏乐观/中性/偏悲观/极度悲观"标签
+- **刻意不碰 `crawler/scoring.py` 的五因子公式**：情绪对齐加成只在
+  `/api/news` 查询时对候选池做有界（≤15%）重排，不写回 `importance_score`
+  ——那个字段是策略实验室/去重/历史分析全部依赖的口径，被"今天的情绪"污染
+  会让不同天算出的分不可比
+- 48 小时而非字面"今天"：主流水线现在每 2 天 1 轮，24 小时窗口会在两轮之间
+  大概率查无数据，48 小时保证覆盖到最近一轮产出
+- 新增 `GET /api/market-mood`，5 分钟进程内缓存
+- `/api/news` 在 `sort=importance` 时改为：查一个比页面大的候选池
+  （`min(500, offset+limit*5)`）、按情绪对齐乘上加成、应用层重排后再切页
+  ——直接在 SQL LIMIT/OFFSET 上做会在翻页边界产生错误结果
+
+**dxFeed News 机构新闻源接入**（`crawler/dxfeed_news.py`，新模块）：
+Lawrence 转发了公司通过 Binance 账号采购的 dxFeed 试用凭据（同事 Drew Zhu
+对接），连着一份 Benzinga（Massive 平台）的示例数据包一起发来问"是不是有
+能用的 key"。核实结果：
+- **Benzinga/Massive**：压缩包里只有示例响应 JSON 和字段文档，**没有真实
+  key**，massive.com 文档页也没写 base URL 或申请方式，需要另外找账号负责人
+- **dxFeed News**：**是真实可用的凭据**。实测 `https://news.dxfeed.com` 用
+  HTTP Basic Auth（binance/密码）直接查通，聚合的是 MT Newswires 的机构级
+  实时美股新闻（分钟级，真实调用返回"Nvidia $500B AI 基础设施合作"
+  "Morgan Stanley 首次覆盖 Riot Platforms 予增持"这类高信号内容），比搜索
+  引擎抓回来的内容权威、及时得多。已接入并配置 21 个精选 symbol（大盘指数+
+  头部ETF+市值最大科技股+加密概念股）——**踩到一个真实的 API 限制**：
+  symbol 参数一次最多传 10 个，超过直接 400（不是限流，是硬性数量上限，
+  逐个测过每个 symbol 单独查都能通），改成按 10 个一批分批查询、按 id 去重
+  合并结果解决
+- **关于 opus-4-8**：用户这次追问"不差钱，能用最好的模型就用"，结论沿用
+  之前的实测——网关上的 opus-4-8 经 Bedrock 通道不支持这套代码依赖的
+  strict json schema，是技术硬限不是预算问题，产线继续用 gpt-5.4，如实
+  回复用户不是揣着明白装糊涂地默认换掉
+
+**前端**（`web/index.html`）：
+- 筛选器新增"市场 Market"下拉（7 个选项，emoji 国旗区分）
+- 表格/详情/App 模拟器三处都加了 market_scope 徽标（`marketBadge()`/
+  `MARKET_BADGE` 映射，非 crypto 的几个市场配色区分度更高，一眼看出"这条
+  不是币圈新闻"）
+- 新增"大盘情绪横幅"，放在 tab02 最顶上、筛选器之前——"排序结果尤其是首
+  几刷要有冲击力"，情绪判断本身就该是进这个 tab 第一眼看到的东西
+
+## 真实验证（这步做得比较扎实，不是纸面自测）
+
+没有跑全量 3485 条历史积压（成本不可控），而是从当天真实抓到的数据里挑了
+一批有代表性的样本（17 条：KOSPI/日经崩盘的 8 条原始报道聚类、5 条
+dxFeed 真实新闻、CNBC 一条"美韩科技股联动创新高"、MarketWatch 一条、2 条
+普通加密新闻做混排对照），通过 monkeypatch `staging.fetch_staged_items`
+让**未经改动的真实 `run_pipeline()`** 只消费这 17 条，其余全部走真代码
+（结构化/去重聚合/跨轮归并/校验/打分/入库/存档标记）。结果：
+
+- 17 条原始 → 11 条最终事件（8 条 KOSPI/日经系列被正确聚合成 2 条canonical
+  事件，证明 embedding 去重在非加密领域一样生效）
+- **"KOSPI跌超8%触发熔断"**：`market_scope=kr_stock`，**S 档 0.7131 分**，
+  情绪 -0.91（强烈看跌），3 个信源合并（BlockBeats/TechFlow深潮/吴说）
+- **"日经225跌4% 铠侠跌18%"**：`market_scope=jp_stock`，**S 档 0.6288 分**，
+  情绪 -0.87
+- 加密新闻（"Blockaid称上半年加密损失超10亿美元"，B档）与美股新闻
+  （"科技股盘前走高"、"大摩首次覆盖Riot予增持"，均 C档）混在同一个按
+  importance_score 排序的列表里——不是两个列表拼起来
+- 浏览器实测：情绪横幅正确显示、驱动因素列表正确列出 KOSPI/日经两条并带
+  国旗徽标；市场筛选器切到"韩股"正确过滤出 2 条；不筛选时的混排列表里
+  "KOSPI跌超8%触发熔断"出现在第 3 位，前后紧邻 BTC/ETH ETF 新闻和 BitMine
+  增持——这就是"混排"要的效果
+- QA 门禁新增第 8 组共 4 条用例（含一条真实踩坑：普通 SQL `LIKE` 在
+  `utf8mb4_unicode_ci` 排序规则下会把"Cathie Wood买入Meta股票"误判成命中
+  "A股"关键词，改用 `BINARY` 精确匹配后确认库内 2026-07-28 起新入库事件
+  零 A 股残留），**98/98 全部通过**
+
+## 顺带发现，未处理（如实记录，不夸大成果）
+
+- **SCMP-Business RSS 内容偏软**：拉回的更多是"香港女子体检故事""马来西亚
+  F1 赛事"这类泛生活/时事新闻，不是密集的港股大盘动态。权威分级本身没错
+  （SCMP 确实是可信媒体），只是这一路 RSS 单独接入不足以撑起"港股市场动态"
+  这个诉求，后续如果 Lawrence 找到的可靠信源里有更聚焦港股的（比如 HKEX
+  官方公告、经济日报），应该优先加那些
+- **大盘情绪目前是 48 小时全窗口加权均值**，会被大量中性/常规内容稀释——
+  实测这批验证数据插入后，全局 mood_score 只有 -0.009（约等于中性），
+  尽管 KOSPI/日经崩盘被正确识别为"最大驱动因素"并列在横幅里。如果
+  Lawrence 想要的是"只要今天有大新闻就应该整体大幅偏向"而不是"稀释在
+  48 小时全部事件里的均值"，这里的窗口/权重需要重新调，现在的实现偏保守

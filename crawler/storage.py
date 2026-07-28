@@ -260,7 +260,7 @@ INSERT INTO news_events (
     id, title_en, title_zh, date, time_event, time_get_data,
     description_short_en, description_short_zh,
     description_long_en, description_long_zh,
-    sectors, coins, news_type, event_tier,
+    sectors, coins, news_type, market_scope, event_tier,
     score_market_impact, score_timeliness, score_hotness,
     score_authority, score_quality, importance_score,
     credibility_score, is_rumor, rumor_reason,
@@ -268,7 +268,7 @@ INSERT INTO news_events (
     cluster_id, merged_sources_count,
     event_subject, event_action, event_fingerprint, embedding, social_interactions
 ) VALUES (
-    %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,
+    %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,
     %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,
     %s,%s,%s,%s,%s
 )
@@ -316,6 +316,7 @@ def write_events(events: list[dict], conn) -> int:
                 json.dumps(event.get("sectors", []), ensure_ascii=False),
                 json.dumps(event.get("coins", []), ensure_ascii=False),
                 event.get("news_type", "other"),
+                event.get("market_scope", "crypto"),
                 event.get("event_tier", "C"),
                 scores.get("score_market_impact", 0.0),
                 scores.get("score_timeliness", 0.0),

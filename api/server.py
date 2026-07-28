@@ -1,7 +1,7 @@
 """
 REST API 服务 - 对外提供新闻数据查询接口
 """
-import os, sys, json, logging
+import os, sys, json, logging, time
 from datetime import datetime
 from functools import wraps
 
@@ -24,6 +24,7 @@ from enrich_bridge import enrich_bridge_bp
 from source_catalog import source_catalog_bp
 from persona_tools import persona_bp
 from crawler.timeutil import now_local
+from crawler import market_mood
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -97,7 +98,7 @@ EVENT_COLUMNS = """
     id, title_en, title_zh, date, time_event, time_get_data,
     description_short_en, description_short_zh,
     description_long_en, description_long_zh,
-    sectors, coins, news_type, event_tier,
+    sectors, coins, news_type, market_scope, event_tier,
     score_market_impact, score_timeliness, score_hotness,
     score_authority, score_quality, importance_score,
     credibility_score, is_rumor, rumor_reason,
@@ -187,6 +188,46 @@ def attach_x_posts(events: list[dict], cursor) -> None:
                 event["x_posts"].append(posts_by_id[tid])
 
 
+# ─── 大盘情绪（crawler/market_mood.py）───────────────────────────────────────
+#
+# 2026-07-28 新增。5 分钟进程内缓存——情绪横幅每次页面加载都会请求，24 小时窗口
+# 内的聚合结果几分钟内变化可忽略，缓存能把这个查询从"每次 /api/news 都触发"
+# 降到"5 分钟一次"，不需要 Redis 这种量级的方案。
+_MOOD_CACHE = {"ts": 0.0, "data": None}
+_MOOD_CACHE_TTL = 300
+
+
+def _get_market_mood() -> dict:
+    now = time.time()
+    if _MOOD_CACHE["data"] is not None and now - _MOOD_CACHE["ts"] < _MOOD_CACHE_TTL:
+        return _MOOD_CACHE["data"]
+
+    db = get_db()
+    cursor = db.cursor()
+    cursor.execute(
+        "SELECT id, title_zh, importance_score, sentiment_score, market_scope "
+        "FROM news_events WHERE time_get_data >= NOW() - INTERVAL %s HOUR "
+        "AND sentiment_score IS NOT NULL AND importance_score >= %s",
+        (market_mood.MOOD_LOOKBACK_HOURS, market_mood.MOOD_MIN_IMPORTANCE),
+    )
+    events = [
+        {"id": r[0], "title_zh": r[1], "importance_score": r[2],
+         "sentiment_score": r[3], "market_scope": r[4]}
+        for r in cursor.fetchall()
+    ]
+    cursor.close()
+
+    result = market_mood.compute_market_mood(events)
+    _MOOD_CACHE["ts"], _MOOD_CACHE["data"] = now, result
+    return result
+
+
+@app.route("/api/market-mood", methods=["GET"])
+@require_api_key
+def get_market_mood():
+    return jsonify(_get_market_mood())
+
+
 # ─── 主新闻列表 ───────────────────────────────────────────────────────────────
 @app.route("/api/news", methods=["GET"])
 @require_api_key
@@ -196,6 +237,7 @@ def get_news():
     sector = request.args.get("sector")
     source = request.args.get("source")
     news_type = request.args.get("news_type")
+    market_scope = request.args.get("market_scope")
     is_rumor = request.args.get("is_rumor")
     event_tier = request.args.get("event_tier")
     date_from = request.args.get("date_from")
@@ -216,6 +258,9 @@ def get_news():
     if news_type:
         where.append("news_type = %s")
         params.append(news_type)
+    if market_scope:
+        where.append("market_scope = %s")
+        params.append(market_scope)
     if is_rumor is not None:
         where.append("is_rumor = %s")
         # 支持 ?is_rumor=0/1 或 ?is_rumor=true/false
@@ -239,19 +284,44 @@ def get_news():
         params.extend([run_at, run_at])
 
     order = "importance_score DESC" if sort == "importance" else "time_get_data DESC"
-    sql = (f"SELECT {EVENT_COLUMNS} FROM news_events WHERE {' AND '.join(where)} "
-           f"ORDER BY {order} LIMIT %s OFFSET %s")
-    params += [limit, offset]
-
     db = get_db()
     cursor = db.cursor()
-    cursor.execute(sql, params)
-    rows = cursor.fetchall()
-    data = [row_to_dict(cursor, r) for r in rows]
+
+    if sort == "importance":
+        # 情绪对齐重排（crawler/market_mood.py）：查一个比页面大的候选池（按
+        # importance_score 排好序），在应用层乘上有界加成再重排、切片，而不是
+        # 直接在 SQL 里 LIMIT/OFFSET——加成会改变相对顺序，只对当前这一页
+        # LIMIT 出来的行做重排会在翻页边界producer出不连续的错误结果（第2页
+        # 该出现的条目因为加成被挤到第1页，但 SQL 已经把它排除在候选之外）。
+        # 候选池上限 500：翻页翻到几百条之外时，"今天的大盘情绪"对那么靠后的
+        # 内容已经没有意义，不值得为了理论上的精确性无限扩大候选池。
+        pool_size = min(500, offset + limit * 5)
+        pool_sql = (f"SELECT {EVENT_COLUMNS} FROM news_events WHERE {' AND '.join(where)} "
+                   f"ORDER BY importance_score DESC LIMIT %s")
+        cursor.execute(pool_sql, params + [pool_size])
+        pool_rows = cursor.fetchall()
+        pool = [row_to_dict(cursor, r) for r in pool_rows]
+
+        mood = _get_market_mood()
+        mood_score = mood.get("mood_score") if mood.get("available") else None
+        for e in pool:
+            mult = market_mood.mood_alignment_multiplier(e.get("sentiment_score"), mood_score)
+            e["_display_score"] = (e.get("importance_score") or 0.0) * mult
+        pool.sort(key=lambda e: e["_display_score"], reverse=True)
+        data = pool[offset:offset + limit]
+        for e in data:
+            e.pop("_display_score", None)
+    else:
+        sql = (f"SELECT {EVENT_COLUMNS} FROM news_events WHERE {' AND '.join(where)} "
+              f"ORDER BY {order} LIMIT %s OFFSET %s")
+        cursor.execute(sql, params + [limit, offset])
+        rows = cursor.fetchall()
+        data = [row_to_dict(cursor, r) for r in rows]
+
     attach_x_posts(data, cursor)
 
     # 总数
-    cursor.execute(f"SELECT COUNT(*) FROM news_events WHERE {' AND '.join(where)}", params[:-2])
+    cursor.execute(f"SELECT COUNT(*) FROM news_events WHERE {' AND '.join(where)}", params)
     total = cursor.fetchone()[0]
     cursor.close()
 

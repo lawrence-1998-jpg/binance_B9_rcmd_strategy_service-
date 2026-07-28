@@ -11,12 +11,14 @@ from bs4 import BeautifulSoup
 from datetime import datetime, timezone
 
 from .sources import (
-    RSS_SOURCES_P0, RSS_SOURCES_P1, RSS_SOURCES_P2, RSS_SOURCES_MACRO, RSS_SOURCES_RSSHUB,
+    RSS_SOURCES_P0, RSS_SOURCES_P1, RSS_SOURCES_P2, RSS_SOURCES_MACRO,
+    RSS_SOURCES_GLOBAL_MARKETS, RSS_SOURCES_RSSHUB,
     HTML_SOURCES, BINANCE_SQUARE_QUERIES, CRYPTO_KOLS, X_TWEETS_PER_KOL,
 )
 from .x_search import fetch_x_search
 from .web_search import fetch_web_search
 from .market_signals import run_market_signals
+from .dxfeed_news import fetch_dxfeed_news
 from .timeutil import now_local
 
 logger = logging.getLogger(__name__)
@@ -306,6 +308,37 @@ def normalize_published_at(value: str, now: datetime | None = None) -> str | Non
     return published.isoformat()
 
 
+# 2026-07-28：接入美股/港股/日股/韩股/世界宏观媒体后新增的 A 股排除闸。
+# 老板明确要求"A股不要"——查询词本身没有一条是冲着 A 股去的，但国际财经媒体
+# （CNBC/Nikkei/SCMP 这类覆盖面广的源）报道亚洲大盘时偶尔会捎带一句"沪指/
+# 深成指/上证综指"，这道闸就是防止这类内容漏进来。只挡"以 A 股大盘/个股为
+# 报道主体"的标题——中国的货币政策、GDP、关税这类宏观信息不会被误伤，因为
+# 它们不会在标题里出现"沪指/A股"这类措辞（这类内容本身就该进"重大经济政策"
+# 分类，是要收的，不是要挡的）。
+_A_SHARE_TITLE_RE = re.compile(
+    r"A股|沪指|深成指|上证综指|上证指数|深证成指|沪深300|创业板指|科创50|"
+    r"shanghai composite|shenzhen component|csi ?300|star ?50",
+    re.IGNORECASE,
+)
+
+
+def filter_a_share(items: list[dict]) -> list[dict]:
+    """丢弃以 A 股大盘/个股为报道主体的条目。只查标题——用摘要判断容易把"提到
+
+    中国经济但主体是别的市场"的内容也误杀（比如"中国关税政策对美股科技股影响"
+    这种恰恰是要收的宏观政策交叉新闻）。
+    """
+    kept, dropped = [], 0
+    for item in items:
+        if _A_SHARE_TITLE_RE.search(item.get("title", "")):
+            dropped += 1
+            continue
+        kept.append(item)
+    if dropped:
+        logger.info(f"A股排除闸：丢弃 {dropped} 条")
+    return kept
+
+
 def filter_by_freshness(items: list[dict]) -> list[dict]:
     """丢弃陈年内容，并把异常时间戳归一。按信源统计丢弃量便于排查。"""
     now = now_local()
@@ -343,7 +376,8 @@ def fetch_cheap_sources() -> list[dict]:
     all_items = []
 
     for url, name, lang, authority in (RSS_SOURCES_P0 + RSS_SOURCES_RSSHUB + RSS_SOURCES_P1
-                                      + RSS_SOURCES_P2 + RSS_SOURCES_MACRO):
+                                      + RSS_SOURCES_P2 + RSS_SOURCES_MACRO
+                                      + RSS_SOURCES_GLOBAL_MARKETS):
         all_items.extend(fetch_rss(url, name, lang, authority))
         time.sleep(0.5)
 
@@ -372,7 +406,18 @@ def fetch_cheap_sources() -> list[dict]:
     except Exception as e:
         logger.warning(f"Web search failed, continuing without: {e}")
 
+    # dxFeed News（2026-07-28 新增）：公司通过 Binance 账号采购的机构级美股实时
+    # 新闻源（MT Newswires），补的是美股/宏观这块"搜索引擎召回精度不够"的缺口。
+    # 未配置凭据（DXFEED_NEWS_USER/PASS）时函数自己直接跳过，不报错。
+    try:
+        dxfeed_items = fetch_dxfeed_news()
+        all_items.extend(dxfeed_items)
+        logger.info(f"dxFeed News: {len(dxfeed_items)} items")
+    except Exception as e:
+        logger.warning(f"dxFeed News failed, continuing without: {e}")
+
     all_items = [item for item in all_items if item.get("title", "").strip()]
+    all_items = filter_a_share(all_items)
     all_items = filter_by_freshness(all_items)
     logger.info(f"Cheap sources: {len(all_items)} items")
     return all_items

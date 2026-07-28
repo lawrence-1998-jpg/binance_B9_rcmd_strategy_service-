@@ -85,6 +85,30 @@ RSS_SOURCES_MACRO = [
     ("https://www.investing.com/rss/news_14.rss",  "Investing-Econ",   "en", 3),
 ]
 
+# ── 全球主流市场源（2026-07-28 新增）─────────────────────────────────
+#
+# 起因：Lawrence 转达老板指示——B9 只爬币圈新闻不够，美股/港股/日股/韩股/
+# 世界主要经济新闻（对股市、资产、价格有直接影响、能调动情绪的）必须接，
+# 依据是"用户买的是价格不是价值"，同时同时买卖股票和币的人（对标 Robinhood）
+# 需要一个能同时看到两边的信息流。**明确不要 A 股**（沪深/上证/深证/创业板/
+# 科创板个股动态），这类内容不在任何查询词里，且下游有关键词黑名单兜底
+# （见 crawler/web_search.py 的 _A_SHARE_KEYWORDS_RE）。
+#
+# 全部实测 HTTP 200、标准 RSS：CNBC 三个频道覆盖美股大盘/宏观/投资，
+# MarketWatch 补美股，Nikkei Asia 覆盖日股为主兼顾亚太，SCMP 覆盖港股，
+# Korea Herald 覆盖韩股。都是国际公认的主流财经媒体，直接给最高权威档
+# （对应 crawler/pipeline.py SYSTEM_PROMPT 里 score_authority 的"顶级媒体"
+# 档位），不需要额外的媒体公信力判断。
+RSS_SOURCES_GLOBAL_MARKETS = [
+    ("https://www.cnbc.com/id/100003114/device/rss/rss.html", "CNBC-TopNews",   "en", 5),
+    ("https://www.cnbc.com/id/20910258/device/rss/rss.html",  "CNBC-Economy",   "en", 5),
+    ("https://www.cnbc.com/id/15839069/device/rss/rss.html",  "CNBC-Investing", "en", 5),
+    ("https://feeds.content.dowjones.io/public/rss/mw_topstories", "MarketWatch", "en", 5),
+    ("https://asia.nikkei.com/rss/feed/nar",                  "NikkeiAsia",     "en", 5),
+    ("https://www.scmp.com/rss/91/feed/",                     "SCMP-Business",  "en", 4),
+    ("https://www.koreaherald.com:443/rss/020000000000.xml",  "KoreaHerald",    "en", 3),
+]
+
 # ── HTML 抓取源（无 RSS，直接解析页面）───────────────────────────────
 HTML_SOURCES = [
     {
