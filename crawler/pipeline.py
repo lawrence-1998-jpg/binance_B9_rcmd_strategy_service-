@@ -17,6 +17,7 @@ import json
 import logging
 import os
 import time
+from datetime import datetime
 from pathlib import Path
 
 from openai import OpenAI
@@ -29,6 +30,7 @@ from .dedup import (COSINE_THRESHOLD, aggregate_events, build_fingerprint,
 from .market_cap import annotate_events as annotate_market_cap
 from .market_cap import persist_coin_metrics
 from .scoring import score_events
+from .timeutil import now_local
 from .sources import SECTOR_LABELS
 from .usage_tracker import UsageTracker
 from .verification import persist_verification, verify_events
@@ -182,6 +184,51 @@ def semantic_prefilter(items: list[dict], client, tracker=None,
     logger.info(f"语义粗去重（LLM 前）: {len(items)} → {len(result)}，"
                 f"折叠 {folded} 条重复，按 $0.011/条估算省下约 ${folded * 0.011:.2f}")
     return result
+
+
+# ── 事件时间闸 ───────────────────────────────────────────────────────
+#
+# 2026-07-29 线上事故后新增。Lawrence 的要求原话："用提取『事件发生 而不是采集』
+# 的实体时间做校验，只出近期（比如1周内）的内容"。
+#
+# 与已有的 filter_by_freshness 的分工（两道都要，不能互相替代）：
+#   · filter_by_freshness 在 LLM **之前**，看的是信源自报的 published_at。
+#     好处是能在花 LLM 钱之前就拦掉，坏处是信源不报/报错时它完全失守——
+#     币安广场那条 2024 年的帖子就是这么漏进来的。
+#   · 本闸在 LLM **之后**，看的是模型从正文里读出来的 event_date（真实发生
+#     时间）。它能抓住"信源时间戳骗人"这一类，代价是钱已经花了。
+# 顺序上是"先便宜的、后可靠的"，属于纵深防御，不是重复。
+MAX_EVENT_AGE_DAYS = int(os.environ.get("B9_MAX_EVENT_AGE_DAYS", "7"))
+
+# 未来事件的容忍窗口。催化剂日历（CoinMarketCal）本来就在预告未来的硬分叉/
+# 解锁，event_date 晚于今天是正常的，不能当异常丢掉。
+MAX_EVENT_FUTURE_DAYS = 400
+
+
+def filter_by_event_date(enriched: list[dict], now: datetime | None = None
+                        ) -> tuple[list[dict], list[dict]]:
+    """按 LLM 抽取的 event_date 卡时效，返回 (保留, 丢弃明细)。
+
+    event_date 缺失或格式不可解析时**保留**——那是模型没给出判断，不是证据表明
+    内容陈旧；此时前面 filter_by_freshness 认可的 published_at 仍然有效。
+    这里只丢"有明确证据表明它很旧"的条目。
+    """
+    now = now or now_local()
+    kept, dropped = [], []
+    for e in enriched:
+        raw = str(e.get("event_date") or "").strip()[:10]
+        try:
+            ev = datetime.strptime(raw, "%Y-%m-%d").replace(tzinfo=now.tzinfo)
+        except (ValueError, TypeError):
+            kept.append(e)
+            continue
+        age_days = (now - ev).total_seconds() / 86400
+        if age_days > MAX_EVENT_AGE_DAYS or age_days < -MAX_EVENT_FUTURE_DAYS:
+            dropped.append({"event_date": raw, "title": e.get("title_zh") or e.get("title_en") or "",
+                            "source": e.get("source", ""), "age_days": round(age_days, 1)})
+            continue
+        kept.append(e)
+    return kept, dropped
 
 
 # ── Step 3: LLM 结构化 ───────────────────────────────────────────────
@@ -918,6 +965,18 @@ def run_pipeline() -> dict:
         logger.info(f"Step 4 LLM: {stats['enriched']} enriched, "
                     f"{stats['rumors']} flagged as rumor (kept, down-weighted)")
         lap("llm_enrich")
+
+        # 4.9 事件时间闸（2026-07-29 新增）——按 LLM 抽出的 event_date（**事件
+        #     真实发生时间**，不是我们的采集时间）再卡一次时效。前面的
+        #     filter_by_freshness 只能看信源自报的 published_at，信源报错/没报
+        #     时就失守；这一道用的是模型从正文里读出来的日期，是最后一层防线。
+        enriched, stale_dropped = filter_by_event_date(enriched)
+        stats["stale_by_event_date"] = len(stale_dropped)
+        if stale_dropped:
+            logger.warning(
+                f"事件时间闸：丢弃 {len(stale_dropped)} 条陈旧内容（event_date 超过 "
+                f"{MAX_EVENT_AGE_DAYS} 天）。样例：" +
+                "；".join(f"{d['event_date']} {d['title'][:24]}" for d in stale_dropped[:5]))
 
         # 5. 事件指纹 + 语义聚合（DC-1 ~ DC-3）
         attach_fingerprints(enriched)

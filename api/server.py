@@ -240,6 +240,16 @@ def get_news():
     news_type = request.args.get("news_type")
     market_scope = request.args.get("market_scope")
     is_rumor = request.args.get("is_rumor")
+    # 展示层时效闸（2026-07-29 新增，线上事故后）。默认只出 7 天内的事件——
+    # Lawrence：「只出近期（比如1周内）的内容」。这是**展示**约束，不是删数据：
+    # 超期的事件仍在库里可查（传 max_age_days=0 关闭本闸，或用 date_from/date_to
+    # 显式指定区间），只是不再默认出现在推荐流里。
+    # 与 crawler 侧那两道闸的分工：那两道防的是"陈年内容混进库"，这一道防的是
+    # "库里正常入库、但随时间自然变旧的内容继续占着推荐位"。
+    try:
+        max_age_days = int(request.args.get("max_age_days", 7))
+    except ValueError:
+        max_age_days = 7
     event_tier = request.args.get("event_tier")
     date_from = request.args.get("date_from")
     date_to = request.args.get("date_to")
@@ -262,6 +272,11 @@ def get_news():
     if market_scope:
         where.append("market_scope = %s")
         params.append(market_scope)
+    if max_age_days > 0 and not (date_from or date_to or run_at):
+        # 显式指定了日期区间/轮次时不叠加本闸——那种查询本身就是"我要看这一段"，
+        # 再套一层默认时效窗口只会让结果莫名其妙地少东西。
+        where.append("date >= DATE_SUB(CURDATE(), INTERVAL %s DAY)")
+        params.append(max_age_days)
     if is_rumor is not None:
         where.append("is_rumor = %s")
         # 支持 ?is_rumor=0/1 或 ?is_rumor=true/false

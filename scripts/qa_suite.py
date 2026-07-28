@@ -69,6 +69,11 @@ def http(path: str, method: str = "GET", body=None, token: str | None = TOKEN,
         return 0, str(e)
 
 
+def _days_ago_str(n: int) -> str:
+    """n 天前的 YYYY-MM-DD，给时效用例做边界比较用。"""
+    return time.strftime("%Y-%m-%d", time.localtime(time.time() - n * 86400))
+
+
 def sql(query: str) -> list[list[str]]:
     out = subprocess.run(
         ["mysql", "-uroot", "-p***REMOVED***", "crypto_news", "-sN", "-e", query],
@@ -153,7 +158,11 @@ def qa_endpoints():
                         for n in node_list)
         check(g, "轮次节点都落在 08:00 / 20:00", shapes_ok,
               f"异常={[n['run_at'] for n in node_list if n.get('run_at','')[11:16] not in ('08:00','20:00')][:3]}")
-        st, allm = http("/api/news?limit=1")
+        # 用 max_age_days=0 关掉展示层时效闸再比：分轮查询带 run_at 时本来就
+        # 绕过那道闸（见 server.py 的说明），全量这边不关就是拿"7天内"和
+        # "所有轮次"相比，必然对不上——这条用例要验的是**分桶不重不漏**，
+        # 不是时效策略，两者不能混在一个断言里。
+        st, allm = http("/api/news?limit=1&max_age_days=0")
         total_all = ((allm or {}).get("meta") or {}).get("total", -1)
         summed = 0
         for n in node_list:
@@ -436,6 +445,30 @@ def qa_market_expansion():
 
     st, _ = http("/api/market-mood", token=None)
     check(g, "/api/market-mood 无 token 应 401", st == 401, f"status={st}")
+
+    # ── 时效性（2026-07-29 线上事故后新增的红线用例）─────────────────
+    #
+    # 事故：一条 2024-08-21 的币安广场帖（DOGS 第 57 期 Launchpool）以
+    # date=2026-07-26 的身份进了事件库并在前端展示。根因是 ddgs 搜索没有日期，
+    # 而 normalize_published_at 把"无日期"回落成"当前时间"，等于伪造新鲜度。
+    # 下面三条是防复发的红线，任何一条红都说明时效防线破了。
+    g2 = "时效"
+    st, d = http("/api/news?limit=100")
+    rows = (d or {}).get("data") or [] if isinstance(d, dict) else []
+    check(g2, "/api/news 默认只返回近 7 天内容", bool(rows) and all(
+        (r.get("date") or "")[:10] >= _days_ago_str(8) for r in rows),
+        f"最旧={min((r.get('date') or '') for r in rows) if rows else 'N/A'}")
+
+    rows_db = sql("SELECT COUNT(*) FROM news_events WHERE DATEDIFF(time_get_data, date) > 7")
+    stale_n = int(rows_db[0][0]) if rows_db and rows_db[0] else -1
+    check(g2, "库内无「事件日期比采集早 7 天以上」的行", stale_n == 0, f"命中 {stale_n} 条")
+
+    # 无日期来源不得再进库：BinanceSquare 走 ddgs 搜索、结构性拿不到发布时间，
+    # 已默认关闭；库里若再次出现它的条目，说明开关被误开或又引入了同类无日期源。
+    rows_bs = sql("SELECT COUNT(*) FROM news_events "
+                 "WHERE JSON_SEARCH(source_names,'one','BinanceSquare') IS NOT NULL")
+    bs_n = int(rows_bs[0][0]) if rows_bs and rows_bs[0] else -1
+    check(g2, "库内无 BinanceSquare（无发布时间的搜索源）条目", bs_n == 0, f"命中 {bs_n} 条")
 
 
 def main() -> int:

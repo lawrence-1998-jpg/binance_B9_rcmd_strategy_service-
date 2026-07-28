@@ -155,7 +155,26 @@ def fetch_html_source(source: dict) -> list[dict]:
 
 # ── 币安广场（ddgs 搜索）─────────────────────────────────────────────
 
+# 2026-07-29：币安广场这条腿默认关闭，原因是它**结构性地拿不到发布时间**。
+#
+# 它走的是 ddgs 搜索（site:binance.com/square + 关键词），`ddgs.text()` 的返回里
+# 根本没有日期字段，代码里因此写死 `"published_at": ""`。搜索引擎会把任意年份的
+# 帖子都翻出来，配合当时 normalize_published_at "空值回落到现在" 的行为，等于给
+# 每一条陈年帖盖上"刚刚"的时间戳——线上事故就是这么来的：一条 2024-08-21 的
+# "币安将 DOGS 列为第 57 期 Launchpool 项目" 以 date=2026-07-26 的身份进了事件库。
+#
+# 这不是调参能修的：这条通道拿不到时间，就无法证明内容是新的。要恢复它，必须先
+# 换成能拿到发布时间的取数方式（币安广场官方 API，或抓详情页解析时间），而不是把
+# 开关打开就完事。留成开关而不是删代码，是为了保留查询词与解析逻辑备用。
+BINANCE_SQUARE_ENABLED = (
+    os.environ.get("BINANCE_SQUARE_ENABLED", "false").strip().lower() == "true")
+
+
 def fetch_binance_square(queries: list[str]) -> list[dict]:
+    if not BINANCE_SQUARE_ENABLED:
+        logger.info("BinanceSquare: 已关闭（ddgs 搜索拿不到发布时间，无法保证时效，"
+                    "见函数上方说明）")
+        return []
     items = []
     try:
         from ddgs import DDGS
@@ -285,18 +304,35 @@ def fetch_x_kols() -> tuple[list[dict], list[dict]]:
 def normalize_published_at(value: str, now: datetime | None = None) -> str | None:
     """校验并规范化发布时间。返回 None 表示该条目应被丢弃。
 
-    三种情况：
-      - 缺失或无法解析 → 回落到当前时间（多数 HTML 抓取源本就没有可靠时间戳）
-      - 早于 now - MAX_CONTENT_AGE_DAYS → 返回 None，调用方丢弃
+    2026-07-29 重大修正（线上事故）：**"没有日期" 不等于 "现在"**。
+
+    原实现在 value 为空或解析失败时 `return now.isoformat()`，注释里的理由是
+    "多数 HTML 抓取源本就没有可靠时间戳"。这个便利性选择直接制造了一次真实的
+    可信度事故：`fetch_binance_square()` 走的是 ddgs 搜索，返回结果**从来就没有
+    日期**（代码里写死 `"published_at": ""`），而搜索引擎会把任意年份的帖子都
+    翻出来——于是一条 2024-08-21 的币安广场帖（DOGS 第 57 期 Launchpool）被盖上
+    了"现在"的时间戳，以 `date=2026-07-26` 的身份进了事件库，在前端跟当天新闻
+    并排展示。Lawrence 原话："被发现一条我的 reputation 就毁了。"
+
+    现在的口径：拿不出可信发布时间的条目一律丢弃（返回 None）。宁可少召回，
+    不可拿陈年内容冒充新闻——这是一个刻意的、偏向精度的取舍，因为这类错误的
+    代价（对外可信度）远高于漏掉几条内容。
+
+    四种情况：
+      - 缺失/无法解析 → **返回 None，丢弃**（不再伪造成当前时间）
+      - 早于 now - MAX_CONTENT_AGE_DAYS → None，丢弃
       - 晚于 now + MAX_FUTURE_HOURS → 视为时区标注错误，回落到当前时间
+        （这一条保留：能解析出时间说明源头是给了时间的，只是标注口径有偏差，
+        与"根本没有时间"是两回事）
+      - 其余 → 原样返回
     """
     now = now or now_local()
     if not value:
-        return now.isoformat()
+        return None
     try:
         published = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
     except (ValueError, TypeError):
-        return now.isoformat()
+        return None
     if published.tzinfo is None:
         published = published.replace(tzinfo=timezone.utc)
 
