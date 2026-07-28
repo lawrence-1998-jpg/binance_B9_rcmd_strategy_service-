@@ -260,17 +260,18 @@ INSERT INTO news_events (
     id, title_en, title_zh, date, time_event, time_get_data,
     description_short_en, description_short_zh,
     description_long_en, description_long_zh,
-    sectors, coins, news_type, market_scope, event_tier,
-    score_market_impact, score_timeliness, score_hotness,
+    sectors, coins, news_type, market_scope, breadth_level, event_tier,
+    score_market_impact, score_breadth, score_punch, punch_magnitude_pct,
+    score_timeliness, score_hotness,
     score_authority, score_quality, importance_score,
     credibility_score, is_rumor, rumor_reason,
     sources, source_names, source_count, is_verified, language_origin,
     cluster_id, merged_sources_count,
     event_subject, event_action, event_fingerprint, embedding, social_interactions
 ) VALUES (
-    %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,
     %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,
-    %s,%s,%s,%s,%s
+    %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,
+    %s,%s,%s,%s,%s,%s,%s,%s
 )
 ON DUPLICATE KEY UPDATE
     -- 标题与正文刻意不更新：同一事件跨轮重复抓到时，LLM 每次改写措辞略有不同，
@@ -284,6 +285,20 @@ ON DUPLICATE KEY UPDATE
     -- 随时间/热度变化的分数需要刷新
     score_timeliness     = VALUES(score_timeliness),
     score_hotness        = VALUES(score_hotness),
+    -- 冲击力要刷新：跨轮归并会合并 sources，权威共振子项随之变化
+    score_punch          = VALUES(score_punch),
+    -- 广度只**填空**不覆盖（COALESCE 而非 VALUES）。2026-07-29 实测踩到的坑：
+    -- migration 014 之前入库的行，breadth_level/score_breadth 天生是 NULL；
+    -- 它们被后续轮次归并时，这条 UPDATE 刷新了 punch 却漏了 breadth，于是
+    -- 永远补不上——145 条这样的行（含 14 条 S/A 档，全在 7 天展示窗口内）在
+    -- 策略实验室重算时走 compute_breadth 的兜底 BREADTH_DEFAULT=0.15
+    -- （single_asset，五档里最低），一个 0.16 权重的因子被静默按地板计，
+    -- 跨市场级事件最多少拿 0.136 基础分，足够把它挤出首屏。
+    -- 用 COALESCE 而不是 VALUES 是为了不违反上面"内容字段不覆盖"的约定：
+    -- NULL→有值是补空缺，不是改写已展示的卡片。
+    breadth_level        = COALESCE(breadth_level, VALUES(breadth_level)),
+    score_breadth        = COALESCE(score_breadth, VALUES(score_breadth)),
+    punch_magnitude_pct  = COALESCE(punch_magnitude_pct, VALUES(punch_magnitude_pct)),
     importance_score     = VALUES(importance_score),
     updated_at           = CURRENT_TIMESTAMP
 """
@@ -317,8 +332,12 @@ def write_events(events: list[dict], conn) -> int:
                 json.dumps(event.get("coins", []), ensure_ascii=False),
                 event.get("news_type", "other"),
                 event.get("market_scope", "crypto"),
+                event.get("breadth_level"),
                 event.get("event_tier", "C"),
                 scores.get("score_market_impact", 0.0),
+                scores.get("score_breadth", 0.0),
+                scores.get("score_punch", 0.0),
+                scores.get("punch_magnitude_pct"),
                 scores.get("score_timeliness", 0.0),
                 scores.get("score_hotness", 0.0),
                 scores.get("score_authority", 0.0),

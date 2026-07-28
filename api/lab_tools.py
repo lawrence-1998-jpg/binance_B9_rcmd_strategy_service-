@@ -39,7 +39,7 @@ from functools import wraps
 
 from flask import Blueprint, request, jsonify, redirect, send_from_directory
 
-from crawler import scoring, storage
+from crawler import market_mood, scoring, storage
 from crawler.sector_relevance import SECTOR_ANCHORS
 from crawler.timeutil import now_local
 
@@ -99,10 +99,12 @@ def lab_page():
 # ─────────────────────────────────────────────────────────────────────────────
 POOL_COLUMNS = """
     id, title_en, title_zh, date, time_event, time_get_data,
-    sectors, sector_relevance, coins, news_type, event_tier,
-    score_market_impact, score_timeliness, score_hotness, score_authority, score_quality,
+    description_short_zh, description_long_zh,
+    sectors, sector_relevance, coins, news_type, market_scope, breadth_level, event_tier,
+    score_market_impact, score_breadth, score_punch, punch_magnitude_pct,
+    score_timeliness, score_hotness, score_authority, score_quality,
     importance_score, is_rumor, source_names, source_count, social_interactions,
-    verification_status
+    sentiment, sentiment_score, verification_status
 """
 
 MAX_POOL_LIMIT = 500
@@ -148,9 +150,30 @@ def fetch_pool(conn, days: int, limit: int) -> list[dict]:
 # ─────────────────────────────────────────────────────────────────────────────
 # 权重归一化 + 因子计算（复用 scoring.py，不重新发明）
 # ─────────────────────────────────────────────────────────────────────────────
-FACTOR_KEYS = ["M", "T", "H", "A", "Q", "Rel"]
-FACTOR_NAME = {"M": "影响面", "T": "时效性", "H": "热度", "A": "权威性", "Q": "质量", "Rel": "相关性"}
-DEFAULT_RAW_WEIGHTS = {"M": 0.35, "T": 0.20, "H": 0.15, "A": 0.15, "Q": 0.15, "Rel": 0.0}
+# 2026-07-29（PRD-03 R6）：五因子 → 七因子，并把「加分项」与「基础因子」分开。
+#
+# 基础因子：权重归一化到 1.0，加权求和得 BaseScore。
+# 加分项：不参与归一化，作为外层倍率 (1 + Σbonus) 应用在 BaseScore 上。
+# 分开的理由见 ADR-001 D1——加分项依赖每天都在变的 mood_score，做成加权项会让
+# 跨天分数不可比；做成外层倍率则 BaseScore 保持可比，且系数调 0 即可退回原排序。
+FACTOR_KEYS = ["M", "B", "T", "I", "H", "A", "Q", "Rel"]
+FACTOR_NAME = {"M": "影响面", "B": "广度", "T": "时效性", "I": "冲击力",
+               "H": "热度", "A": "权威性", "Q": "质量", "Rel": "相关性"}
+DEFAULT_RAW_WEIGHTS = {"M": 0.26, "B": 0.16, "T": 0.16, "I": 0.14,
+                       "H": 0.10, "A": 0.10, "Q": 0.08, "Rel": 0.0}
+
+# 加分项（与基础因子分开展示、分开调节）
+BONUS_KEYS = ["k_align", "k_reversal"]
+BONUS_NAME = {"k_align": "情绪同向加成", "k_reversal": "反转信号加成"}
+DEFAULT_BONUS = {"k_align": market_mood.MOOD_ALIGN_BOOST,
+                 "k_reversal": market_mood.MOOD_REVERSAL_BOOST}
+BONUS_NOTE = (
+    "加分项不参与权重归一化，作为外层倍率 (1 + 同向 + 反转) 应用在基础分上，合计封顶 +"
+    f"{int(market_mood.BONUS_TOTAL_CAP * 100)}%。"
+    "同向加成让首屏跟着大盘氛围走；反转加成专门把「与大盘反向的重大事件」顶上来，"
+    "防止大盘单边时首屏变成回音室——它只对 S/A 档生效，低档位的反向噪音不会被扶上来。"
+    "两个系数都调 0 即退回纯基础排序（也是验证它们真实贡献的 A/B 对照方式）。"
+)
 
 REL_NOTE = (
     "相关性为连续分（2026-07-26 起）：优先取入库时 LLM 按 skill 口径打的连续相关度"
@@ -224,10 +247,15 @@ def compute_relevance(event: dict, sector: str) -> float:
 
 
 def compute_factors(event: dict, baseline: float, now: datetime, sector: str | None) -> dict:
-    """五因子 + 可选 Rel，逐字段调用 scoring.py 的既有函数。"""
+    """七因子 + 可选 Rel，逐字段调用 scoring.py 的既有函数。"""
     factors = {
         "M": scoring.compute_impact(event),
+        "B": scoring.compute_breadth(event),
         "T": scoring.compute_timeliness(event, now),
+        # 冲击力优先用入库时算好的值；存量老行没有该字段则现算一次
+        # （纯正则+信源统计，零 LLM 成本，不怕在查询路径上跑）。
+        "I": (float(event["score_punch"]) if event.get("score_punch") is not None
+              else scoring.compute_punch(event)["score"]),
         "H": scoring.compute_hotness(event, baseline),
         # A 不能再调 compute_authority：库里的 score_authority 存的已经是
         # 折扣后的终值（rumor ×0.7 + verification 降权都在入库打分时应用过，
@@ -273,21 +301,44 @@ CLASS_LABEL = {
 
 
 def event_card(e: dict, factors: dict | None = None, score: float | None = None,
-                rank: int | None = None, prod_rank: int | None = None) -> dict:
+                rank: int | None = None, prod_rank: int | None = None,
+                weights: dict | None = None, bonus: dict | None = None,
+                base_score: float | None = None) -> dict:
     card = {
         "id": e["id"],
         "title_zh": e.get("title_zh"),
         "title_en": e.get("title_en"),
+        # 2026-07-29：补正文。此前卡片只有标题，用户点开看不到内容，
+        # 没法判断"这条为什么排这么高"——Lawrence 原话「现在不够好用」。
+        "description_short_zh": e.get("description_short_zh"),
+        "description_long_zh": e.get("description_long_zh"),
         "event_tier": e.get("event_tier"),
         "news_type": e.get("news_type"),
+        "market_scope": e.get("market_scope"),
+        "breadth_level": e.get("breadth_level"),
+        "punch_magnitude_pct": e.get("punch_magnitude_pct"),
+        "sentiment": e.get("sentiment"),
+        "sentiment_score": e.get("sentiment_score"),
         "sectors": e.get("sectors"),
+        "coins": e.get("coins"),
         "source_names": e.get("source_names"),
+        "source_count": e.get("source_count"),
         "is_rumor": bool(e.get("is_rumor")),
         "verification_status": e.get("verification_status"),
         "importance_score": e.get("importance_score"),
+        "time_event": e.get("time_event"),
     }
     if factors is not None:
         card["factors"] = {k: round(v, 4) for k, v in factors.items()}
+        # 每个因子的**加权贡献值**——只给原始分用户还得自己乘权重心算，
+        # 直接给出贡献值才看得出"这条排高是被哪个因子推上去的"。
+        if weights:
+            card["contributions"] = {
+                k: round(weights.get(k, 0.0) * v, 4) for k, v in factors.items()}
+    if bonus is not None:
+        card["bonus"] = bonus
+    if base_score is not None:
+        card["base_score"] = round(base_score, 4)
     if score is not None:
         card["score"] = round(score, 4)
     if rank is not None:
@@ -297,10 +348,48 @@ def event_card(e: dict, factors: dict | None = None, score: float | None = None,
     return card
 
 
-def rank_pool(events: list[dict], factors_by_id: dict, weights: dict):
-    """按给定权重给整批事件打分排序，返回 [(event, factors, score), ...] 降序。"""
-    scored = [(e, factors_by_id[e["id"]], weighted_score(factors_by_id[e["id"]], weights))
-              for e in events]
+def _lab_mood_score(conn_events: list[dict]):
+    """用当前池子里的 S/A 档事件现算大盘情绪。
+
+    刻意不复用 server.py 的 /api/market-mood 缓存：实验室是**探索工具**，
+    用户可能把 days 调成 30 天来看长周期，那时的"大盘情绪"应当是这个池子的
+    情绪，而不是生产环境固定 48 小时窗口的那个值。口径跟着用户选的池子走，
+    结果才可解释。
+    """
+    res = market_mood.compute_market_mood(conn_events)
+    return res.get("mood_score") if res.get("available") else None
+
+
+def resolve_bonus_coefs(raw: dict) -> dict:
+    """解析加分项系数。非法/缺失回落默认值，负数夹到 0（加分项不做惩罚）。"""
+    raw = raw or {}
+    out = {}
+    for k in BONUS_KEYS:
+        try:
+            v = float(raw.get(k, DEFAULT_BONUS[k]))
+        except (TypeError, ValueError):
+            v = DEFAULT_BONUS[k]
+        out[k] = max(0.0, min(1.0, v))
+    return out
+
+
+def rank_pool(events: list[dict], factors_by_id: dict, weights: dict,
+              mood_score=None, bonus_coefs: dict | None = None):
+    """两段式打分排序：BaseScore(加权) × (1 + 加分项)。
+
+    返回 [(event, factors, final_score, base_score, bonus_detail), ...] 降序。
+    mood_score 为 None（大盘情绪不可用）时加分项全为 0，退化成纯基础排序。
+    """
+    bonus_coefs = bonus_coefs or DEFAULT_BONUS
+    scored = []
+    for e in events:
+        f = factors_by_id[e["id"]]
+        base = weighted_score(f, weights)
+        detail = market_mood.mood_multiplier(
+            e, mood_score,
+            k_align=bonus_coefs.get("k_align"),
+            k_reversal=bonus_coefs.get("k_reversal"))
+        scored.append((e, f, base * detail["multiplier"], base, detail))
     scored.sort(key=lambda x: -x[2])
     return scored
 
@@ -329,15 +418,19 @@ def reweight():
     use_rel = bool(sector)
     weights = normalize_weights(weights_raw, use_rel)
 
+    bonus_coefs = resolve_bonus_coefs(body.get("bonus", {}))
+    mood = _lab_mood_score(conn_events=events)
+
     factors_by_id = {e["id"]: compute_factors(e, baseline, now, sector) for e in events}
-    scored = rank_pool(events, factors_by_id, weights)
+    scored = rank_pool(events, factors_by_id, weights, mood, bonus_coefs)
 
     prod_order = sorted(events, key=lambda e: -(e.get("importance_score") or 0))
     prod_rank = {e["id"]: i + 1 for i, e in enumerate(prod_order)}
 
     results = []
-    for rank, (e, factors, s) in enumerate(scored[:top_n], start=1):
-        card = event_card(e, factors, s, rank, prod_rank.get(e["id"]))
+    for rank, (e, factors, s, base, detail) in enumerate(scored[:top_n], start=1):
+        card = event_card(e, factors, s, rank, prod_rank.get(e["id"]),
+                          weights=weights, bonus=detail, base_score=base)
         p_rank = prod_rank.get(e["id"])
         card["rank_delta"] = (p_rank - rank) if p_rank is not None else None
         results.append(card)
@@ -350,6 +443,11 @@ def reweight():
             "rel_enabled": use_rel,
             "rel_note": REL_NOTE if use_rel else None,
             "weights_normalized": {k: round(v, 4) for k, v in weights.items()},
+            "factor_names": FACTOR_NAME,
+            "bonus_coefs": bonus_coefs,
+            "bonus_names": BONUS_NAME,
+            "bonus_note": BONUS_NOTE,
+            "mood_score": mood,
             "social_baseline": round(baseline, 1),
             "generated_at": now.isoformat(),
         },
@@ -401,16 +499,22 @@ def compare():
     factors_by_id = {e["id"]: compute_factors(e, baseline, now, sector) for e in events}
     event_by_id = {e["id"]: e for e in events}
 
-    scored_a = rank_pool(events, factors_by_id, weights_a)
-    scored_b = rank_pool(events, factors_by_id, weights_b)
+    # 两版可以各带各的加分项系数——这正是验证"加分项到底有没有用"的方式：
+    # A 版把系数调 0、B 版开着，对比换手率与升降 case 即为 A/B 对照。
+    bonus_a = resolve_bonus_coefs((body.get("version_a") or {}).get("bonus", {}))
+    bonus_b = resolve_bonus_coefs((body.get("version_b") or {}).get("bonus", {}))
+    mood = _lab_mood_score(conn_events=events)
 
-    rank_a = {e["id"]: i + 1 for i, (e, _, _) in enumerate(scored_a)}
-    rank_b = {e["id"]: i + 1 for i, (e, _, _) in enumerate(scored_b)}
-    score_a = {e["id"]: s for e, _, s in scored_a}
-    score_b = {e["id"]: s for e, _, s in scored_b}
+    scored_a = rank_pool(events, factors_by_id, weights_a, mood, bonus_a)
+    scored_b = rank_pool(events, factors_by_id, weights_b, mood, bonus_b)
 
-    top_a_ids = [e["id"] for e, _, _ in scored_a[:top_n]]
-    top_b_ids = [e["id"] for e, _, _ in scored_b[:top_n]]
+    rank_a = {e["id"]: i + 1 for i, (e, *_rest) in enumerate(scored_a)}
+    rank_b = {e["id"]: i + 1 for i, (e, *_rest) in enumerate(scored_b)}
+    score_a = {t[0]["id"]: t[2] for t in scored_a}
+    score_b = {t[0]["id"]: t[2] for t in scored_b}
+
+    top_a_ids = [t[0]["id"] for t in scored_a[:top_n]]
+    top_b_ids = [t[0]["id"] for t in scored_b[:top_n]]
     set_a, set_b = set(top_a_ids), set(top_b_ids)
     overlap = set_a & set_b
     turnover_rate = 1.0 - (len(overlap) / top_n if top_n else 0.0)

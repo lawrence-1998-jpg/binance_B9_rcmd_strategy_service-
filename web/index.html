@@ -362,6 +362,17 @@ select:focus,input:focus{outline:none;border-color:var(--indigo);box-shadow:0 0 
 .fchip button{background:none;border:0;color:var(--gold-deep);padding:0 2px;font-size:13px;line-height:1;opacity:.65}
 .fchip button:hover{opacity:1}
 
+/* ── 新闻类型 chips（2026-07-29）────────────────────────────────────── */
+.cat-chips{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 18px}
+.cat-chip{
+  display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border-radius:100px;
+  border:1px solid var(--line);background:var(--paper-1);color:var(--ink-2);
+  font-size:12.5px;font-weight:600;cursor:pointer;transition:all .15s;white-space:nowrap;
+}
+.cat-chip:hover{border-color:var(--gold-line);background:var(--gold-wash)}
+.cat-chip[aria-pressed="true"]{color:#fff;border-color:transparent;font-weight:700}
+.cat-chip .n{font-family:var(--mono);font-size:11px;opacity:.75}
+
 /* ── 大盘情绪横幅（2026-07-28）──────────────────────────────────────── */
 .mood-banner{border:1px solid;border-radius:14px;padding:16px 20px;margin-bottom:20px}
 .mood-head{display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap}
@@ -945,6 +956,10 @@ footer{border-top:1px solid var(--rule);padding:26px 0 40px;font-size:12px;color
        鼠尾草两条阶梯上取值，并按 README 的堆叠条色序 a500→a400→a300→g600→g400
        排列；Rel 只在选了板块时出现，给它一个明显区别于前五段的深赤陶 a700。 — */
   --lab-f-m:var(--lab-a500);
+  /* 2026-07-29 新增的两个因子。B（广度）借鼠尾草深色、I（冲击力）借赤陶最深色，
+     都在既有 Organic 色阶内取，不引入新色相。*/
+  --lab-f-b:var(--lab-g700);
+  --lab-f-i:var(--lab-a800);
   --lab-f-t:var(--lab-a400);
   --lab-f-h:var(--lab-a300);
   --lab-f-a:var(--lab-g600);
@@ -1155,6 +1170,65 @@ footer{border-top:1px solid var(--rule);padding:26px 0 40px;font-size:12px;color
 #panel-5 input.lb-vname:hover{border-color:var(--lab-n400);background:var(--lab-paper)}
 
 #panel-5 .lb-presets{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:14px}
+
+/* ── 基础因子 / 加分项 的分组标题（2026-07-29）─────────────────────────
+   两组滑杆的量纲完全不同，必须在视觉上分开，否则"同向加成 25"会被当成
+   "占 25% 权重"来读。加分项那条用赤陶色 + 虚线上边框做区隔。 */
+#panel-5 .lb-grouplabel{
+  font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;
+  color:var(--lab-n600);margin:2px 0 10px;
+}
+#panel-5 .lb-grouplabel.bonus{
+  margin-top:20px;padding-top:16px;border-top:1px dashed var(--lab-n400);
+  color:var(--lab-a700);
+}
+
+/* ── 结果行可展开：点标题看正文与逐因子明细 ─────────────────────────
+   Lawrence 原话「具体的内容点击后要能看见正文和每个因子对应的分数，现在不够
+   好用」。展开区不是新弹层，就长在行下面——弹层会把上下文（当前排名、位次
+   变化）盖掉，而"为什么这条排这么高"恰恰要对着排名看。 */
+#panel-5 .lb-ritem{cursor:pointer}
+#panel-5 .lb-ritem:hover{background:var(--lab-n100)}
+#panel-5 .lb-ritem .tzh::after{
+  content:"›";display:inline-block;margin-left:6px;color:var(--lab-n500);
+  transition:transform .18s ease;font-weight:700;
+}
+#panel-5 .lb-ritem.open .tzh::after{transform:rotate(90deg)}
+#panel-5 .lb-detail{
+  grid-column:1/-1;margin-top:10px;padding:14px 16px;
+  background:var(--lab-n100);border:1px solid var(--lab-n300);
+  border-radius:var(--lab-r-md);
+}
+#panel-5 .lb-detail h5{
+  font-family:var(--lab-body);font-size:11px;font-weight:700;letter-spacing:.07em;
+  text-transform:uppercase;color:var(--lab-n600);margin:0 0 7px;
+}
+#panel-5 .lb-detail .body{font-size:13.5px;line-height:1.75;color:var(--lab-n800);margin-bottom:14px}
+#panel-5 .lb-detail .body p{margin:0 0 8px}
+#panel-5 .lb-detail .body .empty{color:var(--lab-n500);font-style:italic}
+
+/* 因子明细表：原始分 + 权重 + 加权贡献。只给原始分用户还得自己心算乘权重，
+   贡献值才直接回答"这条是被哪个因子推上去的"。条形按贡献占比画。 */
+#panel-5 .lb-fgrid{display:grid;grid-template-columns:auto 1fr auto auto;gap:5px 10px;align-items:center;font-size:12.5px}
+#panel-5 .lb-fgrid .fk{font-family:var(--lab-mono);font-weight:700;color:var(--lab-n800);white-space:nowrap}
+#panel-5 .lb-fgrid .fk i{display:inline-block;width:7px;height:7px;border-radius:2px;margin-right:6px}
+#panel-5 .lb-fgrid .fbar{height:7px;border-radius:999px;background:var(--lab-n300);overflow:hidden}
+#panel-5 .lb-fgrid .fbar>i{display:block;height:100%;border-radius:999px}
+#panel-5 .lb-fgrid .fraw,#panel-5 .lb-fgrid .fcon{
+  font-family:var(--lab-mono);font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap}
+#panel-5 .lb-fgrid .fraw{color:var(--lab-n600);font-size:11.5px}
+#panel-5 .lb-fgrid .fcon{color:var(--lab-ink);font-weight:600}
+#panel-5 .lb-detail .lb-mathline{
+  margin-top:12px;padding-top:10px;border-top:1px solid var(--lab-n300);
+  font-family:var(--lab-mono);font-size:12px;color:var(--lab-n700);
+  display:flex;flex-wrap:wrap;gap:4px 10px;align-items:baseline;
+}
+#panel-5 .lb-detail .lb-mathline b{color:var(--lab-a700)}
+#panel-5 .lb-detail .lb-chips{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:12px}
+#panel-5 .lb-detail .lb-chips span{
+  font-size:11px;padding:2px 8px;border-radius:999px;
+  background:var(--lab-n200);color:var(--lab-n700);border:1px solid var(--lab-n300);
+}
 #panel-5 .lb-wrow{display:flex;flex-direction:column;gap:6px;margin-bottom:11px}
 #panel-5 .lb-wrow.disabled{opacity:.4}
 #panel-5 .lb-wtop{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:12.5px}
@@ -1501,11 +1575,11 @@ footer{border-top:1px solid var(--rule);padding:26px 0 40px;font-size:12px;color
 
 
   <div class="hero">
-    <span class="kicker"><span class="dot ok"></span>Production · 每 2 天 1 次自动运行</span>
+    <span class="kicker"><span class="dot ok"></span>Production · 每小时 1 次自动运行</span>
     <h1 class="h1-oneline">策略 API Agent：全网 crypto 新闻事件<em>挖掘、理解、排序</em></h1>
     <p class="lede">
-      七类渠道并行抓取加密货币、美股与高相关科技新闻，用 <b>gpt-5.4</b> 结构化成标准事件，
-      用 <b>text-embedding-3-small</b> 做语义去重，再经真实性校验与<b>五因子重要性打分</b>，
+      七类渠道并行抓取加密、美股/港股/日股/韩股与全球宏观新闻（A 股除外），用 <b>gpt-5.4</b> 结构化成标准事件，
+      用 <b>text-embedding-3-small</b> 做语义去重，再经真实性校验与<b>七因子重要性打分 + 两项情绪加分</b>，
       最终以两条分支输出给下游推荐场景。
     </p>
 
@@ -1557,7 +1631,7 @@ footer{border-top:1px solid var(--rule);padding:26px 0 40px;font-size:12px;color
       <h2>服务生成流程</h2>
       <p class="sub">
         左侧为数据源及其接入方式（区分「走第三方 API」与「走 RSS / HTML / 搜索等非 API 逻辑」）；
-        中段为抓取与理解；右侧分两条输出分支 —— 分支 1 不打分直出结构化事件，分支 2 追加五因子排序分。
+        中段为抓取与理解；右侧分两条输出分支 —— 分支 1 不打分直出结构化事件，分支 2 追加七因子排序分。
         底部虚线标出两个 AI 模型在各阶段的分工与协同。
       </p>
       <p class="sub" style="margin-top:8px" id="flowTimeSummary">
@@ -1799,7 +1873,7 @@ footer{border-top:1px solid var(--rule);padding:26px 0 40px;font-size:12px;color
           <rect x="952" y="330" width="168" height="84" rx="11" fill="var(--n100)" stroke="var(--g700)" stroke-width="1.4"/>
           <rect x="952" y="330" width="168" height="4" rx="2" fill="var(--g700)"/>
           <text class="nt" x="1036" y="358" text-anchor="middle">排序分</text>
-          <text class="nd" x="1036" y="375" text-anchor="middle">五因子加权 → 0–1 综合分</text>
+          <text class="nd" x="1036" y="375" text-anchor="middle">七因子加权 → 0–1 基础分</text>
           <text class="nd" x="1036" y="390" text-anchor="middle">映射 S / A / B / C / D 五级</text>
           <circle cx="1108" cy="352" r="4.5" fill="var(--g400)"/>
           <path d="M1120 372 C1146 372, 1146 300, 1172 300 L1172 262"
@@ -1828,7 +1902,7 @@ footer{border-top:1px solid var(--rule);padding:26px 0 40px;font-size:12px;color
           <rect x="470" y="556" width="234" height="76" rx="12" fill="var(--n100)" stroke="var(--g400)" stroke-width="1.4" stroke-dasharray="5 3"/>
           <text class="nt" x="587" y="582" text-anchor="middle" fill="var(--g700)">gpt-5.4</text>
           <text class="nd" x="587" y="599" text-anchor="middle">语言理解 · 抽取 · 判断</text>
-          <text class="nd" x="587" y="616" text-anchor="middle">承担 ① 结构化、④ 校验、五因子评分</text>
+          <text class="nd" x="587" y="616" text-anchor="middle">承担 ① 结构化、④ 校验、七因子评分</text>
 
           <!-- 模型 B -->
           <rect x="752" y="556" width="234" height="76" rx="12" fill="var(--n100)" stroke="var(--g700)" stroke-width="1.4" stroke-dasharray="5 3"/>
@@ -2001,6 +2075,10 @@ footer{border-top:1px solid var(--rule);padding:26px 0 40px;font-size:12px;color
        用户进这个 tab 第一眼看到的东西，而不是滚动到表格里才慢慢品出来。 -->
   <div id="moodBanner" style="display:none"></div>
 
+  <!-- 新闻类型 chip 条（2026-07-29）。Lawrence 要的「一套独立的新闻类型标签」，
+       做成显眼的一键切换而不是藏在下拉里——下拉框保留并与之双向同步。 -->
+  <div class="cat-chips" id="catChips" role="group" aria-label="新闻类型筛选"></div>
+
   <div class="sec-head" id="sec-view" style="display:flex;align-items:flex-end;gap:24px;flex-wrap:wrap">
     <div style="flex:1;min-width:260px">
       <span class="eyebrow">Data</span>
@@ -2023,8 +2101,8 @@ footer{border-top:1px solid var(--rule);padding:26px 0 40px;font-size:12px;color
         <select id="f-tier"><option value="">全部级别</option><option value="S">S · 极重大</option><option value="A">A · 重大</option><option value="B">B · 重要</option><option value="C">C · 一般</option><option value="D">D · 次要</option></select></div>
       <div class="field"><label for="f-type">新闻类型 Type</label>
         <select id="f-type"><option value="">全部类型</option><option value="macro">macro · 宏观</option><option value="policy">policy · 政策监管</option><option value="market">market · 市场行情</option><option value="project">project · 项目动态</option><option value="security">security · 安全事件</option><option value="other">other · 其他</option></select></div>
-      <div class="field"><label for="f-market">市场 Market</label>
-        <select id="f-market"><option value="">全部市场</option><option value="crypto">🪙 加密</option><option value="us_stock">🇺🇸 美股</option><option value="hk_stock">🇭🇰 港股</option><option value="jp_stock">🇯🇵 日股</option><option value="kr_stock">🇰🇷 韩股</option><option value="macro_policy">🌍 宏观政策</option><option value="general">综合</option></select></div>
+      <div class="field"><label for="f-market">新闻类型 Category</label>
+        <select id="f-market"><option value="">全部类型</option><option value="crypto">🪙 加密</option><option value="us_stock">🇺🇸 美股</option><option value="hk_stock">🇭🇰 港股</option><option value="jp_stock">🇯🇵 日股</option><option value="kr_stock">🇰🇷 韩股</option><option value="macro_policy">🌍 经济政策</option><option value="social_signal">📡 社会信号</option><option value="general">◆ 综合</option></select></div>
       <div class="field"><label for="f-rumor">是否谣言 Rumor</label>
         <select id="f-rumor"><option value="">不限</option><option value="0">仅非谣言</option><option value="1">仅谣言标记</option></select></div>
       <div class="field"><label for="f-source">信源 Source</label><select id="f-source"><option value="">全部信源</option></select></div>
@@ -2057,7 +2135,7 @@ footer{border-top:1px solid var(--rule);padding:26px 0 40px;font-size:12px;color
         <tbody id="tbody"></tbody>
       </table>
     </div>
-    <p style="font-size:12px;color:var(--ink-4);margin-top:12px">点击任意行展开完整摘要、五因子明细、真实性判定与原文链接。</p>
+    <p style="font-size:12px;color:var(--ink-4);margin-top:12px">点击任意行展开完整摘要、七因子明细、真实性判定与原文链接。</p>
   </div>
 
   <!-- App 模拟器视图 -->
@@ -2639,7 +2717,7 @@ footer{border-top:1px solid var(--rule);padding:26px 0 40px;font-size:12px;color
       你也可以配置两组权重方案做正面对比，自动得到换手率、具体的上升/下降 case，以及一段规则生成的变化总结。
     </p>
     <!-- 两条公式对应 skill 里两个**结构不同**的场景，不是同一条公式的开关：
-         Macro Insight 是纯五因子加权；Sector Insight 把相关性做成「硬门 + 外层
+         Macro Insight 是纯七因子加权；Sector Insight 把相关性做成「硬门 + 外层
          乘子」（Rel<0.5 直接判 0，其余按 Rel^1.5 锐化），内层权重也不一样。
          默认选 Macro（无相关性），选板块时自动切到 Sector。 -->
     <div class="lb-formula-switch" role="tablist" aria-label="打分公式">
@@ -2652,7 +2730,7 @@ footer{border-top:1px solid var(--rule);padding:26px 0 40px;font-size:12px;color
     </div>
     <div class="lb-formula" id="lbFormulaMacroBody">
       Score = <b>M</b>·影响面 + <b>T</b>·时效性 + <b>H</b>·热度 + <b>A</b>·权威性 + <b>Q</b>·质量
-      <span class="lb-dim">（五因子加权，权重合计 100%）</span>
+      <span class="lb-dim">（七因子加权，权重合计 100%；加分项另计）</span>
     </div>
     <div class="lb-formula" id="lbFormulaSectorBody" hidden>
       <span class="lb-dim">前置硬门：</span>若 <b>Rel</b> &lt; 0.5 → Score = <b>0</b><span class="lb-dim">（直接淘汰）</span><br>
@@ -2735,12 +2813,25 @@ footer{border-top:1px solid var(--rule);padding:26px 0 40px;font-size:12px;color
             <button class="lb-btn sm" type="button" data-preset="timeliness">时效优先</button>
             <button class="lb-btn sm" type="button" data-preset="authority">权威优先</button>
             <button class="lb-btn sm" type="button" data-preset="hotness">热度优先</button>
+            <button class="lb-btn sm" type="button" data-preset="breadth">广度优先</button>
+            <button class="lb-btn sm" type="button" data-preset="punch">冲击力优先</button>
             <button class="lb-btn sm" type="button" data-preset="relevance">相关性优先</button>
           </div>
+          <div class="lb-grouplabel">基础因子 · 归一化为合计 100%</div>
           <div id="wpanel-single"></div>
           <div class="lb-stack" id="wstack-single"></div>
           <div class="lb-legend" id="wlegend-single"></div>
           <p class="lb-hint">权重不需要自己凑够 100% —— 系统会按当前滑块比例自动归一化。</p>
+
+          <!-- 加分项与基础因子在视觉上分开：不同的量纲（上限% vs 权重份额）、
+               不同的作用方式（外层倍率 vs 加权求和），放在一起会被误读。 -->
+          <div class="lb-grouplabel bonus">加分项 · 外层倍率，不参与归一化</div>
+          <div id="bpanel-single"></div>
+          <p class="lb-hint" id="bonusHint">
+            最终分 = 基础分 × (1 + 同向 + 反转)，两项合计封顶 +50%。
+            <b>同向</b>让首屏跟着大盘氛围走；<b>反转</b>专门把「与大盘反向的重大事件」顶上来，
+            只对 S/A 档生效，防止大盘单边时首屏变成回音室。两个都调 0 即退回纯基础排序。
+          </p>
         </div>
         <div class="lb-card">
           <div class="lb-phead">
@@ -2887,12 +2978,25 @@ footer{border-top:1px solid var(--rule);padding:26px 0 40px;font-size:12px;color
 <div role="tabpanel" id="panel-7" aria-labelledby="tab-7" hidden>
 <div class="p7">
 
+  <!-- ⓪ 流水线监控看板（2026-07-29 新增）-->
+  <section class="p7-sec" id="p7-monitor" aria-labelledby="p7-monitor-h">
+    <span class="p7-eyebrow">Pipeline Monitor</span>
+    <h1 class="p7-h1" id="p7-monitor-h">流水线监控</h1>
+    <p class="p7-lead">
+      抓进来多少、处理得多快、入库多少、其中真正有效（S/A 档）多少 —— 分整体 / 加密 / 非加密三档。
+      失败率与最老待处理条目的等待时长也在这里：2026-07-29 凌晨个人 OpenAI key 被吊销时，
+      前端一切正常、日志里全是 401，没有任何地方能一眼看出流水线其实断了，这个看板就是补这个缺口。
+      <button class="btn sm" id="pmRefresh" type="button" style="margin-left:10px">刷新</button>
+    </p>
+    <div id="pmBody"><div class="p7-lead" style="opacity:.6">加载中…</div></div>
+  </section>
+
   <!-- ① 项目与代码访问 -->
   <section class="p7-sec" id="p7-project" aria-labelledby="p7-project-h">
     <span class="p7-eyebrow">Project &amp; Code Access</span>
     <h1 class="p7-h1" id="p7-project-h">开发者资讯</h1>
     <p class="p7-lead">
-      B9 推荐策略服务：从多信源抓取加密新闻，经结构化抽取、去重合并、真实性校验与五因子打分，
+      B9 推荐策略服务：从多信源抓取加密新闻，经结构化抽取、去重合并、真实性校验与七因子打分，
       产出可直接接入的排序结果。整套流水线每 2 天定时跑一轮，结果通过 03 tab 的只读 API 对外提供。
     </p>
 
@@ -3193,7 +3297,7 @@ var STEPS = [
   ["04","语义聚合去重","256 维 embedding 计算余弦相似度，cosine ≥ 0.82 判为同一事件并入同簇","cosine ≥ 0.82"],
   ["05","跨轮归并","写库前与历史事件比对指纹与向量，命中则合并信源、更新分数，而非新增行","写库前拦截"],
   ["06","真实性校验","按独立信源数量与权威度交叉判定，输出 VERIFIED / PROBABLE / UNVERIFIED / DISPUTED","误判率 3.3%"],
-  ["07","五因子打分","影响面 / 时效 / 热度 / 权威 / 质量加权求和，映射为 S/A/B/C/D 事件级别","分支 2 专用"],
+  ["07","七因子打分","影响面 / 广度 / 时效 / 冲击力 / 热度 / 权威 / 质量加权求和，映射为 S/A/B/C/D 事件级别","分支 2 专用"],
   ["08","入库 & 服务","落 MySQL news_events，Flask REST API 对外提供查询与筛选","MySQL + REST"]
 ];
 
@@ -3319,7 +3423,9 @@ function showTab(n){
   // Tab 5 内部 id 沿用 panel-5，展示的 idx 是「06」（05 是外链的策略实验室）。
   [1,2,3,4,5,6,7].forEach(function(i){ var el=$("#panel-"+i); if(el) el.hidden=(i!==n); });
   if(location.hash!=="#tab"+n) history.replaceState(null,"","#tab"+n);
-  var loader=({1:loadFlow,2:loadData,3:loadApi,6:(typeof loadHistory==="function"?loadHistory:null)})[n];
+  var loader=({1:loadFlow,2:loadData,3:loadApi,
+               6:(typeof loadHistory==="function"?loadHistory:null),
+               7:loadPipelineMonitor})[n];
   if(loader&&!loaded[n]){ loaded[n]=true; loader(); }
   track("tab_switch",{tab:n});
   window.scrollTo({top:0,behavior:"smooth"});
@@ -3854,10 +3960,15 @@ var FID={run_at:"#f-run",sector:"#f-sector",event_tier:"#f-tier",
 // 主体），只给非 crypto 的几个市场配色区分度更高的徽标，一眼能看出"这条不是
 // 币圈新闻"——这正是本次改造要的效果：混排里一眼分得出市场，但又不分裂成两个列表。
 var MARKET_BADGE={
+  crypto:{e:"🪙",t:"加密",c:"#B8860B"},
   us_stock:{e:"🇺🇸",t:"美股",c:"#2E7D32"}, hk_stock:{e:"🇭🇰",t:"港股",c:"#C62828"},
   jp_stock:{e:"🇯🇵",t:"日股",c:"#AD1457"}, kr_stock:{e:"🇰🇷",t:"韩股",c:"#1565C0"},
-  macro_policy:{e:"🌍",t:"宏观政策",c:"#6A1B9A"}, general:{e:"◆",t:"综合",c:"#455A64"},
+  macro_policy:{e:"🌍",t:"经济政策",c:"#6A1B9A"},
+  social_signal:{e:"📡",t:"社会信号",c:"#00695C"},
+  general:{e:"◆",t:"综合",c:"#455A64"},
 };
+// 类型 chip 条的展示顺序（与下拉框一致，但 chips 更显眼、一键切换）
+var CATEGORY_ORDER=["","crypto","us_stock","jp_stock","kr_stock","hk_stock","macro_policy","social_signal","general"];
 function marketBadge(scope){
   var b=MARKET_BADGE[scope];
   if(!b) return "";
@@ -3877,6 +3988,97 @@ function fmtRunNode(ts){
   var d=s.slice(0,10), hh=s.slice(11,13);
   return d+" "+hh+":00 · "+(hh==="08"?"早间轮":"晚间轮");
 }
+// counts 由 /api/pipeline-monitor 的 by_scope_7d 提供（那接口本来就统计了这份
+// 数据），不为 chips 单独再打一次 /api/news——切换类型时其它 chip 的数字还得是
+// 全量分布，用当前页结果统计会全变成 0。
+function renderPipelineMonitor(d){
+  var box=$("#pmBody"); if(!box) return;
+  var st=d.staging||{}, tp=d.throughput||{}, so=d.stored||{}, fc=d.factor_coverage||{};
+  function bucketRow(label,b){
+    b=b||{};
+    var rate=b.effective_rate!=null?(b.effective_rate*100).toFixed(1)+"%":"—";
+    return '<tr><td><b>'+label+'</b></td><td>'+nf(b.total||0)+'</td><td>'+nf(b.effective_sa||0)+
+           '</td><td>'+rate+'</td><td>'+nf(b.recent_7d||0)+'</td><td>'+nf(b.recent_7d_sa||0)+'</td></tr>';
+  }
+  var failRate=tp.failure_rate!=null?(tp.failure_rate*100).toFixed(0)+"%":"—";
+  var failBad=(tp.failure_rate||0)>0.2;
+  var oldest=st.oldest_unconsumed_hours;
+  var oldBad=Number(oldest)>12;
+
+  box.innerHTML=
+   '<div class="p7-kpis">'+
+     '<div class="p7-kpi"><div class="p7-kpi-k">24h 抓取</div><div class="p7-kpi-v">'+nf(st.fetched_24h||0)+'</div></div>'+
+     '<div class="p7-kpi"><div class="p7-kpi-k">待处理积压</div><div class="p7-kpi-v">'+nf(st.unconsumed||0)+'</div></div>'+
+     '<div class="p7-kpi"><div class="p7-kpi-k">处理速度</div><div class="p7-kpi-v">'+(tp.avg_events_per_run||0)+' <span style="font-size:12px">事件/轮</span></div></div>'+
+     '<div class="p7-kpi"><div class="p7-kpi-k">最老待处理</div><div class="p7-kpi-v"'+(oldBad?' style="color:var(--red)"':'')+'>'+(oldest!=null?oldest+'h':'—')+'</div></div>'+
+     '<div class="p7-kpi"><div class="p7-kpi-k">近6轮失败率</div><div class="p7-kpi-v"'+(failBad?' style="color:var(--red)"':'')+'>'+failRate+'</div></div>'+
+   '</div>'+
+   '<h3 class="p7-h3" style="margin-top:22px">入库量与有效量（S/A 档）</h3>'+
+   '<div class="p7-tablewrap"><table class="p7-table"><thead><tr>'+
+     '<th>口径</th><th>累计入库</th><th>有效(S+A)</th><th>有效率</th><th>近7天</th><th>近7天有效</th>'+
+   '</tr></thead><tbody>'+
+     bucketRow("整体",so.overall)+bucketRow("加密",so.crypto)+bucketRow("非加密",so.non_crypto)+
+   '</tbody></table></div>'+
+   '<h3 class="p7-h3" style="margin-top:22px">待处理积压 · 按优先级</h3>'+
+   '<div class="p7-tablewrap"><table class="p7-table"><thead><tr><th>优先级</th><th>积压条数</th></tr></thead><tbody>'+
+     (st.backlog_by_priority||[]).map(function(x){
+       return '<tr><td>'+esc(x.label)+'</td><td>'+nf(x.count)+'</td></tr>';}).join("")+
+   '</tbody></table></div>'+
+   '<h3 class="p7-h3" style="margin-top:22px">近 6 轮运行</h3>'+
+   '<div class="p7-tablewrap"><table class="p7-table"><thead><tr>'+
+     '<th>时间</th><th>状态</th><th>事件数</th><th>耗时</th><th>事件/分钟</th></tr></thead><tbody>'+
+     (tp.recent_runs||[]).map(function(r){
+       var ok=r.status==="success";
+       return '<tr><td>'+esc(String(r.started_at).replace("T"," ").slice(5,16))+'</td>'+
+         '<td'+(ok?'':' style="color:var(--red);font-weight:700"')+'>'+esc(r.status)+'</td>'+
+         '<td>'+nf(r.events)+'</td><td>'+Math.round(r.duration_s)+'s</td><td>'+r.events_per_min+'</td></tr>';
+     }).join("")+
+   '</tbody></table></div>'+
+   '<p class="p7-lead" style="margin-top:16px;font-size:12px;opacity:.75">'+
+     '新因子覆盖率：广度标签 '+nf(fc.breadth_tagged||0)+'/'+nf(fc.total||0)+
+     '（'+((fc.breadth_pct||0)*100).toFixed(1)+'%）· 冲击力分 '+nf(fc.punch_scored||0)+
+     '（'+((fc.punch_pct||0)*100).toFixed(1)+'%）。存量事件是改造前入库的，没有这两个字段；'+
+     '覆盖率会随每轮新处理的内容逐步上升，这也是判断改造是否真正生效的直接指标。</p>';
+}
+
+document.addEventListener("click",function(e){
+  if(e.target&&e.target.id==="pmRefresh") loadPipelineMonitor();
+});
+
+function loadPipelineMonitor(){
+  var box=$("#pmBody"); if(box) box.innerHTML='<div class="p7-lead" style="opacity:.6">加载中…</div>';
+  apiGet("/api/pipeline-monitor",{}).then(renderPipelineMonitor).catch(function(e){
+    if(box) box.innerHTML='<div class="p7-lead" style="color:var(--red)">监控数据加载失败：'+esc(e&&e.message||"")+'</div>';
+  });
+}
+
+function loadCategoryCounts(){
+  apiGet("/api/pipeline-monitor",{}).then(function(d){
+    var c={}; var total=0;
+    (d.stored&&d.stored.by_scope_7d||[]).forEach(function(x){ c[x.scope]=x.count; total+=x.count; });
+    c[""]=total; state.catCounts=c; renderCategoryChips(c);
+  }).catch(function(e){ console.warn("类型计数加载失败（不影响筛选）：",e&&e.message); });
+}
+
+function renderCategoryChips(counts){
+  var box=$("#catChips"); if(!box) return;
+  var cur=$("#f-market").value;
+  box.innerHTML=CATEGORY_ORDER.map(function(k){
+    var b=MARKET_BADGE[k];
+    var label=k===""?"全部":((b?b.e+" ":"")+(b?b.t:k));
+    var n=counts&&counts[k]!=null?' <span class="n">'+counts[k]+'</span>':'';
+    var on=(cur===k);
+    var style=on?('background:'+(b?b.c:'var(--ink-1)')+';'):'';
+    return '<button type="button" class="cat-chip" data-cat="'+k+'" aria-pressed="'+on+'" style="'+style+'">'+label+n+'</button>';
+  }).join("");
+  $$("[data-cat]",box).forEach(function(btn){
+    btn.addEventListener("click",function(){
+      $("#f-market").value=btn.getAttribute("data-cat");
+      state.offset=0; fetchRows();
+    });
+  });
+}
+
 function renderActiveFilters(f){
   var box=$("#activeFilters");
   var keys=Object.keys(f).filter(function(k){return f[k]!=="";});
@@ -3898,6 +4100,7 @@ function fetchRows(){
   state.limit=Number($("#f-limit").value);
   var params=Object.assign({},f,{limit:state.limit,offset:state.offset,sort:$("#f-sort").value});
   renderActiveFilters(f);
+  renderCategoryChips(state.catCounts);
   $("#tbody").innerHTML='<tr><td colspan="7"><div class="state"><div class="ic">◌</div>'+
     '<div class="ti">正在查询…</div><div class="ds">GET /api/news · '+esc(qs(params))+'</div></div></td></tr>';
   $("#phFeed").innerHTML='<div class="ph-empty">正在加载…</div>';
@@ -3946,7 +4149,9 @@ function renderRows(){
     var g=fmtTime(r.time_get_data||r.time_event);
     var secs=(r.sectors||[]).slice(0,3).map(function(s){return '<span class="tag">'+esc(s)+'</span>';}).join("");
     var coins=(r.coins||[]).slice(0,4).map(function(c){return '<span class="tag coin">'+esc(c)+'</span>';}).join("");
-    if(!secs&&!coins) secs='<span class="tag neu">未标注</span>';
+    // 非加密事件没有加密板块标签是**正常**的，此前一律显示"未标注"看起来像漏标。
+    // 现在：有类型徽标的就靠徽标表达，真正什么都没有的才叫未标注。
+    if(!secs&&!coins&&!MARKET_BADGE[r.market_scope]) secs='<span class="tag neu">未标注</span>';
     var srcs=r.source_names||[], srcTx=srcs.slice(0,2).map(esc).join("、");
     if(srcs.length>2) srcTx+=' <span class="more">+'+(srcs.length-2)+'</span>';
     if(!srcs.length) srcTx='<span class="more">—</span>';
@@ -4069,7 +4274,7 @@ function toggleDetail(tr,r){
     (r.is_rumor?'<div class="rumor-box"><b>⚠ 谣言标记</b> —— '+esc(r.rumor_reason||"可信度校验未通过，下游建议过滤或降权。")+'</div>':"")+
     tagsH+
     '</div><div>'+
-    '<div class="d-sec"><div class="d-h">五因子明细</div>'+fH+
+    '<div class="d-sec"><div class="d-h">七因子明细</div>'+fH+
       '<div class="mini-f" style="margin-top:10px;border-top:1px solid var(--rule);padding-top:10px">'+
       '<div class="mn" style="color:var(--gold-deep);font-weight:600">综合分</div><div class="bar"><i style="width:'+
       Math.round((r.importance_score||0)*100)+'%"></i></div><div class="mv" style="color:var(--gold-deep);font-weight:600">'+
@@ -4255,6 +4460,7 @@ function loadData(){
   });
   fetchRows();
   fetchMood();
+  loadCategoryCounts();
 }
 
 // 大盘情绪横幅：GET /api/market-mood 一次，渲染成横幅。5 分钟服务端缓存
@@ -4341,7 +4547,7 @@ var DICT=[
   ["news_type","enum","macro / policy / market / project / security / other"],
   ["event_tier","enum","S / A / B / C / D 五级，由 importance_score 映射"],
   ["__grp__","打分（分支 2）",""],
-  ["importance_score","float 0–1","五因子加权综合分，排序主键"],
+  ["importance_score","float 0–1","七因子加权基础分，排序主键（情绪加分项在查询时外层生效，不写回此字段）"],
   ["score_market_impact","float 0–1","M · 影响面，权重 0.35"],
   ["score_timeliness","float 0–1","T · 时效，24h 半衰期衰减，权重 0.20"],
   ["score_hotness","float 0–1","H · 热度，社交互动 + 多源交叉，权重 0.15"],
@@ -6035,22 +6241,37 @@ var SECTORS = ["New Listing","bStocks","Seed","tCommodities","BSC","DeFi","Gamin
   "Layer1/Layer2","Launchpad","Payments","Monitoring","RWA","Solana","Fan Token",
   "Infrastructure","AI","Launchpool","Megadrop","MEME"];
 
-/* 因子色不再写死十六进制，指向 #panel-5 作用域里的 --lab-f-* 变量（见样式段）。*/
+/* 因子色不再写死十六进制，指向 #panel-5 作用域里的 --lab-f-* 变量（见样式段）。
+   2026-07-29：从六因子扩到八因子——新增 B（广度）与 I（冲击力），顺序与后端
+   api/lab_tools.py 的 FACTOR_KEYS 严格一致，两边错位会让滑杆和实际权重对不上。*/
 var FACTORS = [
   {k:"M",   name:"影响面", sub:"Impact",     color:"var(--lab-f-m)"},
+  {k:"B",   name:"广度",   sub:"Breadth",    color:"var(--lab-f-b)"},
   {k:"T",   name:"时效性", sub:"Timeliness", color:"var(--lab-f-t)"},
+  {k:"I",   name:"冲击力", sub:"Punch",      color:"var(--lab-f-i)"},
   {k:"H",   name:"热度",   sub:"Hotness",    color:"var(--lab-f-h)"},
   {k:"A",   name:"权威性", sub:"Authority",  color:"var(--lab-f-a)"},
   {k:"Q",   name:"质量",   sub:"Quality",    color:"var(--lab-f-q)"},
   {k:"Rel", name:"相关性", sub:"Relevance",  color:"var(--lab-f-rel)"}
 ];
 
+/* 加分项。**刻意与 FACTORS 分开**：它们不参与权重归一化，是作用在基础分之上的
+   外层倍率 (1 + 同向 + 反转)，合计封顶 +50%。混在一起会让人以为"把同向拉到
+   100% 就没别的因子了"——完全不是那么回事。单位是百分比上限，不是权重份额。*/
+var BONUSES = [
+  {k:"k_align",    name:"情绪同向加成", sub:"Align",    max:50, color:"var(--lab-f-i)"},
+  {k:"k_reversal", name:"反转信号加成", sub:"Reversal", max:50, color:"var(--lab-f-a)"}
+];
+var DEFAULT_BONUS = {k_align:25, k_reversal:20};
+
 var PRESETS = {
-  default:    {M:35, T:20, H:15, A:15, Q:15, Rel:0},
-  timeliness: {M:10, T:65, H:10, A:10, Q:5,  Rel:0},
-  authority:  {M:10, T:10, H:10, A:65, Q:5,  Rel:0},
-  hotness:    {M:10, T:10, H:65, A:10, Q:5,  Rel:0},
-  relevance:  {M:15, T:15, H:10, A:10, Q:5,  Rel:45}
+  default:    {M:26, B:16, T:16, I:14, H:10, A:10, Q:8,  Rel:0},
+  timeliness: {M:10, B:5,  T:60, I:5,  H:10, A:5,  Q:5,  Rel:0},
+  authority:  {M:10, B:5,  T:10, I:5,  H:10, A:55, Q:5,  Rel:0},
+  hotness:    {M:10, B:5,  T:10, I:5,  H:60, A:5,  Q:5,  Rel:0},
+  breadth:    {M:15, B:50, T:10, I:10, H:5,  A:5,  Q:5,  Rel:0},
+  punch:      {M:15, B:10, T:10, I:50, H:5,  A:5,  Q:5,  Rel:0},
+  relevance:  {M:15, B:10, T:10, I:5,  H:5,  A:5,  Q:5,  Rel:45}
 };
 
 function api(path, body){
@@ -6178,6 +6399,60 @@ Panel.prototype.refresh = function(){
 };
 Panel.prototype.rawWeights = function(){ return Object.assign({}, this.values); };
 
+/* ══════════════════════════════════════════════════════════════════════════
+   加分项面板（2026-07-29）—— 与 Panel 分开实现，不是复用
+   ══════════════════════════════════════════════════════════════════════════
+   为什么不复用 Panel：Panel 的核心行为是"归一化到 100%"，而加分项恰恰**不**
+   归一化——它们是两个独立的倍率上限，各自 0-50%，互不挤占。把它们塞进 Panel
+   会让"拖高同向 → 其它因子被稀释"这种完全错误的反馈出现在界面上。
+   界面上显示的是百分数（25 = 最多 +25%），发给后端的是小数（0.25）。 */
+function BonusPanel(version, initial){
+  this.version = version;
+  this.values = Object.assign({}, initial);
+  this.container = $("#bpanel-" + version);
+  this.build();
+}
+BonusPanel.prototype.build = function(){
+  var self = this;
+  if (!this.container) return;
+  this.container.innerHTML = BONUSES.map(function(b){
+    return (
+      '<div class="lb-wrow" data-k="' + b.k + '">' +
+        '<div class="lb-wtop">' +
+          '<span class="lb-wl"><span class="sw" style="background:' + b.color + '"></span>' + b.name +
+            '<span class="sub">' + b.sub + '</span></span>' +
+          '<span class="lb-wv" data-k="' + b.k + '">0<span class="u">%</span></span>' +
+        '</div>' +
+        '<input type="range" min="0" max="' + b.max + '" value="' + self.values[b.k] +
+          '" data-k="' + b.k + '" aria-label="' + b.name + ' 上限">' +
+      '</div>'
+    );
+  }).join("");
+  Array.prototype.slice.call(this.container.querySelectorAll("input[type=range]")).forEach(function(inp){
+    inp.addEventListener("input", function(){
+      self.values[inp.dataset.k] = parseInt(inp.value, 10);
+      self.refresh();
+      onWeightsChanged(self.version);
+    });
+  });
+  this.refresh();
+};
+BonusPanel.prototype.refresh = function(){
+  var self = this;
+  if (!this.container) return;
+  BONUSES.forEach(function(b){
+    var el = self.container.querySelector('.lb-wv[data-k="' + b.k + '"]');
+    if (el) el.innerHTML = "+" + self.values[b.k] + '<span class="u">%</span>';
+  });
+};
+/* 后端 resolve_bonus_coefs 收的是 0-1 小数系数，界面上是百分数上限，这里转换。*/
+BonusPanel.prototype.coefs = function(){
+  var out = {};
+  var self = this;
+  BONUSES.forEach(function(b){ out[b.k] = self.values[b.k] / 100; });
+  return out;
+};
+
 function currentSector(){ return $("#labFSector").value || null; }
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -6196,7 +6471,7 @@ function showLabPane(n){
 /* ══════════════════════════════════════════════════════════════════════════
    Init
    ══════════════════════════════════════════════════════════════════════════ */
-var panelSingle, panelA, panelB;
+var panelSingle, panelA, panelB, bonusSingle;
 var debounceTimers = {};
 
 function init(){
@@ -6209,6 +6484,7 @@ function init(){
   panelSingle = new Panel("single", PRESETS.default);
   panelA = new Panel("a", PRESETS.authority);
   panelB = new Panel("b", PRESETS.timeliness);
+  bonusSingle = new BonusPanel("single", DEFAULT_BONUS);
 
   $all(".lb-presets").forEach(function(group){
     group.addEventListener("click", function(e){
@@ -6269,6 +6545,8 @@ function init(){
     saveLabResult("lab_ab_compare", lastCompareResult, "compareSaveBtn", "compareSaveLabel", "compareSaveMsg");
   });
 
+  bindDetailToggle();
+
   track("page_view", {});
   runReweight();
   runCompare();
@@ -6319,6 +6597,104 @@ function factorLine(factors){
   return FACTORS.filter(function(f){ return f.k !== "Rel" || factors.Rel !== undefined; })
     .map(function(f){ return f.k + " " + (factors[f.k]!==undefined? factors[f.k].toFixed(2):"–"); }).join("  ");
 }
+
+/* ── 展开区：正文 + 逐因子明细 ────────────────────────────────────────
+   三块内容，回答的是三个不同的问题：
+     1. 标签行 —— 这是条什么新闻（类型/广度/幅度/情绪）
+     2. 正文   —— 内容到底讲了什么（此前只有标题，判断不了排名是否合理）
+     3. 因子表 —— 这个分是怎么来的，被哪个因子推上去的
+   因子表给三列：原始分、权重、加权贡献。条形按**贡献占基础分的比例**画，
+   所以一眼能看出主导因子；只画原始分的话，一个 0.9 分但权重 8% 的因子会
+   显得比 0.5 分权重 26% 的因子更重要，那是误导。 */
+var SCOPE_LABEL_LAB = {
+  crypto:"加密", us_stock:"美股", hk_stock:"港股", jp_stock:"日股", kr_stock:"韩股",
+  macro_policy:"经济政策", social_signal:"社会信号", general:"综合"
+};
+var BREADTH_LABEL_LAB = {
+  cross_market:"跨市场", market_index:"大盘指数", sector:"板块",
+  multi_asset:"多资产", single_asset:"单一标的"
+};
+
+function detailHTML(r, weights){
+  var factors = r.factors || {};
+  var contrib = r.contributions || {};
+  var base = r.base_score || 0;
+
+  var chips = [];
+  if (r.market_scope) chips.push(SCOPE_LABEL_LAB[r.market_scope] || r.market_scope);
+  if (r.breadth_level) chips.push("广度：" + (BREADTH_LABEL_LAB[r.breadth_level] || r.breadth_level));
+  if (r.punch_magnitude_pct !== null && r.punch_magnitude_pct !== undefined)
+    chips.push("幅度 " + r.punch_magnitude_pct + "%");
+  if (r.sentiment_score !== null && r.sentiment_score !== undefined)
+    chips.push("情绪 " + (r.sentiment_score > 0 ? "+" : "") + r.sentiment_score.toFixed(2));
+  if (r.source_count) chips.push(r.source_count + " 个信源");
+
+  var body = r.description_long_zh || r.description_short_zh;
+
+  // 贡献的最大值用来定条形满宽，比用固定 1.0 更能拉开差距
+  var maxContrib = Math.max.apply(null, FACTORS.map(function(f){
+    return Math.abs(contrib[f.k] || 0); }).concat([0.0001]));
+
+  var rows = FACTORS.filter(function(f){
+    return factors[f.k] !== undefined && (f.k !== "Rel" || factors.Rel > 0);
+  }).map(function(f){
+    var raw = factors[f.k], c = contrib[f.k] || 0, w = (weights && weights[f.k]) || 0;
+    return (
+      '<div class="fk"><i style="background:' + f.color + '"></i>' + f.k + ' ' + f.name + '</div>' +
+      '<div class="fbar"><i style="width:' + (Math.abs(c)/maxContrib*100).toFixed(1) + '%;background:' + f.color + '"></i></div>' +
+      '<div class="fraw">' + raw.toFixed(3) + ' × ' + (w*100).toFixed(0) + '%</div>' +
+      '<div class="fcon">' + c.toFixed(4) + '</div>'
+    );
+  }).join("");
+
+  var b = r.bonus || {};
+  var mathline =
+    '<div class="lb-mathline">' +
+      '<span>基础分 <b>' + base.toFixed(4) + '</b></span>' +
+      '<span>× (1 + 同向 ' + (b.sentiment_align || 0).toFixed(3) +
+        ' + 反转 ' + (b.reversal || 0).toFixed(3) + ')</span>' +
+      '<span>= 最终分 <b>' + (r.score !== undefined ? r.score.toFixed(4) : "–") + '</b></span>' +
+      ((b.total_bonus || 0) > 0 ? '<span>（加成 +' + ((b.total_bonus||0)*100).toFixed(1) + '%）</span>' : '') +
+    '</div>';
+
+  return (
+    '<div class="lb-detail">' +
+      (chips.length ? '<div class="lb-chips">' + chips.map(function(c){
+        return '<span>' + esc(c) + '</span>'; }).join("") + '</div>' : '') +
+      '<h5>正文</h5>' +
+      '<div class="body">' + (body
+        ? '<p>' + esc(body) + '</p>'
+        : '<p class="empty">这条事件入库时没有生成正文摘要。</p>') + '</div>' +
+      '<h5>因子明细（原始分 × 权重 = 加权贡献）</h5>' +
+      '<div class="lb-fgrid">' + rows + '</div>' +
+      mathline +
+    '</div>'
+  );
+}
+
+/* 事件委托绑在列表容器上，而不是每行一个 listener：重排是全量重绘 innerHTML，
+   逐行绑定会在每次拖滑块后重新绑几十个 handler。委托只绑一次（init 里）。
+
+   数据从**模块级变量**读，不从闭包捕获：拖一次滑块整个结果集就换了一批，
+   闭包里捕获的是绑定那一刻的旧结果，展开会显示上一版的分数——这种 bug 在
+   界面上完全看不出来（数字是"合理"的，只是不是当前这版）。 */
+var singleById = {}, singleWeights = {};
+
+function bindDetailToggle(){
+  var containerEl = $("#singleResults");
+  if (!containerEl) return;
+  containerEl.addEventListener("click", function(e){
+    var item = e.target.closest(".lb-ritem");
+    if (!item) return;
+    var existing = item.querySelector(".lb-detail");
+    if (existing){ existing.remove(); item.classList.remove("open"); return; }
+    var r = singleById[item.dataset.eid];
+    if (!r) return;
+    item.insertAdjacentHTML("beforeend", detailHTML(r, singleWeights));
+    item.classList.add("open");
+    track("lab_detail_open", {event_id: item.dataset.eid});
+  });
+}
 function sourcesLine(names){
   names = names || [];
   if (!names.length) return "无信源标注";
@@ -6333,23 +6709,36 @@ var reweightSeq = 0;
 function runReweight(){
   var el = $("#singleResults");
   var seq = ++reweightSeq;
-  var body = Object.assign(baseParams(), { weights: panelSingle.rawWeights() });
+  var body = Object.assign(baseParams(), {
+    weights: panelSingle.rawWeights(),
+    bonus: bonusSingle ? bonusSingle.coefs() : {}
+  });
   api("/api/tools/reweight", body).then(function(d){
     if (seq !== reweightSeq) return;                      // 过期响应，丢弃
     lastReweightResult = d;
+    // 展开区读的是这两个模块级变量，必须和这批结果同步更新（见 bindDetailToggle）
+    singleWeights = d.meta.weights_normalized || {};
+    singleById = {};
+    d.results.forEach(function(r){ singleById[r.id] = r; });
     $("#labPoolPill").textContent = "池大小 " + d.meta.pool_size;
-    $("#singleMeta").textContent = "Top " + d.results.length + " · 基准 " + d.meta.social_baseline;
+    var moodTxt = (d.meta.mood_score === null || d.meta.mood_score === undefined)
+      ? "大盘情绪不可用" : "大盘情绪 " + d.meta.mood_score.toFixed(3);
+    $("#singleMeta").textContent = "Top " + d.results.length + " · 基准 " + d.meta.social_baseline + " · " + moodTxt;
     $("#labFootMeta").textContent = "上次计算：" + new Date(d.meta.generated_at).toLocaleString("zh-CN");
     if (!d.results.length){ el.innerHTML = '<div class="lb-empty">该时间范围内没有事件</div>'; return; }
     var moved = d.results.filter(function(r){ return r.rank_delta !== null && r.rank_delta !== undefined && r.rank_delta !== 0; }).length;
     el.innerHTML = '<div class="lb-rlist">' + d.results.map(function(r){
       return (
-        '<div class="lb-ritem">' +
+        '<div class="lb-ritem" data-eid="' + esc(r.id) + '">' +
           '<div class="rk">#' + r.rank + '</div>' +
           '<div>' + tierBadge(r.event_tier) + '</div>' +
           '<div class="ti">' +
             '<div class="tzh">' + esc(r.title_zh || r.title_en) + '</div>' +
-            '<div class="meta">' + factorLine(r.factors) + '  ·  ' + esc(sourcesLine(r.source_names)) + '</div>' +
+            '<div class="meta">' + factorLine(r.factors) + '  ·  ' + esc(sourcesLine(r.source_names)) +
+              (((r.bonus || {}).total_bonus || 0) > 0
+                ? '  ·  <span class="lb-tag up">加成 +' + ((r.bonus.total_bonus)*100).toFixed(1) + '%</span>'
+                : '') +
+            '</div>' +
             ((r.is_rumor || r.verification_status === "VERIFIED") ?
               '<div class="meta">' +
                 (r.is_rumor ? '<span class="lb-tag rumor">疑似传闻</span> ' : '') +
@@ -6361,7 +6750,8 @@ function runReweight(){
         '</div>'
       );
     }).join("") + '</div>' +
-    '<div class="lb-movednote">「位次」为相对生产环境当前排名的变化；本轮共 <b>' + moved + '</b> 条位次变化。</div>';
+    '<div class="lb-movednote">「位次」为相对生产环境当前排名的变化；本轮共 <b>' + moved + '</b> 条位次变化。' +
+      '<b>点任意一条</b>可展开正文与逐因子明细。</div>';
   }).catch(function(err){
     if (seq !== reweightSeq) return;                      // 旧请求的失败别覆盖新请求
     el.innerHTML = '<div class="lb-err">加载失败：' + esc(err.message) + '</div>';

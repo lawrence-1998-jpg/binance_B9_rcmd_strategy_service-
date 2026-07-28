@@ -17,5 +17,15 @@ backups/
 # CoinGecko 行情快照缓存（crawler/market_cap.py，6 小时 TTL，可随时重建）
 config/cache/
 
-# 注意：config/.env 含真实 API key，但仓库为私有且历史已提交，
-# 保持跟踪以保障协同。若日后仓库转公开，必须先清理历史。
+# config/.env —— 2026-07-29 起**不再跟踪**。
+#
+# 原约定是"仓库私有所以直接提交"，那天真的咬了一次：个人 OpenAI key 在
+# 01:48 被吊销（裸调 /v1/models 也 401），整条 VM pipeline 的 LLM 与
+# embedding 全线中断。最可能的原因就是这个 key 明文躺在被反复 push 的
+# 文件里被扫到。
+#
+# 现在改成：.env 只存在于各机器本地，模板见 config/env.example。
+# 已提交进历史的旧 key 仍留在 git 历史里（未做 history rewrite，那会打乱
+# 所有人的克隆）——旧 key 已失效，风险已随之消除；但**新 key 绝不能再进
+# 仓库**，这是这条规则存在的全部意义。
+config/.env

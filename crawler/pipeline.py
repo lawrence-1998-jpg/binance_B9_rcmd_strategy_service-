@@ -163,6 +163,16 @@ def semantic_prefilter(items: list[dict], client, tracker=None,
     if getattr(vectors, "size", 0) == 0:
         return items
 
+    # 关键：dedup.embed_texts 在整批失败时**返回零矩阵而不是抛异常**（那个降级对
+    # 生产去重是对的，见该函数注释）。零向量两两相似度恒为 0，本函数会一条都不折叠，
+    # 日志打出"折叠 0 条"——看起来像"这批没有重复"，实际是"根本没算出来"。
+    # 这两件事必须在日志里分得开，否则 embedding 挂了会以"一切正常"的样子过去。
+    if not vectors.any():
+        logger.error("语义粗去重**未生效**：embedding 全为零向量（多半是 API key "
+                     "失效或上游故障），本轮跳过语义去重，全部条目原样进入 LLM。"
+                     "这不是『没有重复』，是『没算成』。")
+        return items
+
     sim = vectors @ vectors.T
     keep = [True] * len(items)
     folded = 0
@@ -292,9 +302,19 @@ NEWS_SCHEMA = {
                               "enum": ["market", "policy", "security", "project", "macro", "other"]},
                 # 2026-07-28 新增：市场归属，与 news_type 正交（news_type 判事件性质，
                 # market_scope 判属于哪个市场）。见 SYSTEM_PROMPT 的 MARKET SCOPE 章节。
+                # cn_a_share 是**只用来丢弃的枚举值**：老板明确"A股不要"，但把它
+                # 从枚举里拿掉并不能让 A 股内容消失——只会让模型被迫把它塞进
+                # general/hk_stock，反而更难识别。给它一个正确的名字，再在下面
+                # 的语义闸里整类丢掉，比让模型撒谎可靠。
                 "market_scope": {"type": "string",
                                  "enum": ["crypto", "us_stock", "hk_stock", "jp_stock",
-                                          "kr_stock", "macro_policy", "general"]},
+                                          "kr_stock", "cn_a_share", "macro_policy",
+                                          "social_signal", "general"]},
+                # 2026-07-29 新增：影响广度。这是"大盘级 vs 个股级"的量化，
+                # 也是本系统与 CNBC 内容质感差异的核心维度（PRD-03 R2）。
+                "breadth_level": {"type": "string",
+                                  "enum": ["cross_market", "market_index", "sector",
+                                           "multi_asset", "single_asset"]},
                 "event_tier": {"type": "string", "enum": ["S", "A", "B", "C", "D"]},
                 # 事件指纹三元组 —— 去重的第一道网，见 dedup.build_fingerprint
                 "event_subject": {"type": "string"},
@@ -311,7 +331,8 @@ NEWS_SCHEMA = {
                 "title_en", "title_zh", "description_short_en", "description_short_zh",
                 "description_long_zh", "sector_tags", "coins",
                 "entities", "sentiment", "sentiment_score", "impact_horizon",
-                "news_type", "market_scope", "event_tier", "event_subject", "event_action", "event_date",
+                "news_type", "market_scope", "breadth_level", "event_tier",
+                "event_subject", "event_action", "event_date",
                 "score_market_impact", "score_authority", "score_quality",
                 "credibility_score", "is_rumor", "rumor_reason",
             ],
@@ -353,8 +374,35 @@ SYSTEM_PROMPT = """You are a senior financial news analyst for Binance's news re
 - macro_policy: cross-border/global economic policy that does not belong to one specific
   market above — tariffs and trade wars, G7/G20 decisions, global central bank coordination,
   major sovereign credit events, oil/commodity shocks with broad market effect
+- social_signal: geopolitical conflict, natural disaster, or major social event that has a
+  PLAUSIBLE TRANSMISSION PATH TO MARKETS (oil supply, supply chains, risk sentiment, sanctions,
+  central bank response). The transmission requirement is strict: a war affecting oil routes
+  qualifies; a celebrity scandal, a sports result, or a local human-interest story does NOT —
+  those are low-information content, tier D, regardless of how dramatic they sound.
+- cn_a_share: MAINLAND CHINA equities — Shanghai/Shenzhen/Beijing exchanges, the ChiNext or
+  STAR boards, and their indices (上证/沪指/深证/创业板/科创板/沪深300/中证/A股). Use this
+  whenever a mainland-listed company or a mainland index is the SUBJECT of the report, even
+  if the headline leads with a broader framing like "Asian stocks" or "亚太股市". This product
+  DOES NOT SHIP A-share content — labelling it correctly is how it gets filtered out, so do
+  not try to be helpful by picking a neighbouring value. Hong Kong is NOT mainland: HK-listed
+  names stay hk_stock.
 - general: does not fit any of the above but still belongs on this product (rare; prefer a
   specific value whenever one plausibly fits)
+
+## BREADTH (for `breadth_level`) — how much of the market does this move?
+This is a SEPARATE question from importance. A single stock can have a huge move (high impact,
+narrow breadth); a routine Fed statement can be low-drama but wide. Judge only the SCOPE OF
+WHAT IS AFFECTED:
+- cross_market: affects multiple countries or multiple asset classes at once
+  (Fed decision, global bond selloff, war disrupting oil, worldwide risk-off)
+- market_index: moves one market's headline index
+  (Nikkei -4%, KOSPI circuit breaker, Dow +600, BTC breaking a major level)
+- sector: moves an entire industry/track but not the whole index
+  (chip stocks selling off together, DeFi tokens broadly down, bank stocks rallying)
+- multi_asset: names 2-5 specific assets moving together
+  (AMD/Micron/Nvidia all falling; ETH and SOL both up on an upgrade)
+- single_asset: one company or one token
+  (a single earnings report, one project's upgrade, one exchange listing)
 
 Do NOT tag mainland China A-share content (Shanghai/Shenzhen Composite, ChiNext, individual
 A-share tickers) with any value — this content should not reach you at all (filtered upstream);
@@ -970,6 +1018,23 @@ def run_pipeline() -> dict:
         #     真实发生时间**，不是我们的采集时间）再卡一次时效。前面的
         #     filter_by_freshness 只能看信源自报的 published_at，信源报错/没报
         #     时就失守；这一道用的是模型从正文里读出来的日期，是最后一层防线。
+        # A 股二次排除：crawler/main.py 的 filter_a_share 查的是**原始标题**，
+        # 但 LLM 会把标题改写成中文，改写后才出现"A股"的情况它拦不住——实测漏进
+        # 一条 "A股低开，长鑫跌7.7%"（原文是 BlockBeats 的快讯，原标题不含"A股"）。
+        # 所以这里对 LLM 产出的 title_zh 再查一遍。两道都要：前一道省 LLM 的钱，
+        # 这一道兜住改写引入的。
+        from .main import _A_SHARE_TITLE_RE
+        before_a = len(enriched)
+        enriched = [e for e in enriched
+                    if not _A_SHARE_TITLE_RE.search(e.get("title_zh") or "")
+                    # 语义闸：模型自己判定报道主体是中国大陆股市。这一条才是
+                    # 主防线——关键词表在 2026-07-29 一天内漏了三次（裸"上证"、
+                    # 裸"创业板"、以及 IGNORECASE 把"Meta股"误判成 A 股），
+                    # 穷举措辞这条路走不通。关键词只留作 LLM 前的省钱粗筛。
+                    and e.get("market_scope") != "cn_a_share"]
+        if len(enriched) < before_a:
+            logger.info(f"A股排除（LLM 后，关键词+语义双闸）：丢弃 {before_a - len(enriched)} 条")
+
         enriched, stale_dropped = filter_by_event_date(enriched)
         stats["stale_by_event_date"] = len(stale_dropped)
         if stale_dropped:

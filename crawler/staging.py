@@ -28,6 +28,7 @@ import hashlib
 import logging
 import os
 from datetime import datetime, timezone
+from .dxfeed_news import DXFEED_INDEX_SYMBOLS
 from .timeutil import now_local
 
 logger = logging.getLogger(__name__)
@@ -40,6 +41,57 @@ def _url_hash(url: str) -> str:
 # 公开别名：enrich bridge（本地 Claude 预处理缓存）用同一把尺子算 key，
 # 保证 staging 表、缓存表、pipeline 三方对同一 url 算出同一个 hash。
 url_hash = _url_hash
+
+
+# ── 处理优先级（PRD-03 R1 / ADR-001 D4）─────────────────────────────
+#
+# 起因：实测 301 条权威大盘源（CNBC/MarketWatch/Nikkei…）已抓回，只有 8 条被
+# 处理过——它们排在几百条 dxFeed 个股新闻和长尾 RSS 后面。CNBC 首页那种
+# 「大盘级、有冲击力」的内容因此迟迟进不了事件库。
+#
+# 用**优先级**而不是**过滤**：Lawrence 明确要保留 dxFeed 个股的大底池。
+# 过滤不可逆（今天丢掉的以后要不回来），优先级可逆（随时能调档）。
+#
+# 值越小越先处理。默认 3（中间档）——新接入的源在没被显式归档前既不会
+# 意外插队、也不会饿死。
+PRIORITY_AUTHORITATIVE_MACRO = 0   # 权威大盘媒体
+PRIORITY_DXFEED_INDEX        = 1   # dxFeed 大盘/ETF symbol
+PRIORITY_CRYPTO_TOP          = 2   # 加密头部媒体 + 行情异动
+PRIORITY_DEFAULT             = 3   # 其他 RSS / 搜索召回
+PRIORITY_DXFEED_SINGLE       = 4   # dxFeed 个股 symbol
+
+_AUTHORITATIVE_MACRO_SOURCES = {
+    "CNBC-TopNews", "CNBC-Economy", "CNBC-Investing", "CNBC-Finance",
+    "MarketWatch", "NikkeiAsia", "SCMP-GlobalEcon", "SCMP-Business",
+    "KoreaHerald", "Reuters", "Bloomberg",
+}
+
+# 加密侧的头部媒体（authority 5 的那批）+ 行情异动信号
+_CRYPTO_TOP_SOURCES = {
+    "CoinDesk", "TheBlock", "吴说区块链", "BlockBeats快讯", "币安上币公告",
+    "market_signal",
+}
+
+
+def resolve_priority(item: dict) -> int:
+    """按信源与 dxFeed symbol 归属定处理优先级。纯函数，便于单测。"""
+    source = (item.get("source") or "").strip()
+
+    if source in _AUTHORITATIVE_MACRO_SOURCES:
+        return PRIORITY_AUTHORITATIVE_MACRO
+
+    if source.startswith("dxFeed"):
+        # 命中大盘/ETF symbol 的走高优先级，纯个股的垫底。
+        # 一条新闻同时挂大盘和个股时按大盘算——它能影响指数，就是大盘级信息。
+        symbols = {s.strip() for s in (item.get("matched_symbols") or "").split(",") if s.strip()}
+        if symbols & DXFEED_INDEX_SYMBOLS:
+            return PRIORITY_DXFEED_INDEX
+        return PRIORITY_DXFEED_SINGLE
+
+    if source in _CRYPTO_TOP_SOURCES or (item.get("type") == "market_signal"):
+        return PRIORITY_CRYPTO_TOP
+
+    return PRIORITY_DEFAULT
 
 
 def stage_items(items: list[dict], conn) -> dict:
@@ -64,13 +116,18 @@ def stage_items(items: list[dict], conn) -> dict:
             cursor.execute(
                 """INSERT INTO raw_items_staging
                    (source, title, url, url_hash, summary, published_at,
-                    lang, authority, type)
-                   VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
-                   ON DUPLICATE KEY UPDATE fetched_at = CURRENT_TIMESTAMP""",
+                    lang, authority, type, priority, matched_symbols)
+                   VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                   ON DUPLICATE KEY UPDATE fetched_at = CURRENT_TIMESTAMP,
+                       -- 优先级取更高档（数值更小）：同一条 url 可能先由长尾源
+                       -- 抓到、后来权威源也发了，此时该按权威源的档位处理。
+                       priority = LEAST(priority, VALUES(priority)),
+                       matched_symbols = COALESCE(VALUES(matched_symbols), matched_symbols)""",
                 (item.get("source", ""), item.get("title", ""), url, url_hash,
                  item.get("summary", ""), item.get("published_at", ""),
                  item.get("lang", "en"), item.get("authority", 3),
-                 item.get("type", "rss")),
+                 item.get("type", "rss"), resolve_priority(item),
+                 item.get("matched_symbols") or None),
             )
             if cursor.rowcount == 1:  # INSERT 走的是 1，UPDATE 分支走的是 2
                 new_count += 1
@@ -100,6 +157,14 @@ def stage_items(items: list[dict], conn) -> dict:
 # 那条腿始终领先于付费的那条腿。
 MAX_ITEMS_PER_RUN = int(os.environ.get("B9_PIPELINE_BATCH", "400"))
 
+# 已停用信源的黑名单——消费端的闸。抓取端的开关在 crawler/main.py
+# （BINANCE_SQUARE_ENABLED），但那只能拦住"以后不再抓"，拦不住 staging 里
+# 的历史存量继续被送进 LLM 并入库。
+#
+# SQL 里必须按数量展开成 %s,%s,...：`NOT IN %s` 直接传元组是 psycopg2 的行为，
+# mysql-connector 会直接报 "Python type tuple cannot be converted"。
+DISABLED_SOURCES = ("BinanceSquare",)
+
 
 def fetch_staged_items(conn, max_age_days: int = 7) -> list[dict]:
     """只读取（不标记）未消费的存档条目，返回可直接送入 pipeline 的 item 列表。
@@ -117,14 +182,25 @@ def fetch_staged_items(conn, max_age_days: int = 7) -> list[dict]:
     `max_age_days` 兜底：防存档表堆积时把过老内容当"新鲜存货"送进 LLM。
     """
     cursor = conn.cursor(dictionary=True)
+    disabled_ph = ", ".join(["%s"] * len(DISABLED_SOURCES))
     cursor.execute(
-        """SELECT id, source, title, url, summary, published_at, lang, authority, type
+        f"""SELECT id, source, title, url, summary, published_at, lang, authority, type
            FROM raw_items_staging
            WHERE consumed_at IS NULL
              AND fetched_at >= NOW() - INTERVAL %s DAY
-           ORDER BY fetched_at ASC
+             -- 被停用的信源不但要停止抓取，**存量也必须停止消费**。
+             -- 2026-07-29 实测：币安广场（无发布时间，是陈旧新闻事故的源头）
+             -- 在 crawler/main.py 里已经关了抓取开关，但 staging 里还压着 119
+             -- 条历史存货，流水线照常把它们捞出来送进 LLM，又入库了 3 条——
+             -- QA 红线因此重新亮红。关水龙头不等于清管道，两头都要堵。
+             AND source NOT IN ({disabled_ph})
+           -- 优先级在前、时间在后：权威大盘媒体插队（PRD-03 R1）。
+           -- 低优先内容不会永久饥饿——同优先级内仍按时间先进先出，且每轮
+           -- 消费掉高优先的之后就会轮到它们；饥饿风险由监控看板的
+           -- "最老未消费条目年龄"指标盯着。
+           ORDER BY priority ASC, fetched_at ASC
            LIMIT %s""",
-        (max_age_days, MAX_ITEMS_PER_RUN),
+        (max_age_days, *DISABLED_SOURCES, MAX_ITEMS_PER_RUN),
     )
     rows = cursor.fetchall()
     cursor.close()

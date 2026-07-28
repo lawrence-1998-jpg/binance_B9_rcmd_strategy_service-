@@ -41,6 +41,11 @@ DXFEED_SYMBOLS = [
     "COIN", "MSTR", "GLXY", "MARA", "RIOT",        # 加密概念股
 ]
 
+# 大盘/ETF 级 symbol —— 命中这些的条目走高优先级（PRD-03 R1）。
+# Lawrence 明确要保留个股大底池，所以这里做的是**优先级区分**而不是过滤：
+# 个股新闻照抓照存，只是排在大盘后面处理。
+DXFEED_INDEX_SYMBOLS = {"SPX", "DJI", "IXIC", "RUT", "VIX", "SPY", "QQQ", "DIA", "IWM"}
+
 MAX_ITEMS_PER_QUERY = 50
 REQUEST_TIMEOUT = 20
 
@@ -90,12 +95,18 @@ def fetch_dxfeed_news() -> list[dict]:
             if not title:
                 continue
             seen_ids.add(nid)
+            # 记录这条新闻挂了哪些我们关注的 symbol —— 优先级判定要靠它区分
+            # 大盘与个股（见 crawler/staging.py 的 SOURCE_PRIORITY）。用交集而不是
+            # 原样存 n["symbols"]：一条新闻可能挂几十个无关 ticker（实测有 48 个的），
+            # 只留我们订阅的那些，字段短且判定语义清晰。
+            hit = [s for s in (n.get("symbols") or []) if s in set(DXFEED_SYMBOLS)]
             items.append({
                 "source": f"dxFeed-{n.get('source') or 'MTNewswires'}",
                 "title": title,
                 "url": f"{DXFEED_NEWS_BASE}?id={nid}",
                 "summary": (n.get("body") or "").strip(),
                 "published_at": n.get("time", ""),
+                "matched_symbols": ",".join(hit[:12]),
                 "lang": "en",
                 # 机构级实时新闻源，authority 对齐 crawler/web_search.py 的 _TIER_5
                 # （CNBC/Reuters/Bloomberg 那一档）——MT Newswires 是同一量级的

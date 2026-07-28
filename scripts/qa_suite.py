@@ -436,11 +436,26 @@ def qa_market_expansion():
     # （实测普通 LIKE 命中 7 条，BINARY 精确匹配只有 4 条，且全部是 2026-07-28
     # 之前的历史数据）——这是本条用例自己的一次真实踩坑，记录在这里防止
     # 以后又用普通 LIKE 重新引入这个误报。
-    rows = sql("SELECT COUNT(*) FROM news_events WHERE created_at >= '2026-07-28' "
-              "AND (BINARY title_zh LIKE '%A股%' OR BINARY title_zh LIKE '%沪指%' "
-              "OR BINARY title_zh LIKE '%上证综指%')")
+    # 2026-07-29 两处扩口径，都是这条用例漏掉真问题之后补的：
+    #  1) 原来只查"上证综指"这类**全称**，于是「亚太股市重挫 上证失守3800」
+    #     一路过闸，还在策略实验室排到了第 1 名。财经标题里指数名几乎总是简写，
+    #     按全称匹配等于没匹配。改成查裸词（上证/深证/沪深/创业板指…）。
+    #  2) 原来只查 created_at >= '2026-07-28'（"这条规则是以后不要"）。存量已在
+    #     同日清干净，红线改成覆盖**整个 7 天展示窗口**——用户看到的是窗口里的
+    #     全部内容，"历史存量不在范围内"这个借口对着屏幕讲不通。
+    # BINARY 精确匹配保留：utf8mb4_unicode_ci 会把"Meta股票"判成命中"a股"。
+    rows = sql("SELECT COUNT(*) FROM news_events "
+              "WHERE date >= CURDATE() - INTERVAL 7 DAY "
+              "AND (BINARY title_zh REGEXP '(^|[^A-Za-z])A股' "
+              "OR BINARY title_zh LIKE '%沪指%' OR BINARY title_zh LIKE '%沪深%' "
+              "OR BINARY title_zh LIKE '%上证%' OR BINARY title_zh LIKE '%深证%' "
+              "OR BINARY title_zh LIKE '%深成指%' OR BINARY title_zh LIKE '%创业板%' "
+              "OR BINARY title_zh LIKE '%科创板%' OR BINARY title_zh LIKE '%科创50%' "
+              "OR BINARY title_zh LIKE '%北证50%' OR BINARY title_zh LIKE '%北交所%' "
+              "OR BINARY title_zh LIKE '%上交所%' OR BINARY title_zh LIKE '%深交所%' "
+              "OR market_scope = 'cn_a_share')")
     a_share_count = int(rows[0][0]) if rows and rows[0] else -1
-    check(g, "2026-07-28 起新入库事件无 A 股相关标题（filter_a_share 生效）",
+    check(g, "7 天展示窗口内无 A 股相关标题（filter_a_share 生效）",
           a_share_count == 0, f"命中 {a_share_count} 条")
 
     st, _ = http("/api/market-mood", token=None)

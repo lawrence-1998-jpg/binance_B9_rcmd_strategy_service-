@@ -26,11 +26,11 @@
    只是不再兼任"够不够格参与计算"的门槛——这两件事必须分开，门槛要看 LLM 对
    事件本身重要性的判断（tier），不能看会被时效/热度污染的复合分。
 
-2. **不碰 crawler/scoring.py 的五因子公式**。情绪对齐加成（mood_alignment_multiplier）
-   只在 API 查询/展示时应用于排序，绝不写回 news_events.importance_score——那个字段
-   是策略实验室、去重、历史分析全部依赖的口径，一旦被"今天的情绪"污染，昨天算出的分
-   和今天算出的分就不可比了。这是一个纯展示层的、有界（≤15%）、可随时关掉的加成，
-   不是排序公式的第 6 个因子。
+2. **不碰 crawler/scoring.py 的基础因子公式**。两个加分项（同向 / 反转）只在 API
+   查询/展示时作为外层倍率应用于排序，绝不写回 news_events.importance_score——
+   那个字段是策略实验室、去重、历史分析全部依赖的口径，一旦被"今天的情绪"污染，
+   昨天算出的分和今天算出的分就不可比了。加分项合计封顶 +50%，可随时把系数调 0
+   退回纯基础排序（这也是验证它们真实贡献的 A/B 对照方式）。
 
 3. **加成有方向性但不是单向放大**：只有当某条事件的情绪方向与大盘一致时才加成，
    反向或大盘接近中性时不加成也不减成——这样"大悲观时段"里少数逆势乐观的消息不会被
@@ -57,10 +57,6 @@ _MOOD_BUCKETS = [
     (-1.01, "极度悲观", "extreme_bearish", "red"),
 ]
 
-# 有界加成上限——排序"首几刷冲击力"用。15% 是刻意保守的数字：五因子公式里最小的
-# 权重（Q，质量）都有 0.15，情绪加成不该比一个正式因子的权重还大，否则就是变相
-# 把它做成了第六个因子而不是展示层的调味。
-MOOD_ALIGN_BOOST = 0.15
 
 
 def mood_bucket(mood_score: float) -> tuple[str, str, str]:
@@ -114,13 +110,66 @@ def compute_market_mood(events: list[dict]) -> dict:
     }
 
 
-def mood_alignment_multiplier(event_sentiment_score, mood_score) -> float:
-    """情绪与大盘同向时的有界排序加成；反向或任一方为 None 时返回 1.0（不调整）。
+# ── 两个加分项（2026-07-29 拆分，PRD-03 R4/R5）───────────────────────
+#
+# 原本只有一个"同向加成"。Lawrence 采纳了回音室风险的分析后要求拆成两个
+# 独立因子，各自可在策略实验室调：
+#
+#   · 同向 boost：大盘悲观时放大负面、乐观时放大正面 —— 制造氛围感
+#   · 反转 boost：大盘悲观时**反而**把重大利好顶上来 —— 防回音室
+#
+# 为什么必须有第二个：单独的同向放大会让"大盘暴跌 → 首屏全是坏消息"，
+# 而此时一条"美联储可能提前降息"的反转信号恰恰被压到看不见。金融产品里
+# 放大情绪＝放大追涨杀跌，真正伤害用户的不是内容平，是该看到反转时看不到。
+#
+# 反转 boost 的 **tier ∈ S/A 硬约束**是它成立的前提（Lawrence 确认"加的对"）：
+# 没有这个约束，大盘悲观时所有反向的噪音都会被扶上来，反而更乱。只有
+# "重大且与大盘反向"才是真信号。
+MOOD_ALIGN_BOOST = 0.25      # k_s：同向加成上限，原 0.15，本期按需求调高
+MOOD_REVERSAL_BOOST = 0.20   # k_r：反转加成上限
+REVERSAL_TIERS = ("S", "A")  # 反转加成只对重大事件生效
+BONUS_TOTAL_CAP = 0.50       # 两项合计封顶 +50%，防止加分项盖过基础排序
 
-    只应用于查询时的展示排序，绝不写回 importance_score——见模块头部说明 2。
-    """
+
+def sentiment_align_bonus(event_sentiment_score, mood_score, k=None) -> float:
+    """情绪同向加分。返回 0~k 的**加数**（不是倍率），反向或数据缺失返回 0。"""
+    k = MOOD_ALIGN_BOOST if k is None else k
     if event_sentiment_score is None or mood_score is None:
-        return 1.0
+        return 0.0
     if (event_sentiment_score >= 0) != (mood_score >= 0):
-        return 1.0
-    return 1.0 + MOOD_ALIGN_BOOST * abs(mood_score) * abs(event_sentiment_score)
+        return 0.0
+    return k * abs(mood_score) * abs(event_sentiment_score)
+
+
+def reversal_bonus(event_sentiment_score, mood_score, event_tier, k=None) -> float:
+    """反转信号加分。只在「方向与大盘相反」**且**「事件为 S/A 档」时生效。"""
+    k = MOOD_REVERSAL_BOOST if k is None else k
+    if event_sentiment_score is None or mood_score is None:
+        return 0.0
+    if (event_sentiment_score >= 0) == (mood_score >= 0):
+        return 0.0          # 同向 → 交给 sentiment_align_bonus，两者互斥
+    if event_tier not in REVERSAL_TIERS:
+        return 0.0          # 低档位的反向噪音不该被扶上来
+    return k * abs(mood_score) * abs(event_sentiment_score)
+
+
+def mood_multiplier(event: dict, mood_score, k_align=None, k_reversal=None) -> dict:
+    """算出某条事件的展示层倍率。返回明细，便于策略实验室展示"为什么是这个分"。
+
+    只应用于查询/展示时的排序，绝不写回 importance_score——见模块头部说明 2。
+    """
+    s = event.get("sentiment_score")
+    align = sentiment_align_bonus(s, mood_score, k_align)
+    rev = reversal_bonus(s, mood_score, event.get("event_tier"), k_reversal)
+    total = min(align + rev, BONUS_TOTAL_CAP)
+    return {
+        "sentiment_align": round(align, 4),
+        "reversal": round(rev, 4),
+        "total_bonus": round(total, 4),
+        "multiplier": round(1.0 + total, 4),
+    }
+
+
+def mood_alignment_multiplier(event_sentiment_score, mood_score) -> float:
+    """[保留兼容] 旧的单一同向倍率。新代码请用 mood_multiplier()。"""
+    return 1.0 + sentiment_align_bonus(event_sentiment_score, mood_score)

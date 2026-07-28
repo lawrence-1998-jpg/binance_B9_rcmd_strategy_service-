@@ -229,6 +229,110 @@ def get_market_mood():
     return jsonify(_get_market_mood())
 
 
+# ─── 流水线监控看板（2026-07-29，tab07）──────────────────────────────
+#
+# Lawrence：「后台盯一下抓进来的事件的排队处理……给我配一个监控看板，抓进来的
+# 数据、当前处理速度、已入库的量、有效的量（S+A级），分整体、加密、非加密。」
+#
+# 加了两个他没点名但当天真出过事故的指标：
+#   · 最近几轮的**处理失败率**——个人 OpenAI key 在 01:48 被吊销时，前端一切
+#     正常、日志里全是 401，没有任何地方能一眼看出"流水线其实断了"。
+#   · 最老未消费条目的**年龄**——优先级队列上线后要盯低优先内容会不会饿死。
+@app.route("/api/pipeline-monitor", methods=["GET"])
+@require_api_key
+def pipeline_monitor():
+    db = get_db()
+    cur = db.cursor()
+
+    def one(sql, params=()):
+        cur.execute(sql, params)
+        r = cur.fetchone()
+        return r[0] if r else None
+
+    # ── 抓取侧 ──
+    staging = {
+        "total": one("SELECT COUNT(*) FROM raw_items_staging"),
+        "unconsumed": one("SELECT COUNT(*) FROM raw_items_staging WHERE consumed_at IS NULL"),
+        "fetched_24h": one("SELECT COUNT(*) FROM raw_items_staging "
+                          "WHERE fetched_at >= NOW() - INTERVAL 24 HOUR"),
+        "oldest_unconsumed_hours": one(
+            "SELECT ROUND(TIMESTAMPDIFF(MINUTE, MIN(fetched_at), NOW())/60, 1) "
+            "FROM raw_items_staging WHERE consumed_at IS NULL"),
+    }
+    cur.execute("SELECT priority, COUNT(*) FROM raw_items_staging "
+                "WHERE consumed_at IS NULL GROUP BY priority ORDER BY priority")
+    staging["backlog_by_priority"] = [
+        {"priority": p, "label": _PRIORITY_LABELS.get(p, f"P{p}"), "count": n}
+        for p, n in cur.fetchall()]
+
+    # ── 处理速度（近 6 轮）──
+    cur.execute("SELECT run_at, duration_seconds, events_count, status "
+                "FROM pipeline_runs ORDER BY run_at DESC LIMIT 6")
+    runs = []
+    for started, dur, ev, status in cur.fetchall():
+        runs.append({
+            "started_at": started.isoformat() if hasattr(started, "isoformat") else str(started),
+            "duration_s": float(dur or 0),
+            "events": int(ev or 0),
+            "status": status,
+            # 每分钟产出多少事件——比"跑了多久"更能反映真实吞吐
+            "events_per_min": round(float(ev or 0) / max(float(dur or 1) / 60, 0.01), 1),
+        })
+    ok_runs = [r for r in runs if r["status"] == "success"]
+    throughput = {
+        "recent_runs": runs,
+        "avg_events_per_run": round(sum(r["events"] for r in ok_runs) / len(ok_runs), 1) if ok_runs else 0,
+        "avg_duration_s": round(sum(r["duration_s"] for r in ok_runs) / len(ok_runs), 1) if ok_runs else 0,
+        # 失败率：key 失效/上游故障时这个数会立刻跳起来，是最直接的健康信号
+        "failure_rate": round(1 - len(ok_runs) / len(runs), 3) if runs else None,
+    }
+
+    # ── 入库侧：整体 / 加密 / 非加密 三档 ──
+    def bucket(where_sql, params=()):
+        base = f"FROM news_events WHERE {where_sql}"
+        total = one(f"SELECT COUNT(*) {base}", params)
+        sa = one(f"SELECT COUNT(*) {base} AND event_tier IN ('S','A')", params)
+        d7 = one(f"SELECT COUNT(*) {base} AND date >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)", params)
+        sa7 = one(f"SELECT COUNT(*) {base} AND event_tier IN ('S','A') "
+                 f"AND date >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)", params)
+        return {
+            "total": total, "effective_sa": sa,
+            "effective_rate": round(sa / total, 4) if total else 0,
+            "recent_7d": d7, "recent_7d_sa": sa7,
+        }
+
+    stored = {
+        "overall":  bucket("1=1"),
+        "crypto":   bucket("market_scope = 'crypto'"),
+        "non_crypto": bucket("market_scope IS NOT NULL AND market_scope <> 'crypto'"),
+    }
+    cur.execute("SELECT COALESCE(market_scope,'(未标注)'), COUNT(*), "
+                "SUM(event_tier IN ('S','A')) FROM news_events "
+                "WHERE date >= DATE_SUB(CURDATE(), INTERVAL 7 DAY) "
+                "GROUP BY market_scope ORDER BY COUNT(*) DESC")
+    stored["by_scope_7d"] = [
+        {"scope": s, "count": int(n), "sa": int(sa or 0)} for s, n, sa in cur.fetchall()]
+
+    # ── 新因子覆盖率：改造是否真的生效，看这两个数就够 ──
+    total_ev = stored["overall"]["total"] or 1
+    coverage = {
+        "breadth_tagged": one("SELECT COUNT(*) FROM news_events WHERE breadth_level IS NOT NULL"),
+        "punch_scored":   one("SELECT COUNT(*) FROM news_events WHERE score_punch IS NOT NULL"),
+        "total": total_ev,
+    }
+    coverage["breadth_pct"] = round(coverage["breadth_tagged"] / total_ev, 4)
+    coverage["punch_pct"] = round(coverage["punch_scored"] / total_ev, 4)
+
+    cur.close()
+    return jsonify({"staging": staging, "throughput": throughput,
+                    "stored": stored, "factor_coverage": coverage,
+                    "generated_at": now_local().isoformat()})
+
+
+_PRIORITY_LABELS = {0: "P0 权威大盘媒体", 1: "P1 dxFeed大盘/ETF",
+                    2: "P2 加密头部+行情", 3: "P3 其他", 4: "P4 dxFeed个股"}
+
+
 # ─── 主新闻列表 ───────────────────────────────────────────────────────────────
 @app.route("/api/news", methods=["GET"])
 @require_api_key
