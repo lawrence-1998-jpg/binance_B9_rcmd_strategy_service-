@@ -970,3 +970,72 @@ I（冲击力）两项。
 - 浏览器实测：tab02 选"仅反转"→9 条结果、每条都带 ⚡反转 标签；tab05 默认
   Top20 里 17 条带标签（1 反转 + 16 同向），因子公式展示区已更新为七项
 - 新增 7 个信源全部实测 200 + 内容抽样确认相关、优先级解析为 P0
+
+---
+
+# 2026-07-29 · WSJ死源修复 + 放宽头部资产新闻定义 + 30分钟高优抓取 + M/A/Q刷新漏洞
+
+## A. WSJ-Markets 是个死 feed——同一天第三次"验证方法不够"的教训
+
+召回校验时把 `feeds.a.dj.com/rss/RSSMarketsMain.xml` 判定为"内容干净、值得接入"，
+依据是"能打开、标题像真新闻"。部署后实测**这个 feed 从 2025-01-27 起没更新过**
+（channel 级 `lastBuildDate` 冻结在那天），"DeepSeek 引发抛售"这类标题是真实
+发生过的旧新闻，不是抓错——事件时间闸每次都正确拦截，召回率因此恒为 0。
+
+和 FT 那次"grep -c 数错行数"是同一类教训：**只验证"内容像不像新闻"不够，
+必须验证"这个 feed 是否还在更新"**（看 lastBuildDate 或首条 pubDate）。已经
+按同一域名模式换成 `feeds.content.dowjones.io/public/rss/RSSMarketsMain`
+（道琼斯官方内容平台真实域名，MarketWatch 那条本来就在这个域名下），实测
+最新条目是几小时前，61 条待处理，P0 优先级确认生效。
+
+## B. 头部资产新闻定义放宽（Cramer 类内容不再一律 C/D）
+
+Lawrence 原话："Cramer 个股推荐/盘中异动汇总类，这些我们也要抓，放宽对新闻的
+定义（针对头部媒体、主流资产标的时，比如apple）。个股也可以是新闻"。
+
+`crawler/pipeline.py` 的 SYSTEM_PROMPT 里"single-stock news / analyst notes"
+被硬编码在 C/D 档——这条规则本身对大多数场景是对的（挡掉小盘股分析师噪音），
+但对一小撮头部标的（Apple/Nvidia/Microsoft/Amazon/Google/Meta/Tesla/Broadcom
+及各市场自己的国民级龙头）由头部媒体报道时，"个股"不等于"低价值"。
+
+加了一条范围很窄的例外：头部标的 + 头部媒体（CNBC/Bloomberg/WSJ/FT/Reuters/
+MarketWatch/Nikkei/SCMP）才适用，且区分"真有具体事实"（估值里程碑、带具体
+涨跌幅的异动）该给 B，"没有新事实的常规看多看空"仍然是 C——不是无差别放行。
+实测验证：Nvidia 涨 6% 的异动写作 → B/0.52；Cramer"买入苹果、看好财报"这种
+无新信息的常规喊多 → C/0.18（符合设计，不是失败）；无关小盘生物科技分析师
+报告 → 仍然 D/0.08（例外没有被滥用波及）。
+
+## C. 头部财经媒体抓取提到 30 分钟一次
+
+之前的理解有误：以为主 pipeline（cron 0点整）和 stage_fetch.py（cron 30分）
+两个 cron 组合起来已经是 30 分钟一次的抓取节奏。实际查证：**主 pipeline 从
+2026-07-26 起就只消费 staging、不再自己抓取**（架构文档写得很清楚，是我没
+重新验证就假设了旧行为）。真实抓取节奏是 stage_fetch.py 单独决定的，每小时
+一次，不是 30 分钟。
+
+新增 `crawler/main.py:fetch_global_markets_sources()`（只抓 CNBC/Bloomberg×4/
+Forbes/WSJ/FT 等 15 个头部频道）+ `scripts/stage_fetch_priority.py`，配
+`15,45 * * * *` 独立 cron，跟原有的 `stage_fetch.py`（全量源，仍每小时）并存。
+只提速头部媒体，不把长尾加密自媒体也跟着提到 30 分钟——那些源不需要这么高
+时效，提速只会增加 staging 表体积和后续处理压力，没有对应收益。
+
+## D. 打分口径一致性护栏当天第三次抓到真实回归——`score_market_impact`/
+`score_quality` 从未出现在 UPDATE 子句里
+
+护栏部署当天已经抓过一次（`COALESCE` vs `VALUES` 不一致，121 行）。这次
+手动触发一轮生产 pipeline 处理积压后，护栏**再次**抓到 19 行不吻合——查证
+发现 `score_market_impact` 和 `score_quality` 这两列**压根没在 ON DUPLICATE
+KEY UPDATE 子句里出现过**，跨轮归并命中的行，`importance_score` 用本轮新算
+的 M/A/Q 刷新，这两列本身却停在首次入库时的旧值，同一行内部对不上。
+
+这是同一天同一类 bug 的第三次变体（breadth 漏刷新 → COALESCE 语义反了 →
+现在是 M/Q 干脆没写进子句）。补上后把规则写成结构性的、不再逐列判断：
+**任何进 compute_macro_score 公式的列，都必须在 UPDATE 子句里用 VALUES
+刷新，没有例外**。七个基础因子列现在全部确认在场（M/B/T/I/H/A/Q）。
+
+## 验证
+
+- QA 门禁 102/102（含新增的 M/A/Q 修复后重跑 rescore_factors.py 校准）
+- WSJ-Markets 实测 61 条新条目，全部 2026-07 日期、P0 优先级
+- 三个新分类测试用例（Apple异动/Cramer常规喊多/无关小盘）分类结果符合预期
+- 手动触发生产 pipeline 清理 P0 积压（513 条待处理 → 持续消化中）

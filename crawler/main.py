@@ -419,6 +419,26 @@ def filter_by_freshness(items: list[dict]) -> list[dict]:
     return kept
 
 
+def fetch_global_markets_sources() -> list[dict]:
+    """只抓 RSS_SOURCES_GLOBAL_MARKETS（CNBC/MarketWatch/Nikkei/SCMP/KoreaHerald/
+    Bloomberg×4/Forbes/WSJ/FT，共 15 个頻道）——本项目 S/A 档事件的主要来源。
+
+    2026-07-29 新增。起因：`fetch_cheap_sources()` 把这批头部媒体和一大批长尾
+    加密自媒体、公告类 RSS 混在一起统一抓取，由 `scripts/stage_fetch.py` 按
+    每小时 1 次的节奏跑。Lawrence 明确要求头部财经媒体"实时性要更强一点，
+    半小时跑一轮"——但没必要为了这几个頻道，把长尾源也跟着提到 30 分钟一次
+    （抓取虽然不花钱，但徒增 staging 表和后续处理压力，长尾源本来就不那么
+    要求时效）。所以单独拆一个只覆盖这批头部媒体的抓取函数，配一个独立的、
+    更高频的 cron（见 scripts/stage_fetch_priority.py），跟原来的
+    `fetch_cheap_sources()` / `stage_fetch.py` 并存，互不影响。
+    """
+    all_items = []
+    for url, name, lang, authority in RSS_SOURCES_GLOBAL_MARKETS:
+        all_items.extend(fetch_rss(url, name, lang, authority))
+        time.sleep(0.5)
+    return all_items
+
+
 def fetch_cheap_sources() -> list[dict]:
     """跑所有**不花钱**的抓取源：RSS/HTML/币安广场/CoinMarketCal/行情信号/搜索引擎。
 

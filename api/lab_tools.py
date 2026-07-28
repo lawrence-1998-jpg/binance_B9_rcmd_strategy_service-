@@ -103,7 +103,7 @@ POOL_COLUMNS = """
     sectors, sector_relevance, coins, news_type, market_scope, breadth_level, event_tier,
     score_market_impact, score_breadth, score_punch, punch_magnitude_pct,
     score_timeliness, score_hotness, score_authority, score_quality,
-    importance_score, is_rumor, source_names, source_count, social_interactions,
+    importance_score, is_rumor, sources, source_names, source_count, social_interactions,
     sentiment, sentiment_score, verification_status
 """
 
@@ -126,7 +126,7 @@ def fetch_pool(conn, days: int, limit: int) -> list[dict]:
     events = []
     for row in rows:
         d = dict(zip(cols, row))
-        for f in ("sectors", "sector_relevance", "coins", "source_names"):
+        for f in ("sectors", "sector_relevance", "coins", "source_names", "sources"):
             v = d.get(f)
             if isinstance(v, str):
                 try:
@@ -322,6 +322,11 @@ def event_card(e: dict, factors: dict | None = None, score: float | None = None,
         "sectors": e.get("sectors"),
         "coins": e.get("coins"),
         "source_names": e.get("source_names"),
+        # 2026-07-29：补原文信源链接。此前卡片只有 source_names（纯名字，没有
+        # url），点开展开区没法直接跳到原文核实——Lawrence 明确要"点开要有
+        # 信息源链接"。sources 明细本身在 crawler/storage.py 写库时就有
+        # {name, url, authority} 结构，只是策略实验室这条查询路径之前没选它。
+        "sources": e.get("sources"),
         "source_count": e.get("source_count"),
         "is_rumor": bool(e.get("is_rumor")),
         "verification_status": e.get("verification_status"),

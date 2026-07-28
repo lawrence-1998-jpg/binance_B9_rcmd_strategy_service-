@@ -465,6 +465,23 @@ transmission (the GENERIC-TECH FIREWALL below does NOT apply to these items):
   broad market effect, analyst notes/price targets
 - D (M 0.0-0.14): opinion/commentary pieces, evergreen explainers, PR/promotional content
 
+EXCEPTION — bellwether single-stock coverage from top-tier media (2026-07-29, Lawrence's
+explicit instruction: "个股也可以是新闻，放宽对新闻的定义，针对头部媒体、主流资产标的时
+比如apple"). The C/D defaults above assume the item is a small/mid-cap name or a low-signal
+source — that assumption breaks for a short, named list of mega-cap bellwethers whose price
+action this product's users track directly as a proxy for "the market": Apple, Nvidia,
+Microsoft, Amazon, Alphabet/Google, Meta, Tesla, Broadcom (US); and each market's own
+equivalent household-name bellwether (e.g. Samsung Electronics/SK Hynix for kr_stock, Toyota/
+Sony for jp_stock, Tencent/Alibaba for hk_stock). When a bellwether on this list is covered by
+a top-tier outlet (CNBC, Bloomberg, WSJ, FT, Reuters, MarketWatch, Nikkei Asia, SCMP) — market
+commentary/analyst calls ("Cramer says buy X"), a concrete valuation milestone (market-cap
+record, all-time high), or a notable intraday mover writeup — score it on its actual content,
+not on the "single-stock = C/D" default: a real valuation milestone or a mover writeup tied to
+a concrete % move is B; a routine buy/sell opinion with no new fact is still C. This exception
+is deliberately narrow — it does NOT extend to small/mid-cap names, to routine earnings-preview
+filler, or to non-top-tier sources; widening it further would reintroduce exactly the noise the
+C/D floor exists to keep out.
+
 ## HOT-TOPIC RECALL PRIORITY (never underrate these; they are the product's core value)
 1. MEME momentum: new viral memes, celebrity/political tokens, meme sector volume surges → at least B if there is real trading volume or smart money involvement
 2. Smart money / whale moves: lookonchain/spotonchain-style wallet tracking with concrete amounts → B or higher if amounts are large

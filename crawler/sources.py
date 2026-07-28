@@ -148,7 +148,17 @@ RSS_SOURCES_GLOBAL_MARKETS = [
     # WSJ World News / FT 只接了各自最对口的一个频道，没有照单全收——两家的
     # 其他频道（WSJ World、地缘政治类）已经被 Bloomberg-Politics/CNBC-TopNews/
     # macro_policy 覆盖，再接会增加 LLM 成本却不增加净召回。
-    ("https://feeds.a.dj.com/rss/RSSMarketsMain.xml",         "WSJ-Markets",          "en", 5),
+    # 2026-07-29 当天修正：接的时候 feeds.a.dj.com/rss/RSSMarketsMain.xml 返回
+    # 200、标题看着也是真新闻（"Stocks Sink in Broad AI Rout Sparked by China's
+    # DeepSeek"），当时只验证了"能不能打开、内容像不像新闻"，没查 <lastBuildDate>——
+    # 结果这个 feed 从 2025-01-27 起就没更新过（channel 级时间戳也冻结在那天），
+    # 里面的"DeepSeek 引发抛售"是真实存在过的旧新闻，不是抓错，是**这个 feed 本身
+    # 已经停更 18 个月**，每次抓都会被事件时间闸正确拦掉，召回率恒为 0。
+    # 换成 feeds.content.dowjones.io（道琼斯官方内容平台的真实域名——MarketWatch
+    # 那条本来就是这个域名下的），实测最新条目是几小时前，内容也对得上当前市场。
+    # 教训和 SCMP rss/91 那次一样：光看返回内容"像不像新闻"不够，必须验证
+    # lastBuildDate/首条 pubDate 是不是真的在更新。
+    ("https://feeds.content.dowjones.io/public/rss/RSSMarketsMain", "WSJ-Markets", "en", 5),
     ("https://www.ft.com/rss/home",                           "FT-Home",              "en", 5),
 ]
 

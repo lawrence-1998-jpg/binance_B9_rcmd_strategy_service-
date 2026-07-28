@@ -312,6 +312,21 @@ ON DUPLICATE KEY UPDATE
     breadth_level        = VALUES(breadth_level),
     score_breadth        = VALUES(score_breadth),
     punch_magnitude_pct  = VALUES(punch_magnitude_pct),
+    -- score_market_impact 和 score_quality 直到刚才都**没在这个 UPDATE 子句里
+    -- 出现过**——同一天第三次撞上同一类问题：QA 的打分口径一致性断言部署后，
+    -- 手动触发的下一轮生产 pipeline 一跑完就抓到 19 行不吻合。跨轮归并命中的
+    -- 事件会带着新一轮算出的 M/A/Q 传给 importance_score（VALUES 立刻刷新），
+    -- 但 score_market_impact/score_quality 这两列因为压根不在子句里，MySQL
+    -- 对没提到的列什么都不做，于是停留在**首次入库**那一刻的旧值，跟同一行
+    -- 里刚刷新的 importance_score 对不上。
+    --
+    -- 结论：这类 bug 靠"每次出现改一列"堵不完——必须是一条结构性规则：
+    -- **任何进 compute_macro_score 公式的列，都必须在这里用 VALUES 刷新，
+    -- 没有例外、不做个案判断**。下面把 M/A/Q 补全，凑齐全部七个基础因子列
+    -- （B/T/I/H 已经在上面），以后新增因子列时对照这条规则检查，别再漏。
+    score_market_impact  = VALUES(score_market_impact),
+    score_authority      = VALUES(score_authority),
+    score_quality        = VALUES(score_quality),
     importance_score     = VALUES(importance_score),
     -- 2026-07-29 新增（见 migration 015）。这行必须跟 importance_score 一起刷，
     -- 否则会重演同一个 bug 的变体：分刷新了，版本号没刷新，"这行是哪个版本算的"
