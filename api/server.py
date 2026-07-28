@@ -424,9 +424,17 @@ def get_news():
 
         mood = _get_market_mood()
         mood_score = mood.get("mood_score") if mood.get("available") else None
+        # 2026-07-29 修：这里之前调的是 mood_alignment_multiplier——那是拆分
+        # 同向/反转两个因子**之前**的旧单一倍率，策略实验室（api/lab_tools.py）
+        # 早就换成了 mood_multiplier，但生产这条主排序路径一直没跟着换。后果
+        # 是反转加成——PRD-03 明确要的"专门把与大盘反向的重大事件顶上来，防止
+        # 回音室"——实际上从没在用户真正看到的主站生效过，只在实验室的推演里
+        # 生效。同时也是"用户看不出哪条被反转命中"的根源之一：主站 API 压根
+        # 没算过、没吐出过这个信息，前端自然无从展示。
         for e in pool:
-            mult = market_mood.mood_alignment_multiplier(e.get("sentiment_score"), mood_score)
-            e["_display_score"] = (e.get("importance_score") or 0.0) * mult
+            detail = market_mood.mood_multiplier(e, mood_score)
+            e["bonus"] = detail
+            e["_display_score"] = (e.get("importance_score") or 0.0) * detail["multiplier"]
         pool.sort(key=lambda e: e["_display_score"], reverse=True)
         data = pool[offset:offset + limit]
         for e in data:
@@ -437,6 +445,13 @@ def get_news():
         cursor.execute(sql, params + [limit, offset])
         rows = cursor.fetchall()
         data = [row_to_dict(cursor, r) for r in rows]
+        # 按时间排序时不重排、不算加成（加成只服务"营造大盘氛围"的排序场景，
+        # 按时间看的是"最新发生了什么"，套加成没有意义）。但字段形状必须跟
+        # importance 分支一致——前端不该看到"这条有 bonus 字段、那条没有"这种
+        # 靠排序方式决定 schema 的不一致，判断"有没有命中反转"时会漏判。
+        for e in data:
+            e["bonus"] = {"sentiment_align": 0.0, "reversal": 0.0,
+                          "total_bonus": 0.0, "multiplier": 1.0}
 
     attach_x_posts(data, cursor)
 

@@ -114,6 +114,42 @@ RSS_SOURCES_GLOBAL_MARKETS = [
     ("https://www.scmp.com/rss/92/feed/",                     "SCMP-Business",  "en", 4),
     ("https://www.scmp.com/rss/12/feed/",                     "SCMP-GlobalEcon", "en", 4),
     ("https://www.koreaherald.com:443/rss/020000000000.xml",  "KoreaHerald",    "en", 3),
+
+    # 2026-07-29 补：老板点名要的两个头部权威媒体（"对CNBC、ForbesNews等头部
+    # 权威媒体有的内容，直接boost"），之前压根没接——查过库里唯二的 2 条
+    # Forbes/Bloomberg 记录，来源都是 web_search 搜索结果里恰好引用了这两个
+    # 域名，不是真正的媒体订阅。
+    #
+    # Bloomberg：feeds.bloomberg.com 会 301 跳转，实测 4 个频道跳转后都是
+    # 200、20 条、内容干净（markets/economics/technology/politics 全是真财经
+    # 新闻，无噪音）。requests.get 默认跟随重定向，不需要额外处理。
+    ("https://feeds.bloomberg.com/markets/news.rss",          "Bloomberg-Markets",    "en", 5),
+    ("https://feeds.bloomberg.com/economics/news.rss",        "Bloomberg-Economics",  "en", 5),
+    ("https://feeds.bloomberg.com/technology/news.rss",       "Bloomberg-Technology", "en", 5),
+    ("https://feeds.bloomberg.com/politics/news.rss",         "Bloomberg-Politics",   "en", 4),
+
+    # Forbes：吸取过 SCMP rss/91 的教训（不能只看 URL 猜频道，必须读 <title>
+    # 确认），逐个试了 investing/markets/wealth/leadership/digital-assets/
+    # innovation 六个看起来对口的路径——**只有 business 和 innovation 两个
+    # 返回 200**，且 innovation 实测抽样全是 iOS 升级指南/电影流媒体/拼字
+    # 游戏答案，零财经内容，没有加。business 抽样 8 条里 2 条是真市场新闻
+    # （Lucid Motors 涨 20%、消费品牌注意力经济），其余是体育/娱乐/犯罪新闻
+    # 挂着"Business"分类——如实说：这是 Forbes 免费 RSS 能拿到的最干净选项，
+    # 噪音比例明显高于上面几家，但仍然值得接：噪音走的是已有的 D 档过滤路径
+    # （不会露出到首页），真正的市场新闻不会被漏掉。
+    ("https://www.forbes.com/business/feed/",                 "Forbes-Business",      "en", 4),
+
+    # 同一轮里顺带验证过的另外两家：WSJ 与 FT，都是实测 200、内容干净对口
+    # （WSJT Markets 首条"Stocks Sink in Broad AI Rout"；FT 首条"Chip stocks
+    # tumble as AI sell-off deepens"，均为真实大盘新闻）。注意 FT 这个 feed
+    # 是压缩成单行的 XML，`grep -c "<item>"` 这种按行计数的探测方法会误判成
+    # "只有 1 条"——本次是拿 `grep -o | wc -l` 重新量了一遍才发现之前测错，
+    # 记录下来避免同样的测量方法坑到下一次信源评估。
+    # WSJ World News / FT 只接了各自最对口的一个频道，没有照单全收——两家的
+    # 其他频道（WSJ World、地缘政治类）已经被 Bloomberg-Politics/CNBC-TopNews/
+    # macro_policy 覆盖，再接会增加 LLM 成本却不增加净召回。
+    ("https://feeds.a.dj.com/rss/RSSMarketsMain.xml",         "WSJ-Markets",          "en", 5),
+    ("https://www.ft.com/rss/home",                           "FT-Home",              "en", 5),
 ]
 
 # ── HTML 抓取源（无 RSS，直接解析页面）───────────────────────────────

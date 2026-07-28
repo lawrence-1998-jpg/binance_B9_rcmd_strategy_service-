@@ -274,6 +274,13 @@ main{padding:38px 0 90px}
 .tag.neu{background:var(--surface-2);color:var(--ink-3);border-color:var(--rule)}
 .tag.rumor{background:var(--red-wash);color:var(--red);border-color:#F0C6CD;font-weight:600}
 .tag.ver{background:var(--green-wash);color:var(--green);border-color:#BFE3D0}
+/* 2026-07-29：情绪同向/反转加成标签。Lawrence 原话「我都不知道哪条是反转，
+   得一条条肉眼看」——此前策略实验室展开明细里能看到贡献值，但榜单本身和
+   主站数据展示表都没有可视化标签，用户必须逐条点开才知道。
+   两个用不同色相区分（同向=靛蓝，跟随大盘氛围；反转=金色，"值得多看一眼"的
+   稀有信号，反转本来就只对 S/A 档生效，样本天然更少，颜色上也该更显眼）。 */
+.tag.bonus-align{background:var(--indigo-wash);color:var(--indigo);border-color:var(--indigo-line);font-weight:600}
+.tag.bonus-reversal{background:var(--gold-wash);color:var(--gold-deep);border-color:var(--gold-line);font-weight:700}
 
 /* ── Bars ───────────────────────────────────────────────────────────── */
 .bar{height:6px;border-radius:3px;background:var(--surface-3);overflow:hidden}
@@ -1090,6 +1097,11 @@ footer{border-top:1px solid var(--rule);padding:26px 0 40px;font-size:12px;color
 #panel-5 .lb-tag.flat{background:var(--lab-n200);color:var(--lab-n600)}
 #panel-5 .lb-tag.rumor{background:var(--lab-a800);color:var(--lab-paper)}
 #panel-5 .lb-tag.ver{background:var(--lab-g100);color:var(--lab-g800)}
+/* 2026-07-29：情绪同向/反转加成标签，和 tab02（真实数据展示）保持同一套
+   语义色——反转用最深的赤陶+反白，做成"值得多看一眼"的醒目样式（它本来就
+   只对 S/A 档生效，样本天然稀少）；同向是常规软色，不需要抢眼。 */
+#panel-5 .lb-tag.bonus-align{background:var(--lab-a100);color:var(--lab-a700)}
+#panel-5 .lb-tag.bonus-reversal{background:var(--lab-a700);color:var(--lab-paper);font-weight:700}
 
 /* Tier 徽章：色值照 README 第三节（bg / 文字 / inset 描边）*/
 #panel-5 .lb-tier{
@@ -2105,6 +2117,8 @@ footer{border-top:1px solid var(--rule);padding:26px 0 40px;font-size:12px;color
         <select id="f-market"><option value="">全部类型</option><option value="crypto">🪙 加密</option><option value="us_stock">🇺🇸 美股</option><option value="hk_stock">🇭🇰 港股</option><option value="jp_stock">🇯🇵 日股</option><option value="kr_stock">🇰🇷 韩股</option><option value="macro_policy">🌍 经济政策</option><option value="social_signal">📡 社会信号</option><option value="general">◆ 综合</option></select></div>
       <div class="field"><label for="f-rumor">是否谣言 Rumor</label>
         <select id="f-rumor"><option value="">不限</option><option value="0">仅非谣言</option><option value="1">仅谣言标记</option></select></div>
+      <div class="field"><label for="f-bonus">情绪加成 Bonus</label>
+        <select id="f-bonus"><option value="">不限</option><option value="align">☾ 仅同向</option><option value="reversal">⚡ 仅反转</option><option value="any">有加成（不限类型）</option></select></div>
       <div class="field"><label for="f-source">信源 Source</label><select id="f-source"><option value="">全部信源</option></select></div>
       <div class="field"><label for="f-sort">排序 Sort</label>
         <select id="f-sort"><option value="importance">重要性由高到低</option><option value="date">采集时间由新到旧</option></select></div>
@@ -2729,7 +2743,7 @@ footer{border-top:1px solid var(--rule);padding:26px 0 40px;font-size:12px;color
       </button>
     </div>
     <div class="lb-formula" id="lbFormulaMacroBody">
-      Score = <b>M</b>·影响面 + <b>T</b>·时效性 + <b>H</b>·热度 + <b>A</b>·权威性 + <b>Q</b>·质量
+      Score = <b>M</b>·影响面 + <b>B</b>·广度 + <b>T</b>·时效性 + <b>I</b>·冲击力 + <b>H</b>·热度 + <b>A</b>·权威性 + <b>Q</b>·质量
       <span class="lb-dim">（七因子加权，权重合计 100%；加分项另计）</span>
     </div>
     <div class="lb-formula" id="lbFormulaSectorBody" hidden>
@@ -4129,9 +4143,22 @@ function fetchRows(){
   });
 }
 function visibleRows(){
+  // 情绪加成筛选放在客户端做，和标题关键词过滤（下面的 kw）同一个模式：
+  // bonus 是 /api/news 已经算好随每行返回的字段，不需要为了筛这一个维度
+  // 再发一次请求——数据已经在手上，服务端一趟查询就够。
+  var bf=$("#f-bonus").value;
+  var rows=state.rows;
+  if(bf){
+    rows=rows.filter(function(r){
+      var b=r.bonus||{};
+      if(bf==="align") return b.sentiment_align>0;
+      if(bf==="reversal") return b.reversal>0;
+      return b.total_bonus>0;   // "any"
+    });
+  }
   var kw=$("#f-kw").value.trim().toLowerCase();
-  if(!kw) return state.rows;
-  return state.rows.filter(function(r){
+  if(!kw) return rows;
+  return rows.filter(function(r){
     return ((r.title_zh||"")+" "+(r.title_en||"")).toLowerCase().indexOf(kw)>=0;
   });
 }
@@ -4159,6 +4186,11 @@ function renderRows(){
     if(r.is_rumor) flags+=' <span class="tag rumor">谣言</span>';
     else if(r.verification_status==="VERIFIED"||r.is_verified) flags+=' <span class="tag ver">已核实</span>';
     if((r.x_posts||[]).length) flags+=' <span class="tag" style="background:#000;color:#fff;border-color:#000">𝕏 原贴</span>';
+    // 情绪加成标签：同向/反转互斥（market_mood.mood_multiplier 本身就是互斥
+    // 逻辑，一条事件不会同时命中两个），所以最多出现一个，不用担心挤爆一行。
+    var bonus=r.bonus||{};
+    if(bonus.reversal>0) flags+=' <span class="tag bonus-reversal" title="与当前大盘情绪相反，但因为是 S/A 档重大事件，被专门顶上来防止排序变成回音室">⚡反转 +'+(bonus.reversal*100).toFixed(1)+'%</span>';
+    else if(bonus.sentiment_align>0) flags+=' <span class="tag bonus-align" title="情绪方向与当前大盘一致，被同向放大以贴合当前氛围">☾同向 +'+(bonus.sentiment_align*100).toFixed(1)+'%</span>';
     return '<tr class="row" data-i="'+i+'">'+
       '<td class="c-rank">'+(state.offset+i+1)+'</td>'+
       '<td class="c-score"><div class="score-cell"><span class="tier tier-'+tier+'">'+tier+'</span>'+
@@ -4314,7 +4346,10 @@ function renderPhone(){
       var src=srcs.length?esc(srcs[0])+(srcs.length>1?' 等'+srcs.length+'源':''):'—';
       var t=fmtTime(r.time_event||r.time_get_data);
       var mb=MARKET_BADGE[r.market_scope];
-      return '<div class="ph-item"><div class="t">'+(mb?mb.e+' ':'')+esc(r.title_zh||r.title_en||"(无标题)")+'</div>'+
+      var bonus=r.bonus||{}, bTag="";
+      if(bonus.reversal>0) bTag=' <span class="tag bonus-reversal">⚡反转</span>';
+      else if(bonus.sentiment_align>0) bTag=' <span class="tag bonus-align">☾同向</span>';
+      return '<div class="ph-item"><div class="t">'+(mb?mb.e+' ':'')+esc(r.title_zh||r.title_en||"(无标题)")+bTag+'</div>'+
         '<div class="m">'+src+'<span class="sp">·</span>'+t.d+'</div></div>';
     }).join("")+'<div style="height:26px"></div>';
   }
@@ -4437,9 +4472,14 @@ function loadData(){
   });
   var kt;
   $("#f-kw").addEventListener("input",function(){ clearTimeout(kt); kt=setTimeout(function(){ renderRows(); renderPhone(); },180); });
+  // 情绪加成筛选跟关键词过滤同一套逻辑：数据（bonus 字段）已经随本页结果一起
+  // 拿到了，选这个下拉框不需要重新请求 API，只需要重新跑一遍 visibleRows()
+  // 的客户端过滤再重绘——这也是为什么它不在上面那个"change 就 fetchRows()"
+  // 的数组里，那个数组是给需要服务端重新查询的筛选条件用的。
+  $("#f-bonus").addEventListener("change",function(){ renderRows(); renderPhone(); });
   $("#f-refresh").addEventListener("click",fetchRows);
   $("#f-reset").addEventListener("click",function(){
-    ["#f-run","#f-sector","#f-tier","#f-type","#f-market","#f-rumor","#f-source","#f-kw"].forEach(function(id){ $(id).value=""; });
+    ["#f-run","#f-sector","#f-tier","#f-type","#f-market","#f-rumor","#f-source","#f-kw","#f-bonus"].forEach(function(id){ $(id).value=""; });
     $("#f-sort").value="importance"; $("#f-limit").value="50";
     state.offset=0; fetchRows();
   });
@@ -6735,8 +6775,13 @@ function runReweight(){
           '<div class="ti">' +
             '<div class="tzh">' + esc(r.title_zh || r.title_en) + '</div>' +
             '<div class="meta">' + factorLine(r.factors) + '  ·  ' + esc(sourcesLine(r.source_names)) +
-              (((r.bonus || {}).total_bonus || 0) > 0
-                ? '  ·  <span class="lb-tag up">加成 +' + ((r.bonus.total_bonus)*100).toFixed(1) + '%</span>'
+              // 同向/反转互斥（mood_multiplier 本身就是互斥逻辑），拆成两个
+              // 具名标签而不是一个笼统的"加成 +X%"——原来这个通用标签正是
+              // Lawrence 反馈的问题所在："我都不知道哪条是反转，得一条条肉眼看"。
+              (((r.bonus || {}).reversal || 0) > 0
+                ? '  ·  <span class="lb-tag bonus-reversal">⚡反转 +' + (r.bonus.reversal*100).toFixed(1) + '%</span>'
+                : ((r.bonus || {}).sentiment_align || 0) > 0
+                ? '  ·  <span class="lb-tag bonus-align">☾同向 +' + (r.bonus.sentiment_align*100).toFixed(1) + '%</span>'
                 : '') +
             '</div>' +
             ((r.is_rumor || r.verification_status === "VERIFIED") ?

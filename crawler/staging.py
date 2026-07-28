@@ -64,6 +64,14 @@ _AUTHORITATIVE_MACRO_SOURCES = {
     "CNBC-TopNews", "CNBC-Economy", "CNBC-Investing", "CNBC-Finance",
     "MarketWatch", "NikkeiAsia", "SCMP-GlobalEcon", "SCMP-Business",
     "KoreaHerald", "Reuters", "Bloomberg",
+    # 2026-07-29：crawler/sources.py 新接的 Bloomberg/Forbes RSS 用的是带频道
+    # 后缀的名字（"Bloomberg-Markets" 不是 "Bloomberg"）——resolve_priority 是
+    # 精确字符串匹配，不改这里的话，这批新源会静默落到默认的 P3，跟"插队优先
+    # 处理"的需求原意（"把 CNBC 等权威媒体拉回来的数据插队优先处理"）正好相反。
+    # 这正是本项目这一周反复出现的同一类问题——新老命名对不上，问题不报错，
+    # 只是静默地不生效——这次是在部署前发现的，不是事后查出来的。
+    "Bloomberg-Markets", "Bloomberg-Economics", "Bloomberg-Technology",
+    "Bloomberg-Politics", "Forbes-Business", "WSJ-Markets", "FT-Home",
 }
 
 # 加密侧的头部媒体（authority 5 的那批）+ 行情异动信号
