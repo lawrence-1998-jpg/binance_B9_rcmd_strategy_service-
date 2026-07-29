@@ -1,0 +1,385 @@
+<title>B9 排序因子体系 · 汇报材料</title>
+<style>
+:root{
+  --bg:#faf7f2; --panel:#ffffff; --ink:#1c1917; --ink-2:#57534e; --ink-3:#8a827a;
+  --rule:#e8e1d7; --rule-2:#f2ede5;
+  --clay:#a85533; --clay-deep:#7c3a1e; --clay-wash:#f7ebe3;
+  --moss:#54683f; --moss-wash:#ecf0e4;
+  --slate:#3f5468; --slate-wash:#e8eef3;
+  --amber:#9a6b1f; --amber-wash:#f8f0dd;
+  --crimson:#9c3535; --crimson-wash:#f8e6e3;
+  --shadow:0 1px 2px rgba(28,25,23,.05), 0 6px 18px rgba(28,25,23,.05);
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  --serif:"Iowan Old Style","Palatino Linotype",Georgia,"Songti SC",serif;
+}
+@media (prefers-color-scheme:dark){
+  :root{
+    --bg:#17151a; --panel:#211e25; --ink:#ece7e1; --ink-2:#b3aca4; --ink-3:#807a72;
+    --rule:#332e38; --rule-2:#292430;
+    --clay:#d98f66; --clay-deep:#eaad86; --clay-wash:#33231b;
+    --moss:#9db47c; --moss-wash:#232a1c;
+    --slate:#8fb0c9; --slate-wash:#1e2831;
+    --amber:#d5a94f; --amber-wash:#2e2617;
+    --crimson:#dd8484; --crimson-wash:#301f1e;
+    --shadow:0 1px 2px rgba(0,0,0,.35), 0 8px 24px rgba(0,0,0,.3);
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#17151a; --panel:#211e25; --ink:#ece7e1; --ink-2:#b3aca4; --ink-3:#807a72;
+  --rule:#332e38; --rule-2:#292430;
+  --clay:#d98f66; --clay-deep:#eaad86; --clay-wash:#33231b;
+  --moss:#9db47c; --moss-wash:#232a1c;
+  --slate:#8fb0c9; --slate-wash:#1e2831;
+  --amber:#d5a94f; --amber-wash:#2e2617;
+  --crimson:#dd8484; --crimson-wash:#301f1e;
+  --shadow:0 1px 2px rgba(0,0,0,.35), 0 8px 24px rgba(0,0,0,.3);
+}
+:root[data-theme="light"]{
+  --bg:#faf7f2; --panel:#ffffff; --ink:#1c1917; --ink-2:#57534e; --ink-3:#8a827a;
+  --rule:#e8e1d7; --rule-2:#f2ede5;
+  --clay:#a85533; --clay-deep:#7c3a1e; --clay-wash:#f7ebe3;
+  --moss:#54683f; --moss-wash:#ecf0e4;
+  --slate:#3f5468; --slate-wash:#e8eef3;
+  --amber:#9a6b1f; --amber-wash:#f8f0dd;
+  --crimson:#9c3535; --crimson-wash:#f8e6e3;
+  --shadow:0 1px 2px rgba(28,25,23,.05), 0 6px 18px rgba(28,25,23,.05);
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+  font-size:15px;line-height:1.72;-webkit-font-smoothing:antialiased}
+.wrap{max-width:960px;margin:0 auto;padding:44px 26px 96px}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+
+/* masthead */
+.mast{border-bottom:2px solid var(--ink);padding-bottom:22px;margin-bottom:14px}
+.kick{font-size:11px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--clay);margin-bottom:12px}
+h1{font-family:var(--serif);font-weight:400;font-size:40px;line-height:1.14;margin:0 0 14px;letter-spacing:-.015em;text-wrap:balance}
+.lede{font-size:15.5px;color:var(--ink-2);max-width:64ch;margin:0}
+.stamp{display:flex;gap:26px;flex-wrap:wrap;font-size:12px;color:var(--ink-3);margin-bottom:44px;padding-top:12px}
+.stamp b{color:var(--ink-2);font-weight:600}
+
+/* section */
+section{margin-bottom:56px;scroll-margin-top:20px}
+.shead{display:flex;align-items:baseline;gap:12px;margin-bottom:8px;padding-bottom:10px;border-bottom:1px solid var(--rule)}
+.snum{font-family:var(--mono);font-size:12px;font-weight:700;color:var(--clay);letter-spacing:.05em}
+h2{font-family:var(--serif);font-weight:400;font-size:26px;margin:0;letter-spacing:-.01em}
+.slead{font-size:14.5px;color:var(--ink-2);max-width:68ch;margin:14px 0 24px}
+h3{font-size:15px;font-weight:700;margin:30px 0 10px;color:var(--ink)}
+p{max-width:70ch}
+.dim{color:var(--ink-3);font-size:13px}
+
+/* formula band */
+.formula{background:var(--panel);border:1px solid var(--rule);border-radius:12px;
+  padding:20px 24px;box-shadow:var(--shadow);margin-bottom:26px;overflow-x:auto}
+.formula .row{font-family:var(--mono);font-size:14px;white-space:nowrap;margin-bottom:8px}
+.formula .row:last-child{margin-bottom:0}
+.formula .lbl{display:inline-block;min-width:82px;color:var(--ink-3);font-size:11.5px;
+  text-transform:uppercase;letter-spacing:.06em;white-space:nowrap}
+.formula b{color:var(--clay-deep);font-weight:700}
+.formula .new{background:var(--clay-wash);color:var(--clay-deep);padding:1px 5px;border-radius:4px;font-weight:700}
+
+/* factor cards */
+.fgrid{display:grid;gap:16px}
+.fcard{background:var(--panel);border:1px solid var(--rule);border-radius:12px;
+  box-shadow:var(--shadow);overflow:hidden}
+.fcard.new{border-color:var(--clay);border-width:1.5px}
+.fhead{display:flex;align-items:center;gap:12px;padding:15px 20px;border-bottom:1px solid var(--rule-2);flex-wrap:wrap}
+.fsym{font-family:var(--mono);font-size:17px;font-weight:700;width:26px;text-align:center;flex:none}
+.fname{font-weight:700;font-size:15.5px}
+.fen{font-size:11.5px;color:var(--ink-3);letter-spacing:.04em;text-transform:uppercase}
+.fwt{margin-left:auto;font-family:var(--mono);font-size:15px;font-weight:700;color:var(--ink)}
+.ftag{font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:999px;letter-spacing:.03em}
+.ftag.new{background:var(--clay);color:#fff}
+.ftag.old{background:var(--rule-2);color:var(--ink-3)}
+.fbody{padding:16px 20px}
+.fbody p{margin:0 0 12px;font-size:13.8px}
+.fbody p:last-child{margin-bottom:0}
+.fdef{background:var(--slate-wash);border-left:3px solid var(--slate);border-radius:0 7px 7px 0;
+  padding:11px 15px;margin:0 0 14px;font-size:13.2px;color:var(--ink-2)}
+.fdef b{color:var(--ink)}
+.ladder{display:grid;grid-template-columns:auto 1fr auto;gap:5px 12px;align-items:center;
+  font-size:12.8px;margin:12px 0}
+.ladder .lv{font-family:var(--mono);font-weight:700;white-space:nowrap;color:var(--ink)}
+.ladder .ds{color:var(--ink-2)}
+.ladder .val{font-family:var(--mono);font-weight:700;color:var(--clay-deep);text-align:right}
+.why{background:var(--moss-wash);border-radius:8px;padding:12px 15px;font-size:13px;color:var(--ink-2);margin-top:14px}
+.why b{color:var(--moss)}
+.nope{background:var(--crimson-wash);border-radius:8px;padding:12px 15px;font-size:13px;color:var(--ink-2);margin-top:12px}
+.nope b{color:var(--crimson)}
+
+/* mermaid */
+.diagram{background:var(--panel);border:1px solid var(--rule);border-radius:12px;
+  padding:22px;box-shadow:var(--shadow);overflow-x:auto;margin-bottom:10px}
+pre.mermaid{margin:0;background:transparent;text-align:center}
+.cap{font-size:12px;color:var(--ink-3);margin-top:2px;margin-bottom:26px}
+
+/* live example */
+.ex{background:var(--panel);border:1px solid var(--rule);border-radius:12px;box-shadow:var(--shadow);
+  padding:20px 22px;margin-bottom:16px}
+.ex .top{display:flex;justify-content:space-between;align-items:baseline;gap:14px;flex-wrap:wrap;margin-bottom:5px}
+.ex .tl{font-weight:700;font-size:15.5px}
+.ex .sc{font-family:var(--serif);font-size:22px;color:var(--clay-deep);white-space:nowrap}
+.ex .meta{font-size:12px;color:var(--ink-3);margin-bottom:15px}
+.bars{display:grid;grid-template-columns:auto 1fr auto auto;gap:6px 11px;align-items:center;font-size:12.5px}
+.bars .k{font-family:var(--mono);font-weight:700;white-space:nowrap}
+.bars .bar{height:7px;background:var(--rule-2);border-radius:4px;overflow:hidden}
+.bars .bar>i{display:block;height:100%;border-radius:4px;background:var(--clay)}
+.bars .bar.hl>i{background:var(--moss)}
+.bars .raw{font-family:var(--mono);font-size:11.5px;color:var(--ink-3);text-align:right;white-space:nowrap}
+.bars .con{font-family:var(--mono);font-weight:700;text-align:right;white-space:nowrap}
+.math{margin-top:14px;padding-top:12px;border-top:1px dashed var(--rule);
+  font-family:var(--mono);font-size:12.5px;color:var(--ink-2);display:flex;gap:6px 12px;flex-wrap:wrap;align-items:baseline}
+.math b{color:var(--clay-deep)}
+
+/* insight */
+.ins{background:var(--panel);border:1px solid var(--rule);border-left:3px solid var(--clay);
+  border-radius:0 12px 12px 0;padding:18px 22px;margin-bottom:16px;box-shadow:var(--shadow)}
+.ins h4{margin:0 0 8px;font-size:15px;font-weight:700}
+.ins p{margin:0 0 10px;font-size:13.8px;color:var(--ink-2)}
+.ins p:last-child{margin-bottom:0}
+.ins b{color:var(--ink)}
+.ins .num{font-family:var(--mono);color:var(--clay-deep);font-weight:700}
+
+/* table */
+.tw{overflow-x:auto;border:1px solid var(--rule);border-radius:10px;box-shadow:var(--shadow);margin-bottom:8px}
+table{width:100%;border-collapse:collapse;background:var(--panel);font-size:13.2px}
+th{text-align:left;padding:10px 14px;font-size:10.5px;font-weight:700;letter-spacing:.05em;
+  text-transform:uppercase;color:var(--ink-3);background:var(--rule-2);border-bottom:1px solid var(--rule);white-space:nowrap}
+td{padding:9px 14px;border-bottom:1px solid var(--rule-2)}
+tr:last-child td{border-bottom:none}
+td.n,th.n{text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums}
+.tier{display:inline-flex;align-items:center;justify-content:center;width:19px;height:19px;border-radius:5px;
+  font-family:var(--mono);font-size:10.5px;font-weight:700;color:#fff}
+.tS{background:var(--clay-deep)} .tA{background:var(--clay)} .tB{background:var(--amber)}
+footer{margin-top:56px;padding-top:18px;border-top:1px solid var(--rule);font-size:12px;color:var(--ink-3)}
+</style>
+
+<div class="wrap">
+
+<div class="mast">
+  <div class="kick">B9 推荐策略服务 · 排序因子体系</div>
+  <h1>七个基础因子 + 两个加分项<br>怎么把「重要」变成一个可调的数</h1>
+  <p class="lede">本次改造把排序从「五因子加权」升级为两段式模型：先算一个跨天可比的基础分，再叠加一层反映当下市场氛围的倍率。新增 <b>广度</b>、<b>冲击力</b> 两个基础因子和 <b>情绪同向</b>、<b>反转信号</b> 两个加分项——这份材料讲清楚它们各自定义什么、为什么这么定、以及从真实数据里读出的几条结论。</p>
+</div>
+<div class="stamp">
+  <span><b>数据窗口</b> 2026-07-29 实时</span>
+  <span><b>当前大盘情绪</b> −0.439（偏悲观）</span>
+  <span><b>可调界面</b> 工作台 05 策略实验室</span>
+</div>
+
+<!-- ══════════ 01 流程 ══════════ -->
+<section>
+  <div class="shead"><span class="snum">01</span><h2>一条新闻从抓取到排名的完整流程</h2></div>
+  <p class="slead">左半段是「把原始网页变成结构化事件」，右半段是「给事件定序」。本次改造集中在右半段，但左半段新增的两道闸同样关键——它们决定了什么内容有资格进入排序。</p>
+
+  <div class="diagram">
+<pre class="mermaid">
+flowchart TB
+  A["七类渠道抓取<br/>RSS · 爬虫 · 搜索 · 行情 · X"] --> B{"时间可信度闸<br/><small>聚合器来源且无正文 → 丢弃</small>"}
+  B -->|"通过"| C["粗去重<br/>TF-IDF → 语义向量"]
+  B -.->|"丢弃 35%"| X1["发布时间不可知<br/>不可验证"]
+  C --> D["LLM 结构化<br/>gpt-5.4"]
+  D --> E{"事件时间闸<br/><small>真实发生时间 &gt; 5 天 → 丢弃</small>"}
+  E -->|"通过"| F["语义聚合 + 跨轮归并"]
+  E -.->|"丢弃"| X2["陈旧内容"]
+  F --> G["真实性校验<br/><small>五个客观信号 · 零 LLM</small>"]
+  G --> H["七因子打分<br/>BaseScore"]
+  H --> I["写库<br/><small>importance_score</small>"]
+  I --> J{"查询时"}
+  J --> K["情绪同向加成"]
+  J --> L["反转信号加成"]
+  K --> M["FinalScore<br/>= Base × (1 + 加成)"]
+  L --> M
+  M --> N["前端排序"]
+
+  style B fill:#f7ebe3,stroke:#a85533,stroke-width:2px
+  style E fill:#f7ebe3,stroke:#a85533,stroke-width:2px
+  style H fill:#ecf0e4,stroke:#54683f,stroke-width:2px
+  style M fill:#ecf0e4,stroke:#54683f,stroke-width:2px
+  style X1 fill:#f8e6e3,stroke:#9c3535,color:#9c3535
+  style X2 fill:#f8e6e3,stroke:#9c3535,color:#9c3535
+</pre>
+  </div>
+  <p class="cap">两道红框闸是本轮新增/收紧的：前者拦「时间不可信」，后者拦「时间太旧」。两个绿框是本次改造的核心——打分从五因子扩到七因子，并把「当下氛围」从基础分里剥离出来做外层倍率。</p>
+
+  <div class="ins">
+    <h4>为什么把加成做成「查询时的外层倍率」而不是写进分数</h4>
+    <p>加成依赖 <b>mood_score</b>（大盘情绪），这个值每天都在变。如果把它算进 <span class="num">importance_score</span> 写库，昨天算出的分和今天算出的分就<b>不可比</b>了——而这个字段是策略实验室、去重、历史分析共同依赖的口径。</p>
+    <p>拆成两段之后：基础分是「这条新闻本身有多重要」，跨天可比、可复现；加成是「在今天这个市场环境下它该被抬多高」，随时可以把系数调 0 退回纯基础排序——<b>这也是验证加成真实贡献的 A/B 对照方式</b>。</p>
+  </div>
+</section>
+
+<!-- ══════════ 02 公式 ══════════ -->
+<section>
+  <div class="shead"><span class="snum">02</span><h2>两段式打分模型</h2></div>
+
+  <div class="formula">
+    <div class="row"><span class="lbl">基础分</span>BaseScore = 0.26·<b>M</b> + <span class="new">0.16·B</span> + 0.16·<b>T</b> + <span class="new">0.14·I</span> + 0.10·<b>H</b> + 0.10·<b>A</b> + 0.08·<b>Q</b></div>
+    <div class="row"><span class="lbl">最终分</span>FinalScore = BaseScore × ( 1 + <span class="new">同向加成</span> + <span class="new">反转加成</span> )　<span style="color:var(--ink-3)">// 合计封顶 +50%</span></div>
+  </div>
+  <p class="dim" style="margin-top:-16px;margin-bottom:24px">高亮部分为本次新增。七个基础因子权重合计 100%，加分项不参与归一化。</p>
+</section>
+
+<!-- ══════════ 03 新增因子 ══════════ -->
+<section>
+  <div class="shead"><span class="snum">03</span><h2>四个新增项的具体定义</h2></div>
+  <p class="slead">每一项都说明三件事：<b>算什么</b>、<b>为什么这么算</b>、以及<b>刻意没做什么</b>——最后一项往往比前两项更重要，它防止同一个信号被重复计分。</p>
+
+  <div class="fgrid">
+
+    <!-- B 广度 -->
+    <div class="fcard new">
+      <div class="fhead">
+        <span class="fsym" style="color:var(--moss)">B</span>
+        <span class="fname">广度</span><span class="fen">Breadth</span>
+        <span class="ftag new">新增</span>
+        <span class="fwt">16%</span>
+      </div>
+      <div class="fbody">
+        <div class="fdef"><b>定义：</b>这件事波及多大范围。刻意与「有多重要」分开——一家公司的重大丑闻再轰动，波及范围仍然只是它自己。</div>
+        <div class="ladder">
+          <span class="lv">cross_market</span><span class="ds">跨市场：同时波及股市与加密，或多国大盘（美联储决议、全球关税、战争扰动油路）</span><span class="val">1.00</span>
+          <span class="lv">market_index</span><span class="ds">单一市场大盘级（日经暴跌、KOSPI 熔断、纳指创新高）</span><span class="val">0.80</span>
+          <span class="lv">sector</span><span class="ds">板块级，不是整个大盘（AI 芯片股集体下跌、DeFi 监管）</span><span class="val">0.60</span>
+          <span class="lv">multi_asset</span><span class="ds">明确波及 2–5 个标的，但不构成板块</span><span class="val">0.35</span>
+          <span class="lv">single_asset</span><span class="ds">只关乎一家公司/一个币种</span><span class="val">0.15</span>
+        </div>
+        <div class="why"><b>为什么用五档枚举而不是让模型直接打 0–1 分：</b>枚举的判据能写清楚、能复核、能对齐；让模型自由打连续分，实测只会得到一堆 0.7。分档由 LLM 判定，映射成分值由代码固定，改档位定义不用改模型。</div>
+      </div>
+    </div>
+
+    <!-- I 冲击力 -->
+    <div class="fcard new">
+      <div class="fhead">
+        <span class="fsym" style="color:var(--clay)">I</span>
+        <span class="fname">冲击力</span><span class="fen">Punch</span>
+        <span class="ftag new">新增</span>
+        <span class="fwt">14%</span>
+      </div>
+      <div class="fbody">
+        <div class="fdef"><b>定义：</b><span class="mono">0.65 × 数值幅度 + 0.35 × 权威共振</span>。捕捉「这条读起来有多冲」——跌 18% 和跌 0.3% 在其它因子上可能完全一样，但用户感受天差地别。<b>纯计算，零 LLM 调用。</b></div>
+        <div class="ladder">
+          <span class="lv">幅度 ≥15%</span><span class="ds">或命中「熔断/崩盘/暴跌/涨停」等极端词</span><span class="val">1.00</span>
+          <span class="lv">8–15%</span><span class="ds"></span><span class="val">0.75</span>
+          <span class="lv">4–8%</span><span class="ds"></span><span class="val">0.55</span>
+          <span class="lv">2–4%</span><span class="ds"></span><span class="val">0.35</span>
+          <span class="lv">无数字</span><span class="ds">没抽到任何涨跌幅</span><span class="val">0.10</span>
+        </div>
+        <p style="font-size:13.2px;color:var(--ink-2)"><b>权威共振</b>数的是 authority≥4 的独立机构家数（3 家以上给满分）。它和热度因子的区别：热度数的是<b>所有</b>信源、会被社交互动稀释；共振只数<b>一线财经机构</b>——「三家一线媒体同时报」本身就是「这是件大事」的强信号。</p>
+        <div class="nope"><b>刻意没做的：</b>原始需求里还有一项「对社会经济产生重大影响」。对照后发现它已经被 <b>M（影响面）</b> 和 <b>B（广度）</b> 覆盖了两遍，再单列就是<b>三重计分</b>——同一个信号进三次，权重会被悄悄放大到设计意图之外。</div>
+        <div class="why"><b>两个真实的取数陷阱（都已修）：</b>①「征收 <span class="mono">100%</span> 二级关税」里的百分数是<b>税率</b>不是波动，会把冲击力顶满——已加语境词表识别（关税/利率/持股/概率等），数字前后都查；②跨轮归并时正文刻意不更新、幅度却按新正文算，导致「KOSPI 跌超 8%」旁边标「幅度 80%」——已改为打分与入库共用同一份正文。</div>
+      </div>
+    </div>
+
+    <!-- 同向 -->
+    <div class="fcard new">
+      <div class="fhead">
+        <span class="fsym" style="color:var(--slate)">☾</span>
+        <span class="fname">情绪同向加成</span><span class="fen">Align</span>
+        <span class="ftag new">新增</span>
+        <span class="fwt">上限 +25%</span>
+      </div>
+      <div class="fbody">
+        <div class="fdef"><b>定义：</b><span class="mono">k × |大盘情绪| × |事件情绪|</span>，仅当两者<b>方向一致</b>时生效，反向或大盘中性时为 0。</div>
+        <p style="font-size:13.5px;color:var(--ink-2)">解决的是「内容很平、没有感觉」——大盘集体悲观时，负面消息本就该更靠前，这是用户此刻真正关心的东西。加成有界（不是无限放大），且大盘接近中性时自动失效。</p>
+        <div class="why"><b>为什么不做减成：</b>只加不减，意味着「大悲观时段里少数逆势乐观的消息」不会被排序<b>打压到看不见</b>——用户仍然能看到「情况没那么糟」的信号，只是不会被推到最前面。</div>
+      </div>
+    </div>
+
+    <!-- 反转 -->
+    <div class="fcard new">
+      <div class="fhead">
+        <span class="fsym" style="color:var(--clay-deep)">⚡</span>
+        <span class="fname">反转信号加成</span><span class="fen">Reversal</span>
+        <span class="ftag new">新增</span>
+        <span class="fwt">上限 +20%</span>
+      </div>
+      <div class="fbody">
+        <div class="fdef"><b>定义：</b>同样是 <span class="mono">k × |大盘情绪| × |事件情绪|</span>，但仅当方向<b>相反</b>、<b>且事件为 S/A 档</b>时生效。与同向加成互斥，一条事件最多命中一个。</div>
+        <p style="font-size:13.5px;color:var(--ink-2)">这是整套模型里最重要的一个设计决策，它专门用来<b>对冲同向加成的副作用</b>。</p>
+        <div class="nope"><b>不加它会发生什么：</b>大盘暴跌 → 同向加成集体抬高负面内容 → 首屏全是坏消息 → 而此时一条「美联储可能提前降息」的反转信号<b>恰恰被压到看不见</b>。金融产品里放大情绪 = 放大追涨杀跌；真正伤害用户的不是内容平淡，是<b>该看到反转时看不到</b>。</div>
+        <div class="why"><b>S/A 档硬约束是它成立的前提：</b>没有这个约束，大盘单边时所有反向的噪音都会被扶上来，反而更乱。只有「重大 <b>且</b> 与大盘反向」才是真信号——档位低的反向内容拿不到这个加成。</div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<!-- ══════════ 04 真实案例 ══════════ -->
+<section>
+  <div class="shead"><span class="snum">04</span><h2>一条真实事件的完整拆解</h2></div>
+  <p class="slead">取当前首屏第 1 名，把七个因子的原始分、权重、加权贡献逐项摊开——这是策略实验室里点开任意一行就能看到的视图。</p>
+
+  <div class="ex">
+    <div class="top"><span class="tl"><span class="tier tS">S</span> 韩国审查稳市措施 KOSPI 跌 6%</span><span class="sc">0.851</span></div>
+    <div class="meta">2026-07-29 10:21 · 广度 = 大盘指数 · 幅度 = 10.0% · 信源 BlockBeats快讯 · 金色财经</div>
+    <div class="bars">
+      <span class="k">M 影响面</span><div class="bar"><i style="width:90%"></i></div><span class="raw">0.900 × 26%</span><span class="con">0.2340</span>
+      <span class="k">B 广度</span><div class="bar hl"><i style="width:80%"></i></div><span class="raw">0.800 × 16%</span><span class="con">0.1280</span>
+      <span class="k">T 时效性</span><div class="bar"><i style="width:100%"></i></div><span class="raw">1.000 × 16%</span><span class="con">0.1600</span>
+      <span class="k">I 冲击力</span><div class="bar hl"><i style="width:88%"></i></div><span class="raw">0.878 × 14%</span><span class="con">0.1229</span>
+      <span class="k">H 热度</span><div class="bar"><i style="width:10%"></i></div><span class="raw">0.100 × 10%</span><span class="con">0.0100</span>
+      <span class="k">A 权威性</span><div class="bar"><i style="width:62%"></i></div><span class="raw">0.620 × 10%</span><span class="con">0.0620</span>
+      <span class="k">Q 质量</span><div class="bar"><i style="width:80%"></i></div><span class="raw">0.800 × 8%</span><span class="con">0.0640</span>
+    </div>
+    <div class="math"><span>基础分 <b>0.7809</b></span><span>× (1 + 同向 0.090)</span><span>= 最终分 <b>0.8511</b></span></div>
+  </div>
+  <p class="cap">绿色两条即新增因子。这条事件的基础分里，<b>广度 + 冲击力合计贡献 0.251，占比 32%</b>——改造前这两块信息完全不进入排序。</p>
+
+  <h3>当前首屏 Top 8（真实数据）</h3>
+  <div class="tw">
+    <table>
+      <thead><tr><th>#</th><th>档</th><th>标题</th><th>广度</th><th class="n">幅度</th><th class="n">基础分</th><th class="n">加成</th><th class="n">最终</th></tr></thead>
+      <tbody>
+        <tr><td class="n">1</td><td><span class="tier tS">S</span></td><td>韩国审查稳市措施 KOSPI跌6%</td><td>大盘指数</td><td class="n">10%</td><td class="n">0.781</td><td class="n">+9.0%</td><td class="n">0.851</td></tr>
+        <tr><td class="n">2</td><td><span class="tier tA">A</span></td><td>伊朗导弹袭击后美军加油机升空</td><td>跨市场</td><td class="n">20%</td><td class="n">0.772</td><td class="n">+6.4%</td><td class="n">0.821</td></tr>
+        <tr><td class="n">3</td><td><span class="tier tA">A</span></td><td>美方称伊朗向中东美军射导弹</td><td>跨市场</td><td class="n">—</td><td class="n">0.754</td><td class="n">+7.0%</td><td class="n">0.807</td></tr>
+        <tr><td class="n">4</td><td><span class="tier tA">A</span></td><td>红海油轮遇袭推升能源通道风险</td><td>跨市场</td><td class="n">—</td><td class="n">0.754</td><td class="n">+6.2%</td><td class="n">0.800</td></tr>
+        <tr><td class="n">5</td><td><span class="tier tA">A</span></td><td>韩国股市两月6次熔断波动加剧</td><td>大盘指数</td><td class="n">—</td><td class="n">0.711</td><td class="n">+7.9%</td><td class="n">0.767</td></tr>
+        <tr><td class="n">6</td><td><span class="tier tA">A</span></td><td>美伊停火落空油价涨4%</td><td>跨市场</td><td class="n">14%</td><td class="n">0.709</td><td class="n">+6.2%</td><td class="n">0.753</td></tr>
+        <tr><td class="n">7</td><td><span class="tier tS">S</span></td><td>韩股触发熔断 日股失守63000点</td><td>跨市场</td><td class="n">—</td><td class="n">0.681</td><td class="n">+9.7%</td><td class="n">0.747</td></tr>
+        <tr><td class="n">8</td><td><span class="tier tA">A</span></td><td>美国称拦截伊朗导弹袭击</td><td>跨市场</td><td class="n">—</td><td class="n">0.701</td><td class="n">+6.2%</td><td class="n">0.745</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="cap">当前大盘情绪 −0.439（偏悲观），首屏 8 条全部命中同向加成、加成幅度 6–10%——这正是「氛围感」的来源：不是靠视觉喊叫，是靠排序让同一条叙事线上的内容聚到一起。</p>
+</section>
+
+<!-- ══════════ 05 Insight ══════════ -->
+<section>
+  <div class="shead"><span class="snum">05</span><h2>从真实数据里读出的五条结论</h2></div>
+
+  <div class="ins">
+    <h4>一 · 新因子确实在区分内容，不是白算的</h4>
+    <p>把首屏 Top20 的因子均值和全库均值对比：<b>广度</b> <span class="num">0.705</span> vs <span class="num">0.416</span>，<b>冲击力</b> <span class="num">0.693</span> vs <span class="num">0.250</span>。冲击力的首屏均值接近全库的 <b>2.8 倍</b>——说明「跌 X%、多家权威共振」这类特征确实被排上去了。如果这两个数接近，就说明因子只增加了计算量、没有区分力。</p>
+  </div>
+
+  <div class="ins">
+    <h4>二 · 排序改造的效果，主要体现在非加密内容的可见度上</h4>
+    <p>对照改造前的真实排序快照：非加密内容在首屏的占比 <span class="num">45% → 55%</span>，S/A 档占比 <span class="num">80% → 90%</span>，Top20 换手率 45%。换手率本身不是「变好」的证据（它只说明排序确实变了），方向性的证据是前两项。</p>
+  </div>
+
+  <div class="ins">
+    <h4>三 · 首屏是一条连贯叙事，不是十条互不相干的快讯</h4>
+    <p>当前 Top8 读下来是：芯片股抛售 → 拖累亚洲大盘 → 韩国日本相继熔断 → 背后叠加霍尔木兹地缘风险。<b>用户翻到第 8 条还能感觉到「这些事互相有关系」</b>——这才是热度感的核心，不是单条新闻多耸动，而是整体氛围有没有拧成一股绳。情绪横幅的 −0.439 与首屏内容方向完全一致，没有出现「横幅说悲观、内容却平静」的割裂。</p>
+  </div>
+
+  <div class="ins">
+    <h4>四 · 热度因子会给出反直觉的低分，这是设计而不是缺陷</h4>
+    <p>首屏多条重大事件的 <b>H（热度）只有 0.05–0.30</b>。原因是热度只看「信源数 + 社交互动」，即<b>已经被多少人关注过</b>，而不是<b>应该有多重要</b>。刚发生的重大事件天然还没积累关注度，两者本该有落差。</p>
+    <p>这个落差不是 bug，但<b>会被用户读成 bug</b>（「这么大的事热度才 0.1？」）。建议在产品文案上解释清楚，而不是改公式去迎合直觉——一旦让热度去承担「重要性」的表达，它和 M/B 就重复了。</p>
+  </div>
+
+  <div class="ins">
+    <h4>五 · 同一件大事会被拆成多张卡片，这是去重粒度的固有张力</h4>
+    <p>实测案例：「芯片股抛售」这条主线，FT 的单信源版本落在 <b>B 档 0.474</b>，而 9 家信源合并的版本落在 <b>A 档 0.680</b>。两条讲的是同一件事，FT 那条因为语义相似度没跨过合并阈值（0.82，在 855 条真实事件上标定过），没拿到「多源共振」的加成。</p>
+    <p>结论是<b>主线本身排得靠前，只是某一家媒体的具体卡片不一定是最靠前的那张</b>——不是分类错误。要消除它就得下调合并阈值，代价是误合并不同事件，那个代价更大。</p>
+  </div>
+</section>
+
+<footer>
+  数据来源：线上 MySQL 实时查询（news_events），2026-07-29 12:46 UTC+8。因子权重与档位定义见 <span class="mono">crawler/scoring.py</span>，加分项见 <span class="mono">crawler/market_mood.py</span>，可调界面在工作台 05 策略实验室。全部数值为真实生产数据，非示意。
+</footer>
+
+</div>
