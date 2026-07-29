@@ -24,7 +24,7 @@ from openai import OpenAI
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
-from . import storage
+from . import source_trust, storage
 from .dedup import (COSINE_THRESHOLD, aggregate_events, build_fingerprint,
                     embed_texts, fallback_id)
 from .market_cap import annotate_events as annotate_market_cap
@@ -208,7 +208,17 @@ def semantic_prefilter(items: list[dict], client, tracker=None,
 #   · 本闸在 LLM **之后**，看的是模型从正文里读出来的 event_date（真实发生
 #     时间）。它能抓住"信源时间戳骗人"这一类，代价是钱已经花了。
 # 顺序上是"先便宜的、后可靠的"，属于纵深防御，不是重复。
-MAX_EVENT_AGE_DAYS = int(os.environ.get("B9_MAX_EVENT_AGE_DAYS", "7"))
+#
+# 2026-07-29 补充（数字税旧闻事故）：**本闸有一个结构性盲区**——它依赖 LLM
+# 从正文里读日期，而搜索聚合器（Google News/ddgs）给的条目根本没有正文
+# （实测 92% 的 summary 只是标题复读），LLM 无从提取，event_date 只能回落
+# 成聚合器自己那个不可信的 published_at，于是本闸对着一个假日期做校验、
+# 必然放行。这个盲区补在更前面的 crawler/source_trust.py（LLM 前直接丢掉
+# "聚合器 + 无正文"的条目），不是靠调本闸的阈值——阈值再严也救不了一个
+# 从一开始就是假的输入。
+#
+# 天数从 7 收紧到 5：Lawrence 明确要求"发布时间不是近5天的内容做强制去除"。
+MAX_EVENT_AGE_DAYS = int(os.environ.get("B9_MAX_EVENT_AGE_DAYS", "5"))
 
 # 未来事件的容忍窗口。催化剂日历（CoinMarketCal）本来就在预告未来的硬分叉/
 # 解锁，event_date 晚于今天是正常的，不能当异常丢掉。
@@ -969,6 +979,22 @@ def run_pipeline() -> dict:
 
         # 2. X 推文落表（必须早于事件写库，H 因子要读回互动量）
         storage.write_x_posts(x_raw_posts, conn)
+
+        # 2.5 时间可信度闸（2026-07-29 线上事故后新增，见 crawler/source_trust.py）
+        #     丢弃"聚合器来源 + 无正文"的条目：这类条目的 published_at 是搜索
+        #     引擎的分发时间而非原文发布时间（实测差过整整一个月），而且因为
+        #     没有正文，LLM 后的 filter_by_event_date 兜底闸也拿不到任何材料
+        #     去纠正它——两道防线同时失效，只能在这里直接丢。
+        #     放在 LLM **之前**：判定只看 type/summary 两个字段，纯字符串操作，
+        #     不需要模型理解，早丢早省钱（实测这类占 web_search 的 92%）。
+        before_trust = len(raw_items)
+        raw_items = [it for it in raw_items if not source_trust.should_drop_untrusted(it)]
+        trust_dropped = before_trust - len(raw_items)
+        if trust_dropped:
+            logger.info(
+                f"时间可信度闸：丢弃 {trust_dropped} 条（聚合器来源且无正文，"
+                f"真实发布时间不可知且无法验证）")
+        stats["untrusted_dropped"] = trust_dropped
 
         # 3. 粗去重（省 LLM 成本）：字面 TF-IDF → 语义 embedding 两道。
         #    第二道是 2026-07-28 加的，抓的是第一道天然抓不住的跨语言/改写重复，

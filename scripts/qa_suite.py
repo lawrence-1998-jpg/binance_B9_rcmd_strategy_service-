@@ -529,6 +529,51 @@ def qa_market_expansion():
     bs_n = int(rows_bs[0][0]) if rows_bs and rows_bs[0] else -1
     check(g2, "库内无 BinanceSquare（无发布时间的搜索源）条目", bs_n == 0, f"命中 {bs_n} 条")
 
+    # ── 信源时间可信度（2026-07-29 数字税旧闻事故后新增的红线）─────────
+    #
+    # 事故：一条 6/27 的旧闻以 A 档、日期 2026-07-28 进库并展示，差整整一个月。
+    # 根因是搜索聚合器（Google News）给的 published_at 是它重新分发的时间，
+    # 而这类条目没有正文，导致 LLM 后的 filter_by_event_date 兜底闸拿不到
+    # 材料去纠正——两道防线同时失效。详见 crawler/source_trust.py。
+    #
+    # 同一批清理里还抓到第二种失败模式：S 档"韩股据报暴跌33%"（实际当天
+    # KOSPI 跌 10.84%，那个 33% 是把 7 月累计跌幅当成单日崩盘）——同样是
+    # "只有标题没有正文，LLM 把有歧义的数字读错"。
+    g4 = "信源可信度"
+    # 判定必须是「**全部**信源都是聚合器」，不是「任一信源是聚合器」——这条断言
+    # 第一版写成了后者，立刻误报了 3 条：它们都是同一篇文章被直连 RSS/爬虫和
+    # Google News 各收了一次（PANews 爬虫版 + PANews 搜索版这种），直连那一份
+    # 带着可信时间戳，正是设计上要保留的。口径必须和 purge_untrusted_stale.py /
+    # source_trust.event_sources_all_aggregated 完全一致，否则 QA 会永远红。
+    #
+    # 另外 JSON_SEARCH 必须用 '$[*].type' 限定只查 type 字段：不限定的话，
+    # 任何 name/url 里恰好含 "rss" 的信源都会被误匹配（Google News 的 url 里
+    # 就带 /rss/articles/，是个必然踩中的坑）。
+    _NON_AGG = ("rss", "scraper", "social", "calendar", "market_signal", "dxfeed")
+    _no_direct = " AND ".join(
+        f"JSON_SEARCH(sources,'one','{t}',NULL,'$[*].type') IS NULL" for t in _NON_AGG)
+    rows = sql("SELECT COUNT(*) FROM news_events "
+              "WHERE date >= CURDATE() - INTERVAL 30 DAY AND source_count = 1 "
+              "AND JSON_SEARCH(sources,'one','web_search',NULL,'$[*].type') IS NOT NULL "
+              f"AND {_no_direct}")
+    orphan_n = int(rows[0][0]) if rows and rows[0] else -1
+    check(g4, "库内无「聚合器孤证」事件（单一信源且全部来自搜索聚合，真实发布时间不可验证）",
+          orphan_n == 0, f"命中 {orphan_n} 条 —— 需要跑 scripts/purge_untrusted_stale.py")
+
+    # 展示窗口收紧到 5 天后，接口与库两侧口径必须一致
+    rows = sql("SELECT COUNT(*) FROM news_events "
+              "WHERE date < CURDATE() - INTERVAL 5 DAY AND date >= CURDATE() - INTERVAL 7 DAY "
+              "AND event_tier IN ('S','A')")
+    stale_sa = int(rows[0][0]) if rows and rows[0] else -1
+    # 这条不是硬失败：5-7 天之间的 S/A 档留在库里是允许的（历史分析要用），
+    # 只是**不能出现在默认接口结果里**。下面直接查接口验证。
+    st, d = http("/api/news?limit=100")
+    rows_api = (d or {}).get("data") or [] if isinstance(d, dict) else []
+    check(g4, "/api/news 默认窗口已收紧到 5 天",
+          bool(rows_api) and all((r.get("date") or "")[:10] >= _days_ago_str(6) for r in rows_api),
+          f"库内5-7天S/A={stale_sa}（允许），接口最旧="
+          f"{min((r.get('date') or '') for r in rows_api) if rows_api else 'N/A'}")
+
 
 def main() -> int:
     ap = argparse.ArgumentParser()

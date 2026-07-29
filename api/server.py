@@ -351,9 +351,12 @@ def get_news():
     # 与 crawler 侧那两道闸的分工：那两道防的是"陈年内容混进库"，这一道防的是
     # "库里正常入库、但随时间自然变旧的内容继续占着推荐位"。
     try:
-        max_age_days = int(request.args.get("max_age_days", 7))
+        # 2026-07-29 从 7 天收紧到 5 天，与 crawler 侧 MAX_EVENT_AGE_DAYS 对齐
+        # （Lawrence："发布时间不是近5天的内容做强制去除"）。两侧必须同步改，
+        # 否则会出现"库里已按 5 天清过、接口却还按 7 天放行"的口径错位。
+        max_age_days = int(request.args.get("max_age_days", 5))
     except ValueError:
-        max_age_days = 7
+        max_age_days = 5
     event_tier = request.args.get("event_tier")
     date_from = request.args.get("date_from")
     date_to = request.args.get("date_to")
