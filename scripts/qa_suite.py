@@ -567,6 +567,25 @@ def qa_market_expansion():
     stale_sa = int(rows[0][0]) if rows and rows[0] else -1
     # 这条不是硬失败：5-7 天之间的 S/A 档留在库里是允许的（历史分析要用），
     # 只是**不能出现在默认接口结果里**。下面直接查接口验证。
+    # ── 市场重要性权重（PRD-04，2026-07-29）─────────────────────────
+    #
+    # 起因：tier 由 LLM 相对"事件自己所在的市场"判定，但排序是全局的——实测
+    # 韩股 S 档率 13.6%、美股 0.15%（差 90 倍），而韩股供给量只有美股的 1/15，
+    # 结果小市场的本地大新闻长期霸占首屏（用户原话"韩国的都排在了上面"）。
+    g5 = "市场重要性"
+    st, d = http("/api/news?limit=20")
+    rows_mk = (d or {}).get("data") or [] if isinstance(d, dict) else []
+    kr_top20 = sum(1 for r in rows_mk
+                   if (r.get("market") or {}).get("market_scope") == "kr_stock")
+    check(g5, "首屏 Top20 里 kr_stock 不超过 2 条",
+          bool(rows_mk) and kr_top20 <= 2, f"命中 {kr_top20} 条")
+
+    # 每条都要带 market 明细——前端展开区和排序都依赖它，缺了会静默退化成
+    # "所有市场一视同仁"而没有任何报错
+    missing_mk = sum(1 for r in rows_mk if not (r.get("market") or {}).get("multiplier"))
+    check(g5, "/api/news 每条都带 market 倍率明细",
+          bool(rows_mk) and missing_mk == 0, f"缺失 {missing_mk} 条")
+
     st, d = http("/api/news?limit=100")
     rows_api = (d or {}).get("data") or [] if isinstance(d, dict) else []
     check(g4, "/api/news 默认窗口已收紧到 5 天",

@@ -1194,6 +1194,12 @@ footer{border-top:1px solid var(--rule);padding:26px 0 40px;font-size:12px;color
   margin-top:20px;padding-top:16px;border-top:1px dashed var(--lab-n400);
   color:var(--lab-a700);
 }
+/* 第三组：市场重要性。用鼠尾草绿与加分项的赤陶色区分开——三组参数量纲不同，
+   颜色是最快的区分线索。 */
+#panel-5 .lb-grouplabel.market{
+  margin-top:20px;padding-top:16px;border-top:1px dashed var(--lab-n400);
+  color:var(--lab-g700);
+}
 
 /* ── 结果行可展开：点标题看正文与逐因子明细 ─────────────────────────
    Lawrence 原话「具体的内容点击后要能看见正文和每个因子对应的分数，现在不够
@@ -2854,6 +2860,21 @@ footer{border-top:1px solid var(--rule);padding:26px 0 40px;font-size:12px;color
             最终分 = 基础分 × (1 + 同向 + 反转)，两项合计封顶 +50%。
             <b>同向</b>让首屏跟着大盘氛围走；<b>反转</b>专门把「与大盘反向的重大事件」顶上来，
             只对 S/A 档生效，防止大盘单边时首屏变成回音室。两个都调 0 即退回纯基础排序。
+          </p>
+
+          <!-- 第三组：市场重要性（PRD-04）。与前两组量纲都不同，必须视觉分开。 -->
+          <div class="lb-grouplabel market">市场重要性 · 直接相乘的倍率</div>
+          <div id="mpanel-single"></div>
+          <p class="lb-hint">
+            解决的问题：事件级别（S/A/B/C/D）是模型相对<b>「事件自己所在的市场」</b>判定的，
+            但排序是全局的——实测韩股 S 档率 13.6%、美股只有 0.15%（差 90 倍），
+            而韩股供给量只有美股的 1/15，结果小市场的本地大新闻长期压过大市场的全球相关新闻。
+            <br>
+            <b>跨市场豁免</b>：广度为「跨市场」的事件不打折（倍率下限提到 ×1.00）——
+            这对应「日韩在剧烈波动且影响到美国市场时才值得看」。
+            例如「韩国股市大跌引发美科技股担忧」会被豁免、照常出，
+            而「韩财长就单一个股杠杆ETF致歉」按 ×0.55 折价沉下去。
+            全部调回 ×1.00 即退回本次改造前的排序。
           </p>
         </div>
         <div class="lb-card">
@@ -6313,6 +6334,25 @@ var BONUSES = [
 ];
 var DEFAULT_BONUS = {k_align:25, k_reversal:20};
 
+/* 市场重要性（PRD-04，2026-07-29）。第三组可调参数，与前两组量纲都不同：
+   基础因子是归一化到 100% 的份额，加分项是百分比上限，这一组是**直接相乘的倍率**。
+   起因：tier 由 LLM 相对「事件自己所在的市场」判定，但排序是全局的——实测韩股
+   S 档率 13.6% vs 美股 0.15%（差 90 倍），供给量却只有美股的 1/15，结果小市场的
+   本地大新闻长期压过大市场的全球相关新闻。 */
+var MARKETS = [
+  {k:"us_stock",      name:"美股",     e:"🇺🇸"},
+  {k:"crypto",        name:"加密",     e:"🪙"},
+  {k:"macro_policy",  name:"经济政策", e:"🌍"},
+  {k:"social_signal", name:"社会信号", e:"📡"},
+  {k:"general",       name:"综合",     e:"◆"},
+  {k:"hk_stock",      name:"港股",     e:"🇭🇰"},
+  {k:"jp_stock",      name:"日股",     e:"🇯🇵"},
+  {k:"kr_stock",      name:"韩股",     e:"🇰🇷"}
+];
+/* 界面上是百分数（120 = ×1.20），发给后端时除以 100。 */
+var DEFAULT_MARKETS = {us_stock:120, crypto:100, macro_policy:100, social_signal:85,
+                       general:70, hk_stock:65, jp_stock:60, kr_stock:55};
+
 var PRESETS = {
   default:    {M:26, B:16, T:16, I:14, H:10, A:10, Q:8,  Rel:0},
   timeliness: {M:10, B:5,  T:60, I:5,  H:10, A:5,  Q:5,  Rel:0},
@@ -6502,6 +6542,62 @@ BonusPanel.prototype.coefs = function(){
   return out;
 };
 
+/* ══════════════════════════════════════════════════════════════════════════
+   市场重要性面板（2026-07-29，PRD-04）
+   ══════════════════════════════════════════════════════════════════════════
+   同样不复用 Panel：它是**直接相乘的倍率**，既不归一化（不像基础因子），
+   也不是"加多少百分比"（不像加分项）。三组量纲不同，必须分开呈现，否则
+   用户会以为把美股拉到 120% 就等于"占 120% 权重"——完全不是那回事。 */
+function MarketPanel(version, initial){
+  this.version = version;
+  this.values = Object.assign({}, initial);
+  this.container = $("#mpanel-" + version);
+  this.build();
+}
+MarketPanel.prototype.build = function(){
+  var self = this;
+  if (!this.container) return;
+  this.container.innerHTML = MARKETS.map(function(m){
+    return (
+      '<div class="lb-wrow" data-k="' + m.k + '">' +
+        '<div class="lb-wtop">' +
+          '<span class="lb-wl">' + m.e + ' ' + m.name +
+            '<span class="sub">' + m.k + '</span></span>' +
+          '<span class="lb-wv" data-k="' + m.k + '">0<span class="u">%</span></span>' +
+        '</div>' +
+        '<input type="range" min="0" max="200" step="5" value="' + self.values[m.k] +
+          '" data-k="' + m.k + '" aria-label="' + m.name + ' 重要性倍率">' +
+      '</div>'
+    );
+  }).join("");
+  Array.prototype.slice.call(this.container.querySelectorAll("input[type=range]")).forEach(function(inp){
+    inp.addEventListener("input", function(){
+      self.values[inp.dataset.k] = parseInt(inp.value, 10);
+      self.refresh();
+      onWeightsChanged(self.version);
+    });
+  });
+  this.refresh();
+};
+MarketPanel.prototype.refresh = function(){
+  var self = this;
+  if (!this.container) return;
+  MARKETS.forEach(function(m){
+    var el = self.container.querySelector('.lb-wv[data-k="' + m.k + '"]');
+    if (!el) return;
+    var v = self.values[m.k];
+    // 用 ×1.20 这种倍率写法而不是 120%，避免和上面两组的百分比语义混淆
+    el.innerHTML = '×' + (v / 100).toFixed(2);
+    el.style.color = v > 100 ? "var(--lab-g700)" : (v < 100 ? "var(--lab-a700)" : "");
+  });
+};
+/* 后端 market_weight.resolve_weights 收的是 0-2 的倍率，界面是百分数 */
+MarketPanel.prototype.weights = function(){
+  var out = {}, self = this;
+  MARKETS.forEach(function(m){ out[m.k] = self.values[m.k] / 100; });
+  return out;
+};
+
 function currentSector(){ return $("#labFSector").value || null; }
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -6520,7 +6616,7 @@ function showLabPane(n){
 /* ══════════════════════════════════════════════════════════════════════════
    Init
    ══════════════════════════════════════════════════════════════════════════ */
-var panelSingle, panelA, panelB, bonusSingle;
+var panelSingle, panelA, panelB, bonusSingle, marketSingle;
 var debounceTimers = {};
 
 function init(){
@@ -6534,6 +6630,7 @@ function init(){
   panelA = new Panel("a", PRESETS.authority);
   panelB = new Panel("b", PRESETS.timeliness);
   bonusSingle = new BonusPanel("single", DEFAULT_BONUS);
+  marketSingle = new MarketPanel("single", DEFAULT_MARKETS);
 
   $all(".lb-presets").forEach(function(group){
     group.addEventListener("click", function(e){
@@ -6683,6 +6780,12 @@ function detailHTML(r, weights){
   if (r.sentiment_score !== null && r.sentiment_score !== undefined)
     chips.push("情绪 " + (r.sentiment_score > 0 ? "+" : "") + r.sentiment_score.toFixed(2));
   if (r.source_count) chips.push(r.source_count + " 个信源");
+  // 市场重要性倍率：非 1.0 时才显示——等于 1.0 说明没被折价也没被提权，
+  // 摆出来只是噪音。命中跨市场豁免时标出来，让用户看懂"为什么它没被折价"。
+  var mk = r.market || {};
+  if (mk.multiplier !== undefined && Math.abs(mk.multiplier - 1) > 1e-6)
+    chips.push("市场 ×" + mk.multiplier);
+  if (mk.cross_market_exempt) chips.push("跨市场豁免");
 
   var body = r.description_long_zh || r.description_short_zh;
 
@@ -6714,9 +6817,12 @@ function detailHTML(r, weights){
   }).join("");
 
   var b = r.bonus || {};
+  var mkMul = (r.market || {}).multiplier;
   var mathline =
     '<div class="lb-mathline">' +
       '<span>基础分 <b>' + base.toFixed(4) + '</b></span>' +
+      ((mkMul !== undefined && Math.abs(mkMul - 1) > 1e-6)
+        ? '<span>× 市场 ' + mkMul + '</span>' : '') +
       '<span>× (1 + 同向 ' + (b.sentiment_align || 0).toFixed(3) +
         ' + 反转 ' + (b.reversal || 0).toFixed(3) + ')</span>' +
       '<span>= 最终分 <b>' + (r.score !== undefined ? r.score.toFixed(4) : "–") + '</b></span>' +
@@ -6787,7 +6893,8 @@ function runReweight(){
   var seq = ++reweightSeq;
   var body = Object.assign(baseParams(), {
     weights: panelSingle.rawWeights(),
-    bonus: bonusSingle ? bonusSingle.coefs() : {}
+    bonus: bonusSingle ? bonusSingle.coefs() : {},
+    market_weights: marketSingle ? marketSingle.weights() : {}
   });
   api("/api/tools/reweight", body).then(function(d){
     if (seq !== reweightSeq) return;                      // 过期响应，丢弃

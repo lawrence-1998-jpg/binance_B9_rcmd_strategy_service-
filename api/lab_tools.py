@@ -39,7 +39,7 @@ from functools import wraps
 
 from flask import Blueprint, request, jsonify, redirect, send_from_directory
 
-from crawler import market_mood, scoring, storage
+from crawler import market_mood, market_weight, scoring, storage
 from crawler.sector_relevance import SECTOR_ANCHORS
 from crawler.timeutil import now_local
 
@@ -175,6 +175,26 @@ BONUS_NOTE = (
     "两个系数都调 0 即退回纯基础排序（也是验证它们真实贡献的 A/B 对照方式）。"
 )
 
+# 市场重要性权重（PRD-04，2026-07-29）。与基础因子、加分项并列的第三组可调参数，
+# 三者量纲不同：基础因子是归一化到 100% 的权重份额，加分项是百分比上限，
+# 市场重要性是**直接相乘的倍率**。
+MARKET_KEYS = ["us_stock", "crypto", "macro_policy", "social_signal",
+               "general", "hk_stock", "jp_stock", "kr_stock"]
+MARKET_NAME = {"us_stock": "美股", "crypto": "加密", "macro_policy": "经济政策",
+               "social_signal": "社会信号", "general": "综合",
+               "hk_stock": "港股", "jp_stock": "日股", "kr_stock": "韩股"}
+MARKET_NOTE = (
+    "市场重要性是作用在基础分上的**直接倍率**，不参与因子归一化。"
+    "起因：tier 是 LLM 相对『事件自己所在的市场』判定的，但排序是全局的——"
+    "实测韩股 S 档率 13.6%、美股只有 0.15%（差 90 倍），而韩股供给量只有美股的 1/15，"
+    "结果小市场的本地大新闻长期压过大市场的全球相关新闻。"
+    "**cross_market 豁免**：广度为『跨市场』的事件不打折（权重下限提到 1.0）——"
+    "这直接对应『日韩在剧烈波动且影响到美国市场时才值得看』，"
+    "比如「油价飙升拖累韩国KOSPI跌7%」是跨市场、照常出，"
+    "而「韩财长就单一个股杠杆ETF致歉」是单一大盘、按 0.55 折价沉下去。"
+    "全部调回 1.0 即退回改造前的排序（A/B 对照方式）。"
+)
+
 REL_NOTE = (
     "相关性为连续分（2026-07-26 起）：优先取入库时 LLM 按 skill 口径打的连续相关度"
     "（0-1，锚点强制，覆盖 86% 库存），旧行按 sectors 命中 0.60 / 成分币白名单 0.55 / "
@@ -303,7 +323,7 @@ CLASS_LABEL = {
 def event_card(e: dict, factors: dict | None = None, score: float | None = None,
                 rank: int | None = None, prod_rank: int | None = None,
                 weights: dict | None = None, bonus: dict | None = None,
-                base_score: float | None = None) -> dict:
+                base_score: float | None = None, market: dict | None = None) -> dict:
     card = {
         "id": e["id"],
         "title_zh": e.get("title_zh"),
@@ -342,6 +362,10 @@ def event_card(e: dict, factors: dict | None = None, score: float | None = None,
                 k: round(weights.get(k, 0.0) * v, 4) for k, v in factors.items()}
     if bonus is not None:
         card["bonus"] = bonus
+    if market is not None:
+        # 市场重要性明细（含是否命中 cross_market 豁免），供实验室展示
+        # "为什么这条被折价 / 为什么它没被折价"
+        card["market"] = market
     if base_score is not None:
         card["base_score"] = round(base_score, 4)
     if score is not None:
@@ -379,11 +403,16 @@ def resolve_bonus_coefs(raw: dict) -> dict:
 
 
 def rank_pool(events: list[dict], factors_by_id: dict, weights: dict,
-              mood_score=None, bonus_coefs: dict | None = None):
-    """两段式打分排序：BaseScore(加权) × (1 + 加分项)。
+              mood_score=None, bonus_coefs: dict | None = None,
+              market_weights: dict | None = None):
+    """三段式打分排序：BaseScore(加权) × 市场重要性 × (1 + 加分项)。
 
-    返回 [(event, factors, final_score, base_score, bonus_detail), ...] 降序。
-    mood_score 为 None（大盘情绪不可用）时加分项全为 0，退化成纯基础排序。
+    返回 [(event, factors, final_score, base_score, bonus_detail, market_detail), ...]
+    降序。mood_score 为 None（大盘情绪不可用）时加分项全为 0，退化成纯基础排序。
+
+    市场重要性倍率是 2026-07-29 加的（PRD-04）：tier 是相对"自己所在市场"判定的，
+    但排序是全局的，导致韩股 S 档率是美股的 90 倍、供给只有 1/15 却占了 2 倍的
+    首屏位置。详见 crawler/market_weight.py。
     """
     bonus_coefs = bonus_coefs or DEFAULT_BONUS
     scored = []
@@ -394,7 +423,9 @@ def rank_pool(events: list[dict], factors_by_id: dict, weights: dict,
             e, mood_score,
             k_align=bonus_coefs.get("k_align"),
             k_reversal=bonus_coefs.get("k_reversal"))
-        scored.append((e, f, base * detail["multiplier"], base, detail))
+        mkt = market_weight.explain(e, market_weights)
+        final = base * mkt["multiplier"] * detail["multiplier"]
+        scored.append((e, f, final, base, detail, mkt))
     scored.sort(key=lambda x: -x[2])
     return scored
 
@@ -424,18 +455,20 @@ def reweight():
     weights = normalize_weights(weights_raw, use_rel)
 
     bonus_coefs = resolve_bonus_coefs(body.get("bonus", {}))
+    mkt_weights = market_weight.resolve_weights(body.get("market_weights"))
     mood = _lab_mood_score(conn_events=events)
 
     factors_by_id = {e["id"]: compute_factors(e, baseline, now, sector) for e in events}
-    scored = rank_pool(events, factors_by_id, weights, mood, bonus_coefs)
+    scored = rank_pool(events, factors_by_id, weights, mood, bonus_coefs, mkt_weights)
 
     prod_order = sorted(events, key=lambda e: -(e.get("importance_score") or 0))
     prod_rank = {e["id"]: i + 1 for i, e in enumerate(prod_order)}
 
     results = []
-    for rank, (e, factors, s, base, detail) in enumerate(scored[:top_n], start=1):
+    for rank, (e, factors, s, base, detail, mkt) in enumerate(scored[:top_n], start=1):
         card = event_card(e, factors, s, rank, prod_rank.get(e["id"]),
-                          weights=weights, bonus=detail, base_score=base)
+                          weights=weights, bonus=detail, base_score=base,
+                          market=mkt)
         p_rank = prod_rank.get(e["id"])
         card["rank_delta"] = (p_rank - rank) if p_rank is not None else None
         results.append(card)
@@ -452,6 +485,9 @@ def reweight():
             "bonus_coefs": bonus_coefs,
             "bonus_names": BONUS_NAME,
             "bonus_note": BONUS_NOTE,
+            "market_weights": mkt_weights,
+            "market_names": MARKET_NAME,
+            "market_note": MARKET_NOTE,
             "mood_score": mood,
             "social_baseline": round(baseline, 1),
             "generated_at": now.isoformat(),
@@ -510,8 +546,9 @@ def compare():
     bonus_b = resolve_bonus_coefs((body.get("version_b") or {}).get("bonus", {}))
     mood = _lab_mood_score(conn_events=events)
 
-    scored_a = rank_pool(events, factors_by_id, weights_a, mood, bonus_a)
-    scored_b = rank_pool(events, factors_by_id, weights_b, mood, bonus_b)
+    mkt_weights = market_weight.resolve_weights(body.get("market_weights"))
+    scored_a = rank_pool(events, factors_by_id, weights_a, mood, bonus_a, mkt_weights)
+    scored_b = rank_pool(events, factors_by_id, weights_b, mood, bonus_b, mkt_weights)
 
     rank_a = {e["id"]: i + 1 for i, (e, *_rest) in enumerate(scored_a)}
     rank_b = {e["id"]: i + 1 for i, (e, *_rest) in enumerate(scored_b)}

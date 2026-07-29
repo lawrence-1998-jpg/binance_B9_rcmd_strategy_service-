@@ -24,7 +24,7 @@ from enrich_bridge import enrich_bridge_bp
 from source_catalog import source_catalog_bp
 from persona_tools import persona_bp
 from crawler.timeutil import now_local
-from crawler import market_mood
+from crawler import market_mood, market_weight
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -437,7 +437,13 @@ def get_news():
         for e in pool:
             detail = market_mood.mood_multiplier(e, mood_score)
             e["bonus"] = detail
-            e["_display_score"] = (e.get("importance_score") or 0.0) * detail["multiplier"]
+            # 市场重要性倍率（PRD-04，2026-07-29）。与情绪加成同为查询时的外层
+            # 倍率，不写回 importance_score——那是"事件本身有多重要"的口径，掺进
+            # "我们产品更关心哪个市场"这种运营偏好就污染了，且改权重要全库重算。
+            mkt = market_weight.explain(e)
+            e["market"] = mkt
+            e["_display_score"] = ((e.get("importance_score") or 0.0)
+                                   * mkt["multiplier"] * detail["multiplier"])
         pool.sort(key=lambda e: e["_display_score"], reverse=True)
         data = pool[offset:offset + limit]
         for e in data:
@@ -455,6 +461,9 @@ def get_news():
         for e in data:
             e["bonus"] = {"sentiment_align": 0.0, "reversal": 0.0,
                           "total_bonus": 0.0, "multiplier": 1.0}
+            # 字段形状与 importance 分支保持一致（按时间排序不重排，但不能让
+            # 前端因为排序方式不同就要处理两种 schema）
+            e["market"] = market_weight.explain(e)
 
     attach_x_posts(data, cursor)
 
