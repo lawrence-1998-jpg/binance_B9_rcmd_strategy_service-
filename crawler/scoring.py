@@ -196,6 +196,27 @@ W_PUNCH_MAGNITUDE, W_PUNCH_RESONANCE = 0.65, 0.35
 # 所以要求百分号紧跟数字，且数字前不能是年份特征。
 _PCT_RE = re.compile(r"(?<!\d)(\d{1,3}(?:\.\d+)?)\s*%")
 
+# "这个百分数不是涨跌幅"的语境词。2026-07-29 实测踩到的：
+# 「美参议院推进俄伊制裁法案」正文里"对继续购买俄罗斯油气的国家征收 **100%**
+# 二级关税"——那是**税率**，被当成了 100% 的价格波动，直接把冲击力顶满，
+# 这条因此排到首屏第 5。税率/利率/持股比例/概率这些都是"百分数但不是波动"，
+# 语义上和"跌 8%"完全是两回事。
+#
+# 前后都要看：实测这类修饰语前置后置都常见——后置如"100%关税""25%的股权"，
+# 前置如"降息概率60%""持股比例升至25%"。窗口刻意取得窄（前 5 后 6 个字符），
+# 再宽会误伤"受关税影响纳指跌3%"这种"提到关税、但百分数是真跌幅"的正常句子
+# （实测这句里"关税"距数字 7 个字符，窄窗口正好放过）。
+#
+# 一开始还加了条"涨跌动词紧贴数字则优先判为波动"的兜底规则，测出来是**多余
+# 且有害**的："降息概率60%"里的"降"、"持股比例升至25%"里的"升"都会命中动词，
+# 反而把本该排除的放行了。先判非波动、不做动词覆盖，9 条用例全过。
+_PCT_NOT_MOVE_RE = re.compile(
+    r"关税|税率|征税|利率|占比|比例|份额|股权|持股|概率|胜率|收益率|准备金率|"
+    r"tariff|tax|stake|odds|probability",
+    re.IGNORECASE,
+)
+_PCT_WINDOW_BEFORE, _PCT_WINDOW_AFTER = 5, 6
+
 # 无数字但本身就意味着剧烈波动的词。命中直接给满分——"熔断""崩盘"不需要
 # 再看百分比，它们的语义就是极端。
 _EXTREME_WORDS_RE = re.compile(
@@ -216,8 +237,15 @@ def extract_magnitude_pct(text: str) -> float | None:
             continue
         # >100% 的多半是"上涨800倍""市值占GDP137%"这类非涨跌幅语境，
         # 不参与冲击力判定，避免把统计数字当成暴涨暴跌。
-        if 0 < v <= 100:
-            vals.append(v)
+        if not (0 < v <= 100):
+            continue
+        # 数字前后紧邻"关税/税率/持股/概率"这类词时，这个百分数是**税率/比例**
+        # 而不是涨跌幅，跳过（见 _PCT_NOT_MOVE_RE 的说明）。
+        head = text[max(0, m.start() - _PCT_WINDOW_BEFORE):m.start()]
+        tail = text[m.end():m.end() + _PCT_WINDOW_AFTER]
+        if _PCT_NOT_MOVE_RE.search(head) or _PCT_NOT_MOVE_RE.search(tail):
+            continue
+        vals.append(v)
     return max(vals) if vals else None
 
 

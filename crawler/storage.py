@@ -98,8 +98,17 @@ def load_recent_events(conn, hours: int = LOOKBACK_HOURS) -> list[dict]:
     since = (now_local() - timedelta(hours=hours)).strftime("%Y-%m-%d %H:%M:%S")
     cursor = conn.cursor()
     cursor.execute(
+        # title_zh/title_en/description_short_zh 是 2026-07-29 补读的：跨轮归并
+        # 命中既有行时，写库**刻意不更新正文**（防前端卡片文案抖动），但打分是
+        # 用**新一轮的正文**算的——于是 punch 的"数值幅度"子项来自一份最终不会
+        # 入库的文本，和行里真正存着的正文对不上。实测 638 条有幅度值的事件里
+        # 63 条错位，且 100% 都是归并过的行，症状很刺眼：「KOSPI跌超8%触发熔断」
+        # 显示"幅度 80%"、「日经225跌4% 铠侠跌18%」显示"幅度 2%"。
+        # 把既有正文一并读出来，在 merge_with_existing 里回填给事件，让打分
+        # 和入库看到的是同一份文本。
         """SELECT id, event_fingerprint, embedding, source_names, sources,
-                  source_count, merged_sources_count, time_event
+                  source_count, merged_sources_count, time_event,
+                  title_zh, title_en, description_short_zh
            FROM news_events WHERE time_get_data >= %s""",
         (since,),
     )
@@ -115,7 +124,8 @@ def load_recent_events(conn, hours: int = LOOKBACK_HOURS) -> list[dict]:
     recent = []
     for row in rows:
         (event_id, fingerprint, blob, source_names, sources,
-         source_count, merged, time_event) = row
+         source_count, merged, time_event,
+         title_zh, title_en, desc_short_zh) = row
         recent.append({
             "id": event_id,
             "fingerprint": fingerprint or "",
@@ -129,6 +139,10 @@ def load_recent_events(conn, hours: int = LOOKBACK_HOURS) -> list[dict]:
             "source_count": source_count or 1,
             "merged_sources_count": merged or 1,
             "published_at": time_event.isoformat() if time_event else None,
+            # 既有正文，供 merge_with_existing 回填（见上面 SELECT 的说明）
+            "title_zh": title_zh,
+            "title_en": title_en,
+            "description_short_zh": desc_short_zh,
         })
     logger.info(f"Cross-run merge: loaded {len(recent)} events from last {hours}h")
     return recent
@@ -195,6 +209,16 @@ def merge_with_existing(events: list[dict], recent: list[dict]) -> tuple[list[di
         if target is None:
             # 首个命中者：继承既有行的 id 与信源
             event["id"] = existing["id"]
+            # 同时继承既有行的**正文**。写库那条 UPSERT 刻意不更新标题/正文
+            # （防前端卡片文案抖动），所以入库后留下的是既有行这一份；如果这里
+            # 不回填，下游 score_events 会用本轮新正文去算 punch 的"数值幅度"
+            # 子项，算出来的幅度对应一份最终不会入库的文本。实测这正是
+            # 「KOSPI跌超8%触发熔断」显示"幅度 80%"、「日经225跌4% 铠侠跌18%」
+            # 显示"幅度 2%"的原因（638 条里错 63 条，100% 都是归并过的行）。
+            # 回填之后，打分看到的正文和最终入库的正文是同一份。
+            for _text_field in ("title_zh", "title_en", "description_short_zh"):
+                if existing.get(_text_field):
+                    event[_text_field] = existing[_text_field]
             event["source_names"] = sorted(set(event.get("source_names", [])) |
                                            set(existing["source_names"]))
             event["merged_sources_count"] = (existing["merged_sources_count"] +
