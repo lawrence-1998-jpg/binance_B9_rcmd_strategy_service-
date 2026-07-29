@@ -240,34 +240,60 @@ a{color:var(--terracotta-deep)}
       <div class="takeaway">Bloomberg.com 和 Forbes.com 这次打不开——前者是机器人验证墙，后者需要人工点击才能过。改用它们的官方 RSS 实时抓取（和我们爬虫读的是同一份数据），逐条比对库内记录。</div>
     </div>
 
+    <div class="callout" style="margin-bottom:20px">
+      <b>更正（同一次评测内部发现的错误）：</b>下面 CNBC/FT 最初报的 45%/36%
+      是用中文标题关键词（"谷歌""亚马逊"这类）反查库内记录得出的——但 LLM 会把
+      标题意译成中文，"Amazon, Meta and Microsoft face skeptical investors"
+      被写成"AI支出挤压科技巨头现金流"，字面上根本不含公司名，关键词搜索因此
+      系统性漏判。改成按<b>原文 URL 逐条精确回查</b>（sources 字段本身就存了
+      原文链接）后重新核对，真实命中率明显更高：<b>CNBC 70%（14/20）、FT
+      基本全中（9/9 复核项全部命中）</b>。下表是更正后的数字。
+    </div>
+
     <div class="audit-grid">
       <div class="audit-card">
         <div class="src">CNBC</div>
-        <div class="method">真实首页，前 20 条（剔重复）</div>
-        <div class="pct">45<span style="font-size:16px">%</span></div>
-        <div class="frac">9/20 命中 · 8 条是 Cramer 个股推荐/盘中异动汇总，本轮已放宽定义收录</div>
+        <div class="method">真实首页 20 条，逐条按 URL 精确回查</div>
+        <div class="pct">70<span style="font-size:16px">%</span></div>
+        <div class="frac">14/20 命中（含 Cramer 个股点评 3 条、政治类 1 条，均被系统正确收录并按内容打到相应 tier）· 剩余 6 条经查<b>压根没进过抓取存档表</b>——CNBC 首页滚动快、RSS 窗口有限，被更新的内容挤出去了，见下方说明</div>
       </div>
       <div class="audit-card">
         <div class="src">Bloomberg</div>
-        <div class="method">Markets 频道 RSS，前 20 条</div>
+        <div class="method">Markets 频道 RSS，前 20 条（关键词法，未逐条复核）</div>
         <div class="pct">35<span style="font-size:16px">%</span></div>
-        <div class="frac">7/20 命中 · 未命中的多是市政债券/企业债重组类小众专业新闻</div>
+        <div class="frac">7/20 命中，此项未按 CNBC/FT 的方法重新核实，真实值大概率同样被低估</div>
       </div>
       <div class="audit-card">
         <div class="src">Forbes</div>
         <div class="method">Business 频道 RSS，前 25 条</div>
         <div class="pct">8<span style="font-size:16px">%</span></div>
-        <div class="frac">2/25 命中 · 如实说：这个 feed 25 条里只有 2 条是真财经新闻，其余是体育/明星/犯罪新闻</div>
+        <div class="frac">2/25 命中 · 如实说：这个 feed 25 条里只有 2 条是真财经新闻，其余是体育/明星/犯罪新闻——这次不是搜索方法问题，是信源本身内容如此</div>
       </div>
       <div class="audit-card">
         <div class="src">FT</div>
-        <div class="method">首页 RSS，11 条</div>
-        <div class="pct">36<span style="font-size:16px">%</span></div>
-        <div class="frac">4/11 命中 · 芯片股抛售、苹果 5 万亿市值等；见下方"因子感知"一节的具体分析</div>
+        <div class="method">首页 RSS，逐条按内容 ID 精确回查</div>
+        <div class="pct">≈100<span style="font-size:16px">%</span></div>
+        <div class="frac">9/9 复核项全部命中（含 Nvidia 500亿数据中心、UAE-伊朗关系等此前误判为"未命中"的条目）；另有 2 条是几分钟前刚抓到、还没排到下一轮 LLM 处理，是队列延迟不是漏召</div>
       </div>
     </div>
 
     <p class="note">同一条"苹果市值破 5 万亿"，CNBC / Forbes / FT 三家独立信源都在报，库里也确实有——三方交叉验证过的真实命中，不是巧合。</p>
+
+    <h3>CNBC 剩下 6 条到底为什么没进来</h3>
+    <div class="tblwrap">
+      <table>
+        <thead><tr><th>标题</th><th>结论</th></tr></thead>
+        <tbody>
+          <tr><td>Dow rallies 600 points, oil decline（收盘总结版）</td><td>抓取存档表里<b>完全没有这条 URL</b>——不是分类丢的，是压根没抓到</td></tr>
+          <tr><td>Morgan Stanley says buy these quality stocks</td><td>同上，未进抓取存档</td></tr>
+          <tr><td>We're upgrading Boeing shares（Cramer 组合调仓）</td><td>同上，未进抓取存档</td></tr>
+          <tr><td>Stocks making the biggest moves midday（盘中异动汇总）</td><td>同上，未进抓取存档</td></tr>
+          <tr><td>Buy these stocks with strong earnings, says Wolfe</td><td>同上，未进抓取存档</td></tr>
+          <tr><td>Chip stocks head for one of their worst months ever</td><td>同上，未进抓取存档（注：库里另一条克拉默的"top 10 things to watch"曾被我误认成这条的命中，实际是两条不同的 URL）</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="note">六条的共同点：<b>一条都没进过 raw_items_staging</b>，说明问题不在 LLM 分类，而在更早一步——CNBC 首页更新快，RSS 只保留最近约 30–50 条，我们的爬虫按小时轮询，轮询间隙里被更新内容挤出窗口的条目就再也抓不到了。这正是本次同一天已经动手改的方向：新增 15,45 分的头部媒体专属抓取（<code>stage_fetch_priority.py</code>），把轮询间隔从 60 分钟压到 30 分钟——这批被漏掉的 6 条发生在改动生效之前，之后同类窗口丢失的概率会降低，但物理上不可能降到 0（除非把轮询压缩到分钟级，那是另一个成本决策）。</p>
 
     <h3>公司 API（dxFeed）实际召回</h3>
     <div class="tblwrap">
