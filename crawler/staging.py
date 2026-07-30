@@ -72,6 +72,11 @@ _AUTHORITATIVE_MACRO_SOURCES = {
     # 只是静默地不生效——这次是在部署前发现的，不是事后查出来的。
     "Bloomberg-Markets", "Bloomberg-Economics", "Bloomberg-Technology",
     "Bloomberg-Politics", "Forbes-Business", "WSJ-Markets", "FT-Home",
+    # 2026-07-30：Benzinga（经 Massive 平台直连 API）——原生结构化实时源，
+    # 发布即可抓取，同样归入"实时性要更强"这批优先处理（见 crawler/
+    # benzinga_news.py 模块说明：优先级和 authority 是独立的两条轴线，
+    # 这里只提优先级，不改 authority）。
+    "Benzinga",
 }
 
 # 加密侧的头部媒体（authority 5 的那批）+ 行情异动信号

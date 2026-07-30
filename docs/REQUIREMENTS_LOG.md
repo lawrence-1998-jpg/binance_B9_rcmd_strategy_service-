@@ -1,5 +1,24 @@
 # 原始需求留痕（按时间倒序）
 
+## 2026-07-30（第六轮：接入 Massive/Benzinga 实时新闻）
+
+> 公司又给了一个新的 massive的key。也接入吧，数据质量应该还不错
+>
+> benzinga 的 key
+> <见 config/.env 的 MASSIVE_API_KEY，不入库>
+> Ben.Y
+> https://massive.com/docs/rest/partners/overview#available-endpoints
+>
+> 直接用 benzinga 的 realtime news 的接口
+
+交付：crawler/benzinga_news.py（直连 `GET /benzinga/v2/news`，query param 鉴权，
+90 分钟回溯窗 + staging 层 url_hash 去重，不额外维护水位线）。挂进
+`fetch_global_markets_sources()`（30 分钟高频路径），staging 优先级列入
+P0（`_AUTHORITATIVE_MACRO_SOURCES`）。authority 定 3，未对齐 dxFeed 的机构级
+5 分——直连拿到的是时间戳可信+正文完整，不是编辑质量的跃升（Benzinga 在
+`web_search.py` 域名分级里本来就是 _TIER_3），详见模块内文档字符串。
+QA `_NON_AGG` 白名单加 `benzinga`。
+
 ## 2026-07-29（第五轮：市场重要性权重）
 
 > 产生了新的问题，现在的排序结果。韩国的都排在了上面。

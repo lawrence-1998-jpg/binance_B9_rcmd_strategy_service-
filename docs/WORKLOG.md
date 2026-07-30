@@ -1346,3 +1346,46 @@ QA 对 S/A 档不自动删这一步设计，这次是保对了。清完之后复
 **How to apply**：这类"离线窗口"排查的通用方法——不要只看服务是否
 active，要在日志里量时间戳 gap，量化影响（哪几轮、多花多少钱），
 而不是笼统说"有一段时间没处理"。
+
+---
+
+# 需求 #82：接入 Massive/Benzinga 实时新闻 API
+
+原始需求："公司又给了一个新的massive的key。也接入吧...直接用benzinga的
+realtime news的接口"（见 REQUIREMENTS_LOG 同名章节，含 key/文档链接原文）。
+
+## 接口调研
+
+先读文档（`https://massive.com/docs/rest/partners/benzinga/news`，静态
+WebFetch 拿不到渲染后内容，改用浏览器 read_page 才拿到完整参数表）：
+`GET https://api.massive.com/benzinga/v2/news`，`apiKey` query param 鉴权，
+`published`/`published.gt`/`.gte` 等时间过滤、`tickers`/`channels`/`tags`
+过滤、`limit` 默认 100 上限 50000、`sort` 默认 `published.desc`。落地前先
+用真实 key 跑了 3 次探测请求：确认 200 可用、`published.gt` 增量过滤生效、
+响应带完整 HTML 正文/真实 tickers/可信 `published`+`last_updated` 时间戳。
+
+## 设计取舍
+
+**为什么不建水位线状态表**：这条源接的是 `stage_fetch_priority.py`（30分钟
+一次，只抓取存档不进LLM）。跟 CNBC 等 RSS 源同一套简单方案——每次拉一个
+比抓取间隔更宽的窗口（90分钟，3倍余量），重复内容靠 staging 表的 url_hash
+去重挡掉，不为这一条源单独发明状态持久化机制。
+
+**为什么 authority=3 而不对齐 dxFeed 的 5 分**：dxFeed 转发的是 MT
+Newswires——比 Benzinga 自己内容更高一级的机构通讯社，直连代表内容量级
+跃升，这是 5 分的依据。Benzinga 自己的编辑内容在 `web_search.py` 的域名
+分级表里本来就是 `_TIER_3`（零售财经风格为主），直连 API 换来的是**时间戳
+可信+正文完整**（不再被 `source_trust.py` 的"聚合器+无正文"闸门拦截），
+不是编辑质量的跃升——把这俩混为一谈正是 `source_trust.py` 那次线上事故的
+认知根源，这次没有重复同一个错误。
+
+**优先级仍给 P0**：处理优先级和内容权威度是两条独立轴线（dxFeed 大盘/个股
+symbol 的 P1/P4 区分是先例）。Benzinga 是发布即结构化的原生 API，天然适合
+"实时性要更强"这条诉求，所以优先级给到跟 CNBC/Bloomberg 同档，authority
+不跟着动。
+
+## 验证
+
+VM 上补 `MASSIVE_API_KEY`，部署代码后手动跑一轮 `stage_fetch_priority.py`：
+Benzinga 条目正常进 staging，`priority=0`、`type=benzinga`；跑一轮主
+pipeline 确认能正常入库；QA 门禁复跑确认无回归。

@@ -549,7 +549,7 @@ def qa_market_expansion():
     # 另外 JSON_SEARCH 必须用 '$[*].type' 限定只查 type 字段：不限定的话，
     # 任何 name/url 里恰好含 "rss" 的信源都会被误匹配（Google News 的 url 里
     # 就带 /rss/articles/，是个必然踩中的坑）。
-    _NON_AGG = ("rss", "scraper", "social", "calendar", "market_signal", "dxfeed")
+    _NON_AGG = ("rss", "scraper", "social", "calendar", "market_signal", "dxfeed", "benzinga")
     _no_direct = " AND ".join(
         f"JSON_SEARCH(sources,'one','{t}',NULL,'$[*].type') IS NULL" for t in _NON_AGG)
     rows = sql("SELECT COUNT(*) FROM news_events "

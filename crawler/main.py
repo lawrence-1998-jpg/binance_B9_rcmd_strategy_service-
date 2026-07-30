@@ -19,6 +19,7 @@ from .x_search import fetch_x_search
 from .web_search import fetch_web_search
 from .market_signals import run_market_signals
 from .dxfeed_news import fetch_dxfeed_news
+from .benzinga_news import fetch_benzinga_news
 from .timeutil import now_local
 
 logger = logging.getLogger(__name__)
@@ -436,6 +437,17 @@ def fetch_global_markets_sources() -> list[dict]:
     for url, name, lang, authority in RSS_SOURCES_GLOBAL_MARKETS:
         all_items.extend(fetch_rss(url, name, lang, authority))
         time.sleep(0.5)
+
+    # Benzinga 实时新闻（经 Massive 平台，2026-07-30 新增）：原生结构化 API，
+    # 发布即可抓取，天然适合这条高频路径。未配置 MASSIVE_API_KEY 时函数自己
+    # 直接跳过，不报错。见 crawler/benzinga_news.py 模块说明。
+    try:
+        benzinga_items = fetch_benzinga_news()
+        all_items.extend(benzinga_items)
+        logger.info(f"Benzinga News: {len(benzinga_items)} items")
+    except Exception as e:
+        logger.warning(f"Benzinga News failed, continuing without: {e}")
+
     return all_items
 
 
