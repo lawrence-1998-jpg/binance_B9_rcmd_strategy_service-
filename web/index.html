@@ -1256,13 +1256,35 @@ footer{border-top:1px solid var(--rule);padding:26px 0 40px;font-size:12px;color
   border:1px solid var(--lab-n400,#d9cfc0);border-radius:8px;
   background:#fff;color:inherit;
 }
-.b9-modal .b9-verlist{margin:0;padding:0;list-style:none;font-size:12px}
+/* 版本管理列表（2026-07-30 重设计：版本徽标 + 备注/时间双行 + 生效态高亮） */
+.b9-modal .b9-verlist{margin:14px 0 0;padding:0;list-style:none;font-size:12px}
 .b9-modal .b9-verlist li{
-  display:flex;align-items:center;justify-content:space-between;gap:10px;
-  padding:8px 0;border-bottom:1px solid var(--lab-n300,#e6ddd0);
+  display:flex;align-items:center;gap:12px;
+  padding:11px 12px;margin-bottom:8px;border-radius:10px;
+  background:var(--lab-n200,#f3ede3);
+  border:1px solid transparent;
 }
-.b9-modal .b9-verlist li:last-child{border-bottom:none}
-.b9-modal .b9-verlist .cur{color:var(--lab-g700);font-weight:600}
+.b9-modal .b9-verlist li.on{
+  background:color-mix(in srgb, var(--lab-g700,#5d7052) 8%, transparent);
+  border-color:color-mix(in srgb, var(--lab-g700,#5d7052) 35%, transparent);
+}
+.b9-modal .vchip{
+  flex:none;min-width:38px;text-align:center;
+  font-family:var(--lab-mono,monospace);font-weight:700;font-size:12px;
+  padding:4px 8px;border-radius:999px;
+  background:var(--lab-n300,#e6ddd0);color:var(--lab-n900,#2a2521);
+}
+.b9-modal .vchip.on{background:var(--lab-g700,#5d7052);color:#fff}
+.b9-modal .vmain{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.b9-modal .vnote{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.b9-modal .vsub{font-size:11px;color:var(--lab-n700,#6f6357)}
+.b9-modal .vcur{flex:none;font-size:12px;font-weight:600;color:var(--lab-g700,#5d7052)}
+
+/* 重排结果里的公式总分（2026-07-30，Lawrence 要求加粗展示） */
+#panel-5 .lb-ritem .fsum{
+  font-family:var(--lab-mono,monospace);font-variant-numeric:tabular-nums;
+  font-weight:700;color:var(--lab-n900,#2a2521);
+}
 
 /* ── 结果行可展开：点标题看正文与逐因子明细 ─────────────────────────
    Lawrence 原话「具体的内容点击后要能看见正文和每个因子对应的分数，现在不够
@@ -2900,7 +2922,7 @@ footer{border-top:1px solid var(--rule);padding:26px 0 40px;font-size:12px;color
         <div class="lb-baseline">
           <div class="lb-baseline-meta">
             当前基线 <b id="baseVer">—</b>
-            <button class="lb-btn sm ghost" type="button" id="baseHistBtn">历史版本</button>
+            <button class="lb-btn sm ghost" type="button" id="baseHistBtn">版本管理</button>
           </div>
           <button class="lb-btn primary" type="button" id="saveBaseBtn">存为基线</button>
         </div>
@@ -6877,28 +6899,55 @@ function openSaveBaselineModal(){
   });
 }
 
+function fmtVerTime(iso){
+  if (!iso) return "";
+  try{
+    var dt = new Date(iso);
+    return (dt.getMonth()+1) + "/" + dt.getDate() + " " +
+           String(dt.getHours()).padStart(2,"0") + ":" + String(dt.getMinutes()).padStart(2,"0");
+  }catch(e){ return ""; }
+}
+
 function openBaselineHistory(){
   api("/api/strategy-config", null, "GET").then(function(d){
     var items = (d.versions || []).map(function(v){
-      return '<li><span>' + (v.is_active ? '<span class="cur">v' + v.version + ' · 当前</span>' : "v" + v.version) +
-             ' <span style="opacity:.7">' + esc(v.note || "") + '</span></span>' +
-             (v.is_active ? "" : '<button class="lb-btn sm" type="button" data-rb="' + v.version + '">回滚到此版</button>') +
-             '</li>';
+      return (
+        '<li class="' + (v.is_active ? "on" : "") + '">' +
+          '<span class="vchip' + (v.is_active ? " on" : "") + '">v' + v.version + '</span>' +
+          '<span class="vmain">' +
+            '<span class="vnote">' + esc(v.note || "（无备注）") + '</span>' +
+            '<span class="vsub">' + fmtVerTime(v.created_at) +
+              (v.created_by === "seed" ? " · 初始种子" : "") +
+              (v.is_active ? " · <b>当前生效</b>" : "") + '</span>' +
+          '</span>' +
+          (v.is_active
+            ? '<span class="vcur">✓ 生效中</span>'
+            : '<button class="lb-btn sm" type="button" data-rb="' + v.version + '">切换到此版</button>') +
+        '</li>');
     }).join("");
     var mask = openModal(
-      '<h3>基线版本历史</h3>' +
-      '<div class="b9-modal-body">回滚不会删除任何版本，只是把选中的那版重新置为生效。' +
+      '<h3>版本管理</h3>' +
+      '<div class="b9-modal-body">切换版本立即生效于实验室默认配置与下方排序，' +
+      '不删除任何历史版本，可随时切回。' +
       '<ul class="b9-verlist">' + (items || "<li>暂无历史</li>") + '</ul></div>' +
       '<div class="b9-modal-act"><button class="lb-btn sm" type="button" id="histClose">关闭</button></div>');
     mask.querySelector("#histClose").addEventListener("click", closeModal);
     Array.prototype.slice.call(mask.querySelectorAll("[data-rb]")).forEach(function(b){
       b.addEventListener("click", function(){
-        b.disabled = true; b.textContent = "回滚中…";
+        b.disabled = true; b.textContent = "切换中…";
         api("/api/strategy-config/rollback", {version: parseInt(b.dataset.rb, 10)}).then(function(d){
           activeBaseline = d.config;
           var v = $("#baseVer"); if (v) v.textContent = "v" + d.version;
           applyBaselineToPanels(d.config);
+          // 修（2026-07-30 Lawrence 抓的 bug"点击回滚/版本切换是不对排序模块
+          // 生效的"）：只把配置灌回滑杆不重算排序，Top N 列表还是旧参数的
+          // 结果——看起来就是"没生效"。灌完必须立刻按新参数重排一次。
+          runReweight();
           closeModal();
+          track("lab_baseline_rollback", {version: d.version});
+        }).catch(function(err){
+          b.disabled = false; b.textContent = "切换到此版";
+          alert("切换失败：" + String(err && err.message || err));
         });
       });
     });
@@ -6941,6 +6990,10 @@ function loadBaseline(){
     var v = $("#baseVer");
     if (v) v.textContent = d.config._fallback ? "默认值" : ("v" + d.config._version);
     applyBaselineToPanels(d.config);
+    // 基线可能在首次 runReweight 之后才加载完成——灌完滑杆必须再重排一次，
+    // 否则打开页面看到的 Top N 是代码默认参数的结果，和滑杆显示的基线不一致
+    // （与版本切换是同一类"灌了不算"bug）。竞态由 reweightSeq 兜底。
+    runReweight();
   }).catch(function(){
     var v = $("#baseVer"); if (v) v.textContent = "读取失败";
   });
@@ -7275,7 +7328,10 @@ function runReweight(){
           '<div>' + tierBadge(r.event_tier) + '</div>' +
           '<div class="ti">' +
             '<div class="tzh">' + esc(r.title_zh || r.title_en) + '</div>' +
-            '<div class="meta">' + rowTimeLabel(r) + '  ·  ' + factorLine(r.factors) + '  ·  ' + esc(sourcesLine(r.source_names)) +
+            // 公式总分（七因子加权和+CNBC背书，未乘市场/新鲜度/情绪倍率）加粗
+            // 放在因子明细前——用户要一眼看到"公式打出来多少分"，右侧大数字是
+            // 乘完全部倍率的最终分，两者口径不同，都得在。
+            '<div class="meta"><b class="fsum">总分 ' + (r.base_score !== undefined && r.base_score !== null ? r.base_score.toFixed(3) : '—') + '</b>  ·  ' + rowTimeLabel(r) + '  ·  ' + factorLine(r.factors) + '  ·  ' + esc(sourcesLine(r.source_names)) +
               // 同向/反转互斥（mood_multiplier 本身就是互斥逻辑），拆成两个
               // 具名标签而不是一个笼统的"加成 +X%"——原来这个通用标签正是
               // Lawrence 反馈的问题所在："我都不知道哪条是反转，得一条条肉眼看"。

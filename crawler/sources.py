@@ -35,7 +35,8 @@ RSS_SOURCES_RSSHUB = [
 RSS_SOURCES_P1 = [
     ("https://thedefiant.io/feed",                                     "TheDefiant","en", 4),
     ("https://www.coindesk.com/arc/outboundfeeds/rss/category/policy-regulation/?outputType=xml", "CoinDesk-Policy", "en", 5),
-    ("https://www.cnbc.com/id/10000664/device/rss/rss.html",           "CNBC-Finance","en", 4),
+    # 2026-07-30 4→5：Lawrence 定调"CNBC 信源覆盖的默认权威性=5"，四个频道拉齐
+    ("https://www.cnbc.com/id/10000664/device/rss/rss.html",           "CNBC-Finance","en", 5),
 ]
 
 # ── P2 二线英文加密媒体（2026-07-26 新增）───────────────────────────

@@ -530,12 +530,18 @@ def qa_market_expansion():
     # 标了 2 但其实没跑重算）。所以再核对一遍**数值真的对得上**当前公式，
     # 抽样而不是全量（全库逐行算一遍对 QA gate 来说太重，抽样已经够暴露"标记
     # 与实际不符"这类问题）。
+    # v3（2026-07-30）：加权和之后还有 CNBC 编辑背书 +0.05（封顶 1.0），SQL
+    # 复算必须逐字镜像 scoring.compute_macro_score，否则这条断言会把正确的分
+    # 全部误报成不吻合。JSON_SEARCH 的 'CNBC%' 走 LIKE 语义，命中任意 CNBC 频道。
     rows = sql("""
         SELECT COUNT(*) FROM (
           SELECT importance_score,
-                 ROUND(0.26*score_market_impact + 0.16*score_breadth + 0.16*score_timeliness
+                 ROUND(LEAST(1.0,
+                       0.26*score_market_impact + 0.16*score_breadth + 0.16*score_timeliness
                      + 0.14*score_punch + 0.10*score_hotness + 0.10*score_authority
-                     + 0.08*score_quality, 3) AS recalculated
+                     + 0.08*score_quality
+                     + IF(JSON_SEARCH(source_names,'one','CNBC%') IS NOT NULL, 0.05, 0)
+                 ), 3) AS recalculated
           FROM news_events
           WHERE scoring_version = {v} AND score_market_impact IS NOT NULL
           ORDER BY updated_at DESC LIMIT 300

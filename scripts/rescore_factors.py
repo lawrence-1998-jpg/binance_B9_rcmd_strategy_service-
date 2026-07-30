@@ -46,7 +46,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from crawler import scoring, storage
+from crawler import scoring, storage, verification
 from crawler.pipeline import get_openai_client
 from crawler.timeutil import now_local
 
@@ -173,7 +173,8 @@ def rescore(conn) -> int:
     cur.execute("""
         SELECT id, title_zh, title_en, description_short_zh, sources,
                breadth_level, score_market_impact, score_timeliness,
-               score_hotness, score_authority, score_quality
+               score_hotness, score_authority, score_quality,
+               is_rumor, verification_status
         FROM news_events
         WHERE score_market_impact IS NOT NULL
     """)
@@ -199,17 +200,33 @@ def rescore(conn) -> int:
         H = r["score_hotness"] or 0.0
         A = r["score_authority"] or 0.0
         Q = r["score_quality"] or 0.0
+
+        # v3（2026-07-30）：CNBC 覆盖 → 权威抬到满分再走既有折扣（与
+        # scoring.compute_authority 同一语义）。存量行的 score_authority 是
+        # 折扣后的净值，无法拆出原始折扣，所以这里用 is_rumor/verification
+        # 两列**重放折扣**算出"CNBC 抬底后的净值"，取两者较大——只抬不降。
+        if scoring.cnbc_covered(event):
+            floored = 1.0
+            if r.get("is_rumor"):
+                floored *= 0.7
+            floored *= verification.authority_multiplier(
+                {"verification_status": r.get("verification_status")})
+            A = max(A, round(floored, 4))
+
         total = (scoring.W_IMPACT * M + scoring.W_BREADTH * B
                  + scoring.W_TIME * T + scoring.W_PUNCH * punch["score"]
                  + scoring.W_HOT * H + scoring.W_AUTH * A + scoring.W_QUAL * Q)
+        # v3：CNBC 编辑背书 +0.05，封顶 1.0（与 compute_macro_score 同步）
+        if scoring.cnbc_covered(event):
+            total = min(1.0, total + scoring.CNBC_COVER_BONUS)
 
         wcur.execute("""
             UPDATE news_events
                SET score_breadth=%s, score_punch=%s, punch_magnitude_pct=%s,
-                   importance_score=%s, scoring_version=%s
+                   score_authority=%s, importance_score=%s, scoring_version=%s
              WHERE id=%s
         """, (round(B, 4), round(punch["score"], 4), punch["magnitude_pct"],
-              round(total, 4), scoring.SCORING_VERSION, r["id"]))
+              round(A, 4), round(total, 4), scoring.SCORING_VERSION, r["id"]))
         updated += 1
         if idx % 500 == 0:
             conn.commit()

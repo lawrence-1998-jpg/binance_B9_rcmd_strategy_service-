@@ -378,7 +378,16 @@ def normalize_published_at(value: str, now: datetime | None = None) -> str | Non
 _A_SHARE_TITLE_RE = re.compile(
     r"(?<![A-Za-z])A股|沪指|沪深|上证|深证|深成指|中证\d|"
     r"创业板|科创板|科创50|北证50|北交所|上交所|深交所|"
-    r"shanghai composite|shenzhen component|csi ?300|star ?50|chinext|star ?market",
+    # 2026-07-30 从"A股"扩到"纯中国内地市场"（Lawrence："纯中国内容后面不召回。
+    # 但中美之间的政治之类的可以放"）。触发案例：FT 的 "Chinese stocks worst
+    # month in a decade" 绕过了上面的 A 股关键词（它说的是"中国股市"整体），
+    # LLM 标成 macro_policy 后一路进了首屏第 1。关键词只加**市场指向明确**的
+    # 词（中国股市/陆股/Chinese stocks 这类），刻意不加"中国经济/China"这种
+    # 宽词——"中方警告反制美人形机器人禁令"这类中美交叉内容恰恰是要保留的，
+    # 宽词会把它们一起杀掉（keyword-blocklist 的老教训：语义边界靠关键词永远
+    # 收不干净，这里只兜"一眼就是纯内地市场"的硬案例，剩下交给展示端复查）。
+    r"中国股市|中国股票|中国内地股|陆股(?!通)|"
+    r"chinese stocks?|china stocks?|china'?s stock market|china equit",
     re.IGNORECASE,
 )
 

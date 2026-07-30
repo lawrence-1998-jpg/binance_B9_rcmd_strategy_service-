@@ -6,6 +6,7 @@ Macro Insight v1 打分。
 因子口径见 docs/skill-macro-news-recommendation-v1.md 第二章。本模块只负责把 LLM
 给出的原始分与管线算出的信号合成为最终分，不做召回或过滤。
 """
+import json
 import logging
 import math
 import re
@@ -47,7 +48,7 @@ W_IMPACT, W_BREADTH, W_TIME, W_PUNCH, W_HOT, W_AUTH, W_QUAL = (
 # 逐行比对，对不上直接红。改公式时那条用例会立刻亮红，逼着做数据迁移——
 # 加列走 migration、改公式只改代码，是这次事故的直接成因，两者是同一个变更
 # 的两半。重算脚本见 scripts/rescore_factors.py。
-SCORING_VERSION = 2   # v1 = 五因子（M/T/H/A/Q）；v2 = 七因子（+B 广度、+I 冲击力）
+SCORING_VERSION = 3   # v1=五因子；v2=七因子(+B/+I)；v3=CNBC覆盖→权威满分+总分+0.05(2026-07-30)
 
 # event_tier 对应的 M 值区间，用于约束 LLM 可能越界的打分
 TIER_BOUNDS = {
@@ -131,15 +132,45 @@ def compute_hotness(event: dict, baseline: float) -> float:
 
 # ── A：权威 ──────────────────────────────────────────────────────────
 
+def cnbc_covered(event: dict) -> bool:
+    """事件是否有 CNBC 任一频道背书（v3 公式的两处特殊对待都以此为开关）。
+
+    2026-07-30 Lawrence 明确要求："CNBC信源覆盖的，默认权威性=5"——背景是
+    要贴近 CNBC 的选题画风，被 CNBC 头条页收录本身就是"值得上首屏"的编辑
+    信号。sources 可能是 list（写入路径）或 JSON 字符串（从库里读出重算），
+    两种都接。
+    """
+    srcs = event.get("sources") or []
+    if isinstance(srcs, (str, bytes)):
+        try:
+            srcs = json.loads(srcs)
+        except (ValueError, TypeError):
+            return False
+    return any(str((s or {}).get("name", "")).startswith("CNBC") for s in (srcs or []))
+
+
+# CNBC 编辑背书加分（v3）：加在七因子加权和之后、封顶 1.0。做成公式的一部分
+# 而不是后台手改单条分数——手改会破坏「存量分 = 当前公式(因子列)」这条 QA
+# 红线（qa_suite 抽样重算比对），且改了哪些、为什么改，三天后没人说得清。
+CNBC_COVER_BONUS = 0.05
+
+
 def compute_authority(event: dict) -> float:
-    """LLM 给出的信源权威分，谣言打 7 折（文档 2.4），再按真实性校验结论降权。
+    """信源权威分，谣言打 7 折（文档 2.4），再按真实性校验结论降权。
 
     两道折扣叠加是有意的，它们防的是不同东西：`is_rumor` 是 LLM 从**文本措辞**
     判断的（"据传"/"消息人士"），而 verification 看的是**客观信号**（几家独立
     机构报道、信源可信度分层、有无矛盾报道）。一条写得像板上钉钉、但只有一个
     陌生账号说的消息，LLM 不会标 rumor，只有校验层能压住它。
+
+    v3（2026-07-30）：CNBC 覆盖的事件，基础权威直接抬到满分再走折扣——LLM 对
+    "多信源混合"的事件常给出偏低的综合权威分（实测一条 Benzinga+CNBC 双 5 分
+    信源的事件被打 0.48），而"上了 CNBC"这个事实本身就该锁定权威档位。折扣
+    仍然生效：CNBC 转述的传闻依旧按传闻打折，抬的是底不是天花板。
     """
     authority = _clamp(float(event.get("score_authority", 0.5) or 0.0))
+    if cnbc_covered(event):
+        authority = 1.0
     if event.get("is_rumor"):
         authority *= 0.7
     return _clamp(authority * verification.authority_multiplier(event))
@@ -332,6 +363,11 @@ def compute_macro_score(event: dict, baseline: float,
 
     score = (W_IMPACT * M + W_BREADTH * B + W_TIME * T + W_PUNCH * I
              + W_HOT * H + W_AUTH * A + W_QUAL * Q)
+    # v3：CNBC 编辑背书加分（见 CNBC_COVER_BONUS 注释）。封顶 1.0，保持分数
+    # 值域不变。注意 QA 的抽样一致性断言用 SQL 复算这条公式，改这里必须同步
+    # 改 scripts/qa_suite.py 的 recalculated 表达式与 scripts/rescore_factors.py。
+    if cnbc_covered(event):
+        score = min(1.0, score + CNBC_COVER_BONUS)
 
     return {
         "score_market_impact": round(M, 4),
