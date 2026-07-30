@@ -304,6 +304,47 @@ def qa_tools(run_paid: bool):
     check(g, "策略实验室 两版本对比（含换手率/升降case/总结）", ok,
           f"status={st} keys={sorted(d.keys()) if isinstance(d, dict) else d}")
 
+    # ── 排序策略基线配置（2026-07-30）───────────────────────────────
+    # 表：strategy_config（migration 016），端点在 api/lab_tools.py，校验在
+    # api/strategy_config.py。这组断言的重点是**写路径的严格性**——一份坏配置
+    # 被置为 active 的影响面是全站默认，所以非法载荷必须被 400 挡住而不是
+    # 静默夹紧；读路径的宽松兜底（表坏了退默认值）由「GET 必须 200 且含
+    # config」间接覆盖（兜底失败会直接 500）。
+    st, d = http("/api/strategy-config")
+    ok = st == 200 and isinstance(d, dict) and "config" in d and "versions" in d
+    check(g, "基线配置 GET 可用且含 config/versions", ok, f"status={st}")
+    active_ver = (d.get("config") or {}).get("_version") if isinstance(d, dict) else None
+    check(g, "基线配置有生效版本（种子迁移已跑）",
+          isinstance(active_ver, int) and active_ver >= 1, f"_version={active_ver}")
+    st, _d = http("/api/strategy-config", "POST",
+                  {"config": {"base_weights": {"M": 30, "B": 16, "T": 16, "I": 14,
+                                               "H": 10, "A": 10, "Q": 8, "XX": 5}}})
+    check(g, "基线配置：未知因子应 400", st == 400, f"status={st}")
+    st, _d = http("/api/strategy-config", "POST",
+                  {"config": {"market_weights": {"us_stock": 5.0}}})
+    check(g, "基线配置：市场权重越界应 400", st == 400, f"status={st}")
+    st, _d = http("/api/strategy-config", "POST",
+                  {"config": {"bonus": {"k_align": 0.4, "k_reversal": 0.3, "cap": 0.5}}})
+    check(g, "基线配置：加分项超封顶应 400", st == 400, f"status={st}")
+    st, _d = http("/api/strategy-config/rollback", "POST", {"version": 999999})
+    check(g, "基线配置：回滚到不存在版本应 400", st == 400, f"status={st}")
+    # 实验室与生产必须用同一根时间轴取数（2026-07-30 回填事故的直接教训：
+    # 实验室按入库时间取池、生产按事件日期过滤，一次历史回填就让实验室首屏
+    # 变成单一信源的旧闻）。这里断言 reweight 默认池里最新事件不早于昨天——
+    # pipeline 每小时都在产出，池子里连 24 小时内的事件都没有只能是取数轴错了。
+    st, d = http("/api/tools/reweight", "POST",
+                 {"weights": {"M": 26, "B": 16, "T": 16, "I": 14, "H": 10, "A": 10, "Q": 8},
+                  "days": 7, "pool": 100, "top_n": 10})
+    newest = ""
+    if isinstance(d, dict):
+        for r in d.get("results", []):
+            t = (r.get("time_event") or r.get("date") or "")[:10]
+            newest = max(newest, t)
+    from datetime import date as _date, timedelta as _td
+    check(g, "实验室池子含近24小时事件（取数轴与生产一致）",
+          st == 200 and newest >= (_date.today() - _td(days=1)).isoformat(),
+          f"最新事件日期={newest or '无'}")
+
     st, _ = http("/api/recommend/sector?sector=MEME&limit=3")
     check(g, "Sector Insight 推荐端点", st == 200, f"status={st}")
     st, _ = http("/api/recommend/sector?sector=NotARealSector")

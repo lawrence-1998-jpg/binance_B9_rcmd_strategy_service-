@@ -39,9 +39,14 @@ from functools import wraps
 
 from flask import Blueprint, request, jsonify, redirect, send_from_directory
 
-from crawler import market_mood, market_weight, scoring, storage
+from crawler import freshness, market_mood, market_weight, scoring, storage
 from crawler.sector_relevance import SECTOR_ANCHORS
 from crawler.timeutil import now_local
+
+# api/ 不是 package（没有 __init__.py），server.py 是以 `from lab_tools import lab_bp`
+# 这种平铺方式引入同目录模块的——所以这里必须用 `import strategy_config` 而不是
+# `from . import strategy_config`，后者在启动时直接 ImportError。
+import strategy_config
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 鉴权：与 api/server.py 里的 require_api_key 逻辑保持一致（同一个静态 token），
@@ -111,12 +116,32 @@ MAX_POOL_LIMIT = 500
 
 
 def fetch_pool(conn, days: int, limit: int) -> list[dict]:
-    """拉取近 N 天入库的事件，转成 scoring.py 各 compute_* 函数能直接吃的 dict。"""
+    """拉取近 N 天**发生**的事件，转成 scoring.py 各 compute_* 函数能直接吃的 dict。
+
+    ## 2026-07-30 修：口径从「入库时间」改成「事件时间」
+
+    原来是 `WHERE time_get_data >= since ORDER BY time_get_data DESC LIMIT N`，
+    即"最近入库的 N 条"。这在增量抓取下没问题——入库顺序约等于发生顺序。
+    但一次**批量回填**就会把它彻底击穿：当天回填 3454 条 Benzinga 历史新闻
+    （按 published 升序拉，所以先入库的是最老的），pipeline 消费掉 800 条后，
+    "最近入库的 300 条"变成了 **300/300 全是 Benzinga、且全是 7/27-7/28 的旧闻**
+    ——实验室首屏于是只剩一个信源的旧新闻，29/30 号的内容一条都进不了池子。
+
+    这不是回填的锅，是这个查询把「我们什么时候把它写进库」当成了「它什么时候
+    发生」。两者在稳态下相关、在回填时完全脱钩。生产 /api/news 一直是按
+    `date`（事件日期）过滤的，实验室却按入库时间——**同一个产品的两个界面用
+    不同的时间轴取数**，本身就是不一致的根源。改成与生产同一根轴。
+
+    COALESCE(time_event, date)：time_event 是 LLM 从正文读出的真实发生时间，
+    缺失时退化到 date（日期粒度），两者都没有才用 time_get_data 兜底——
+    不兜底会让老数据整批消失。
+    """
     since = (now_local() - timedelta(days=days)).strftime("%Y-%m-%d %H:%M:%S")
     cursor = conn.cursor()
     cursor.execute(
-        f"SELECT {POOL_COLUMNS} FROM news_events WHERE time_get_data >= %s "
-        f"ORDER BY time_get_data DESC LIMIT %s",
+        f"SELECT {POOL_COLUMNS} FROM news_events "
+        f"WHERE COALESCE(time_event, date, time_get_data) >= %s "
+        f"ORDER BY COALESCE(time_event, date, time_get_data) DESC LIMIT %s",
         (since, limit),
     )
     cols = [d[0] for d in cursor.description]
@@ -389,6 +414,31 @@ def _lab_mood_score(conn_events: list[dict]):
     return res.get("mood_score") if res.get("available") else None
 
 
+def resolve_mood(events: list[dict], raw):
+    """决定这次重排用哪个大盘情绪值。
+
+    2026-07-30 新增「大盘情绪方向」控件（Lawrence："增加一个大盘情绪的因子，
+    让我可以直接调控情绪方向"）。语义：
+
+      · raw 为 None / 缺失 / "auto"  → 用池子现算的实时情绪（原行为）
+      · raw 是 -1..1 的数字          → **人工指定**，覆盖实时值
+
+    人工指定的价值在于**反事实推演**：实时情绪是什么样，取决于最近恰好发生了
+    什么，不可控；而"如果此刻大盘极度悲观，我这套权重会把什么顶上首屏"是产品
+    决策真正要回答的问题。没有这个控件就只能干等到市场真的崩一次才能验证。
+
+    返回 (mood_score, is_manual)——is_manual 要透传到前端，否则用户看到一个
+    情绪值却分不清是实时算的还是自己刚拖出来的。
+    """
+    if raw is None or (isinstance(raw, str) and raw.strip().lower() in ("", "auto")):
+        return _lab_mood_score(conn_events=events), False
+    try:
+        v = float(raw)
+    except (TypeError, ValueError):
+        return _lab_mood_score(conn_events=events), False
+    return max(-1.0, min(1.0, v)), True
+
+
 def resolve_bonus_coefs(raw: dict) -> dict:
     """解析加分项系数。非法/缺失回落默认值，负数夹到 0（加分项不做惩罚）。"""
     raw = raw or {}
@@ -405,7 +455,7 @@ def resolve_bonus_coefs(raw: dict) -> dict:
 def rank_pool(events: list[dict], factors_by_id: dict, weights: dict,
               mood_score=None, bonus_coefs: dict | None = None,
               market_weights: dict | None = None):
-    """三段式打分排序：BaseScore(加权) × 市场重要性 × (1 + 加分项)。
+    """四段式打分排序：BaseScore(加权) × 市场重要性 × 新鲜度 × (1 + 加分项)。
 
     返回 [(event, factors, final_score, base_score, bonus_detail, market_detail), ...]
     降序。mood_score 为 None（大盘情绪不可用）时加分项全为 0，退化成纯基础排序。
@@ -413,6 +463,12 @@ def rank_pool(events: list[dict], factors_by_id: dict, weights: dict,
     市场重要性倍率是 2026-07-29 加的（PRD-04）：tier 是相对"自己所在市场"判定的，
     但排序是全局的，导致韩股 S 档率是美股的 90 倍、供给只有 1/15 却占了 2 倍的
     首屏位置。详见 crawler/market_weight.py。
+
+    新鲜度衰减是 2026-07-30 补进来的（crawler/freshness.py）。当天先加进了生产
+    排序（api/server.py），实验室这边漏了——结果是**同一套权重在两个界面算出
+    不同的排名**：生产首屏是 7/29-7/30 的内容，实验室却把 7/27-7/28 的旧闻排在
+    前面。实验室的全部意义在于"我在这里调的就是线上跑的那套"，两边公式不一致
+    的话，调参结论直接失效。补齐后两边是同一个公式。
     """
     bonus_coefs = bonus_coefs or DEFAULT_BONUS
     scored = []
@@ -424,7 +480,8 @@ def rank_pool(events: list[dict], factors_by_id: dict, weights: dict,
             k_align=bonus_coefs.get("k_align"),
             k_reversal=bonus_coefs.get("k_reversal"))
         mkt = market_weight.explain(e, market_weights)
-        final = base * mkt["multiplier"] * detail["multiplier"]
+        fresh = freshness.decay_multiplier(e)
+        final = base * mkt["multiplier"] * fresh * detail["multiplier"]
         scored.append((e, f, final, base, detail, mkt))
     scored.sort(key=lambda x: -x[2])
     return scored
@@ -456,7 +513,7 @@ def reweight():
 
     bonus_coefs = resolve_bonus_coefs(body.get("bonus", {}))
     mkt_weights = market_weight.resolve_weights(body.get("market_weights"))
-    mood = _lab_mood_score(conn_events=events)
+    mood, mood_manual = resolve_mood(events, body.get("mood_override"))
 
     factors_by_id = {e["id"]: compute_factors(e, baseline, now, sector) for e in events}
     scored = rank_pool(events, factors_by_id, weights, mood, bonus_coefs, mkt_weights)
@@ -489,6 +546,9 @@ def reweight():
             "market_names": MARKET_NAME,
             "market_note": MARKET_NOTE,
             "mood_score": mood,
+            # 前端要能区分"这个情绪值是实时算的"还是"我自己拖出来的"，
+            # 否则拖完滑杆看到一个数字，分不清生效没有。
+            "mood_manual": mood_manual,
             "social_baseline": round(baseline, 1),
             "generated_at": now.isoformat(),
         },
@@ -544,7 +604,9 @@ def compare():
     # A 版把系数调 0、B 版开着，对比换手率与升降 case 即为 A/B 对照。
     bonus_a = resolve_bonus_coefs((body.get("version_a") or {}).get("bonus", {}))
     bonus_b = resolve_bonus_coefs((body.get("version_b") or {}).get("bonus", {}))
-    mood = _lab_mood_score(conn_events=events)
+    # 两版共用同一个情绪值（含人工指定）：对比的是**权重差异**，情绪必须是
+    # 受控变量，两边各算各的就分不清排序变化来自权重还是来自情绪。
+    mood, _mood_manual = resolve_mood(events, body.get("mood_override"))
 
     mkt_weights = market_weight.resolve_weights(body.get("market_weights"))
     scored_a = rank_pool(events, factors_by_id, weights_a, mood, bonus_a, mkt_weights)
@@ -688,3 +750,72 @@ def build_summary(events, rank_a, rank_b, weights_a, weights_b, turnover_rate, t
         lines.append(f"下降幅度最大：《{title}》从第 {c['rank_b']} 名降至第 {c['rank_a']} 名。")
 
     return " ".join(lines) if lines else "两版本权重差异极小，排序基本没有变化。"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 排序策略基线配置 —— GET/POST /api/strategy-config，POST /api/strategy-config/rollback
+#
+# 2026-07-30 新增（Lawrence："增加一个存为基线的按钮，点击后弹窗提示是否确认
+# 替换基线...那么就需要你把排序公式的参数做成真的配置化的，而不是写死的"）。
+#
+# 本轮的生效范围是**策略实验室的默认配置（04/05）**：打开实验室时滑杆从这里
+# 初始化，而不是从代码常量。01/02/03 的生产排序**暂不接入**——那要把生产从
+# 「读入库时算好的 importance_score」改成「查询时按配置重算」，是排序主路径的
+# 改动，按 Lawrence 的决定放到展示之后再做（见 docs/WORKLOG.md 需求 #84）。
+#
+# 表结构与"为什么是整份快照而不是 key-value"见 config/migrations/016_strategy_config.sql，
+# 校验与兜底策略见 api/strategy_config.py 的模块说明。
+# ─────────────────────────────────────────────────────────────────────────────
+@lab_bp.route("/api/strategy-config", methods=["GET"])
+@require_api_key
+def strategy_config_get():
+    conn = storage.get_mysql_conn()
+    try:
+        cfg = strategy_config.get_active(conn)
+        versions = strategy_config.list_versions(conn)
+    finally:
+        conn.close()
+    return jsonify({"config": cfg, "versions": versions,
+                    "defaults": strategy_config.DEFAULTS})
+
+
+@lab_bp.route("/api/strategy-config", methods=["POST"])
+@require_api_key
+def strategy_config_save():
+    body = request.get_json(force=True, silent=True) or {}
+    payload = body.get("config")
+    if payload is None:
+        return jsonify({"error": "缺少 config 字段"}), 400
+
+    conn = storage.get_mysql_conn()
+    try:
+        cfg = strategy_config.save_baseline(
+            conn, payload,
+            note=(body.get("note") or None),
+            created_by=(body.get("created_by") or "lab"))
+    except strategy_config.ConfigError as e:
+        # 校验失败必须把**具体哪一项不合法**告诉前端——弹窗里只显示"保存失败"
+        # 用户无从下手，而这类错误恰恰都是可以自己改对的。
+        return jsonify({"error": str(e)}), 400
+    finally:
+        conn.close()
+    return jsonify({"ok": True, "config": cfg, "version": cfg["_version"]})
+
+
+@lab_bp.route("/api/strategy-config/rollback", methods=["POST"])
+@require_api_key
+def strategy_config_rollback():
+    body = request.get_json(force=True, silent=True) or {}
+    try:
+        version = int(body.get("version"))
+    except (TypeError, ValueError):
+        return jsonify({"error": "version 必须是整数"}), 400
+
+    conn = storage.get_mysql_conn()
+    try:
+        cfg = strategy_config.rollback(conn, version)
+    except strategy_config.ConfigError as e:
+        return jsonify({"error": str(e)}), 400
+    finally:
+        conn.close()
+    return jsonify({"ok": True, "config": cfg, "version": cfg["_version"]})

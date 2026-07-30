@@ -1201,6 +1201,69 @@ footer{border-top:1px solid var(--rule);padding:26px 0 40px;font-size:12px;color
   color:var(--lab-g700);
 }
 
+/* ── 大盘情绪方向（2026-07-30）────────────────────────────────────
+   和上面两个加分项滑杆同宽同节奏，但用虚线分隔：它调的是「往哪个方向加」，
+   不是「加多少」，语义上是另一件事。 */
+#panel-5 .lb-moodrow{
+  margin-top:14px;padding-top:12px;border-top:1px dashed var(--lab-n400);
+}
+#panel-5 .lb-moodrow input[type=range]{width:100%;margin-top:6px}
+#panel-5 .lb-moodrow input[type=range]:disabled{opacity:.4;cursor:not-allowed}
+#panel-5 .lb-moodauto{
+  display:flex;align-items:center;gap:6px;margin-top:8px;
+  font-size:12px;color:var(--lab-n700);cursor:pointer;
+}
+#panel-5 .lb-moodauto input{cursor:pointer}
+
+/* ── 存为基线 ────────────────────────────────────────────────────
+   放在 section 标题行右侧，与滑杆区拉开距离：这是不可逆的提交动作
+   （会改变全站默认），不该和随手拖动的调节控件挤在一起。 */
+#panel-5 .lb-baseline{
+  display:flex;align-items:center;justify-content:flex-end;gap:12px;
+  flex-wrap:wrap;margin-top:10px;
+}
+#panel-5 .lb-baseline-meta{
+  display:flex;align-items:center;gap:8px;
+  font-size:12px;color:var(--lab-n700);
+}
+#panel-5 .lb-baseline-meta b{color:var(--lab-g700);font-variant-numeric:tabular-nums}
+#panel-5 .lb-btn.primary{
+  background:var(--lab-g700);color:#fff;border-color:var(--lab-g700);font-weight:600;
+}
+#panel-5 .lb-btn.primary:hover{filter:brightness(1.08)}
+#panel-5 .lb-btn.ghost{background:transparent}
+
+/* 确认弹窗：替换基线会改变全站默认，必须二次确认 */
+.b9-modal-mask{
+  position:fixed;inset:0;background:rgba(28,24,20,.55);z-index:9998;
+  display:flex;align-items:center;justify-content:center;padding:20px;
+}
+.b9-modal{
+  background:var(--lab-n100,#fdfbf7);color:var(--lab-n900,#2a2521);
+  border-radius:14px;max-width:520px;width:100%;
+  padding:22px 24px;box-shadow:0 18px 48px rgba(0,0,0,.28);
+  max-height:80vh;overflow-y:auto;
+}
+.b9-modal h3{margin:0 0 10px;font-size:17px}
+.b9-modal .b9-modal-body{font-size:13px;line-height:1.7}
+.b9-modal .b9-modal-diff{
+  margin:12px 0;padding:10px 12px;border-radius:8px;
+  background:var(--lab-n200,#f3ede3);font-size:12px;line-height:1.8;
+}
+.b9-modal .b9-modal-act{display:flex;justify-content:flex-end;gap:10px;margin-top:16px}
+.b9-modal input[type=text]{
+  width:100%;margin-top:8px;padding:8px 10px;font-size:13px;
+  border:1px solid var(--lab-n400,#d9cfc0);border-radius:8px;
+  background:#fff;color:inherit;
+}
+.b9-modal .b9-verlist{margin:0;padding:0;list-style:none;font-size:12px}
+.b9-modal .b9-verlist li{
+  display:flex;align-items:center;justify-content:space-between;gap:10px;
+  padding:8px 0;border-bottom:1px solid var(--lab-n300,#e6ddd0);
+}
+.b9-modal .b9-verlist li:last-child{border-bottom:none}
+.b9-modal .b9-verlist .cur{color:var(--lab-g700);font-weight:600}
+
 /* ── 结果行可展开：点标题看正文与逐因子明细 ─────────────────────────
    Lawrence 原话「具体的内容点击后要能看见正文和每个因子对应的分数，现在不够
    好用」。展开区不是新弹层，就长在行下面——弹层会把上下文（当前排名、位次
@@ -2831,6 +2894,16 @@ footer{border-top:1px solid var(--rule);padding:26px 0 40px;font-size:12px;color
         <span class="lb-eyebrow">01 · Real-time Reorder</span>
         <h2>单版本权重调节 · 实时重排</h2>
         <p class="lb-sub">拖动滑块，权重会自动归一化为合计 100%；下方 Top N 列表随权重变化实时重新计算并排序（含与生产环境当前排名的对比）。</p>
+        <!-- 存为基线（2026-07-30）：把当前这套参数固化成全站默认。
+             放在标题行右侧而不是滑杆区里——它是「提交」语义，不是「调节」语义，
+             混在滑杆中间容易误点。 -->
+        <div class="lb-baseline">
+          <div class="lb-baseline-meta">
+            当前基线 <b id="baseVer">—</b>
+            <button class="lb-btn sm ghost" type="button" id="baseHistBtn">历史版本</button>
+          </div>
+          <button class="lb-btn primary" type="button" id="saveBaseBtn">存为基线</button>
+        </div>
       </div>
       <div class="lb-grid lb-gsingle">
         <div class="lb-card">
@@ -2856,10 +2929,31 @@ footer{border-top:1px solid var(--rule);padding:26px 0 40px;font-size:12px;color
                不同的作用方式（外层倍率 vs 加权求和），放在一起会被误读。 -->
           <div class="lb-grouplabel bonus">加分项 · 外层倍率，不参与归一化</div>
           <div id="bpanel-single"></div>
+
+          <!-- 大盘情绪方向（2026-07-30）：上面两个加分项都是「系数有多大」，
+               这一条是「往哪个方向加」。默认跟随实时计算值；手动指定用于
+               反事实推演——"如果此刻大盘极度悲观，这套权重会把什么顶上首屏"。 -->
+          <div class="lb-moodrow">
+            <div class="lb-wtop">
+              <span class="lb-wl"><span class="sw" style="background:#8c5a3c"></span>大盘情绪方向
+                <span class="sub">Market Mood</span></span>
+              <span class="lb-wv" id="moodVal">实时</span>
+            </div>
+            <input type="range" id="moodSlider" min="-100" max="100" value="0" step="5"
+                   aria-label="大盘情绪方向" disabled>
+            <label class="lb-moodauto">
+              <input type="checkbox" id="moodAuto" checked> 跟随实时情绪（取消勾选后可手动指定方向）
+            </label>
+          </div>
+
           <p class="lb-hint" id="bonusHint">
             最终分 = 基础分 × (1 + 同向 + 反转)，两项合计封顶 +50%。
             <b>同向</b>让首屏跟着大盘氛围走；<b>反转</b>专门把「与大盘反向的重大事件」顶上来，
             只对 S/A 档生效，防止大盘单边时首屏变成回音室。两个都调 0 即退回纯基础排序。
+            <br>
+            <b>大盘情绪方向</b>决定上面两项往哪边加：默认用近 24 小时实时算出来的值，
+            手动指定则是做<b>反事实推演</b>——实时情绪取决于最近恰好发生了什么，不可控，
+            而「假如此刻大盘极度悲观，我这套权重会把什么顶上首屏」才是调参真正要回答的问题。
           </p>
 
           <!-- 第三组：市场重要性（PRD-04）。与前两组量纲都不同，必须视觉分开。 -->
@@ -6363,12 +6457,16 @@ var PRESETS = {
   relevance:  {M:15, B:10, T:10, I:5,  H:5,  A:5,  Q:5,  Rel:45}
 };
 
-function api(path, body){
-  return fetch(API + path, {
-    method: "POST",
-    headers: {"Content-Type":"application/json", "Authorization":"Bearer " + token()},
-    body: JSON.stringify(body || {})
-  }).then(function(r){
+/* method 默认 POST（原有 20+ 处调用都不传，行为不变）；GET 时不带 body，
+   否则部分环境会对带 body 的 GET 直接报错。 */
+function api(path, body, method){
+  method = method || "POST";
+  var opts = {
+    method: method,
+    headers: {"Content-Type":"application/json", "Authorization":"Bearer " + token()}
+  };
+  if (method !== "GET") opts.body = JSON.stringify(body || {});
+  return fetch(API + path, opts).then(function(r){
     if (!r.ok) return r.json().catch(function(){ return {}; }).then(function(j){ throw new Error(j.error || ("HTTP " + r.status)); });
     return r.json();
   });
@@ -6601,6 +6699,254 @@ MarketPanel.prototype.weights = function(){
 function currentSector(){ return $("#labFSector").value || null; }
 
 /* ══════════════════════════════════════════════════════════════════════════
+   大盘情绪方向（2026-07-30）
+   ══════════════════════════════════════════════════════════════════════════
+   勾选「跟随实时情绪」时发 null，后端按原逻辑用池子现算的值；取消勾选后发
+   -1..1 的数字，后端直接用它算同向/反转加成。滑杆本身是 -100..100 的整数
+   （range 控件不支持小数步进得很别扭），发出去之前除以 100。 */
+function moodOverrideValue(){
+  var auto = $("#moodAuto");
+  if (!auto || auto.checked) return null;
+  var s = $("#moodSlider");
+  return s ? (parseInt(s.value, 10) / 100) : null;
+}
+/* 分档边界必须和后端 crawler/market_mood.py 的 _MOOD_BUCKETS 逐字一致
+   （那边是 `mood_score >= 下界`，全部闭区间）。首版这里把后两档写成了开区间
+   `v > -0.15` / `v > -0.5`，于是恰好 -0.50 时后端判"偏悲观"、前端显示"极度悲观"
+   ——同一个数字两块界面给两个说法，正是最难查的那种不一致。 */
+function moodLabel(v){
+  if (v >= 0.5)   return "极度乐观";
+  if (v >= 0.15)  return "偏乐观";
+  if (v >= -0.15) return "中性";
+  if (v >= -0.5)  return "偏悲观";
+  return "极度悲观";
+}
+function refreshMoodUI(){
+  var auto = $("#moodAuto"), s = $("#moodSlider"), out = $("#moodVal");
+  if (!auto || !s || !out) return;
+  s.disabled = auto.checked;
+  if (auto.checked){
+    // 跟随实时时显示后端算出来的真实值，而不是滑杆位置——否则用户会以为
+    // 滑杆停在 0 就代表"现在大盘是中性"，那是两回事。
+    var m = lastReweightResult && lastReweightResult.meta
+            ? lastReweightResult.meta.mood_score : null;
+    // 3 位小数：-0.502 显示成 -0.50 会和分档标签"极度悲观"（阈值恰好 -0.5）
+    // 看起来自相矛盾，其它地方（singleMeta）也都是 3 位。
+    out.textContent = (m === null || m === undefined)
+      ? "实时（不可用）"
+      : "实时 " + m.toFixed(3) + " · " + moodLabel(m);
+  } else {
+    var v = parseInt(s.value, 10) / 100;
+    out.textContent = "手动 " + v.toFixed(2) + " · " + moodLabel(v);
+  }
+}
+function bindMoodControls(){
+  var auto = $("#moodAuto"), s = $("#moodSlider");
+  if (!auto || !s) return;
+  auto.addEventListener("change", function(){
+    refreshMoodUI();
+    onWeightsChanged("single");
+  });
+  s.addEventListener("input", function(){
+    refreshMoodUI();
+    onWeightsChanged("single");
+  });
+  refreshMoodUI();
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   存为基线（2026-07-30）
+   ══════════════════════════════════════════════════════════════════════════
+   把当前这套参数固化成全站默认。三个要点：
+
+   1) **必须二次确认**——它改的是全站默认，不是自己这次的预览。
+   2) 确认框里要说清**这次到底改了什么**：拿当前基线逐项 diff，只列真正变了的
+      那几项。只写一句"是否确认替换基线"等于让用户闭着眼签字。
+   3) 保存成功后刷新版本号显示，并把新基线设成"重置"的目标——否则用户点完
+      重置又跳回旧值，会以为没保存上。
+
+   本轮生效范围仅 04/05 实验室默认配置；01/02/03 生产排序的接入见
+   docs/WORKLOG.md 需求 #84（按 Lawrence 的决定放到展示之后）。 */
+var activeBaseline = null;
+
+function currentConfigPayload(){
+  var bw = panelSingle ? panelSingle.rawWeights() : {};
+  var out = {};
+  ["M","B","T","I","H","A","Q"].forEach(function(k){ out[k] = bw[k] || 0; });
+  var cfg = {
+    base_weights: out,
+    market_weights: marketSingle ? marketSingle.weights() : {},
+    mood: {}
+  };
+  if (bonusSingle){
+    var c = bonusSingle.coefs();
+    // cap 不在实验室里暴露，沿用当前基线的值，避免把它悄悄重置成默认
+    var cap = (activeBaseline && activeBaseline.bonus && activeBaseline.bonus.cap);
+    cfg.bonus = {k_align: c.k_align, k_reversal: c.k_reversal,
+                 cap: (cap === undefined || cap === null) ? 0.5 : cap};
+  }
+  var mo = moodOverrideValue();
+  cfg.mood.manual_override = mo;
+  if (activeBaseline && activeBaseline.mood && activeBaseline.mood.lookback_hours){
+    cfg.mood.lookback_hours = activeBaseline.mood.lookback_hours;
+  }
+  return cfg;
+}
+
+function diffLines(next){
+  var cur = activeBaseline;
+  if (!cur) return ["（读不到当前基线，无法比对差异）"];
+  var lines = [];
+  var NAME = {M:"影响面",B:"广度",T:"时效性",I:"冲击力",H:"热度",A:"权威性",Q:"质量"};
+  // 基础因子存进去的是归一化后的份额，这里也归一化再比，否则"都乘以2"会被
+  // 误报成七项全变（实际归一化后完全一样）。
+  var tot = 0; Object.keys(next.base_weights).forEach(function(k){ tot += next.base_weights[k]; });
+  Object.keys(NAME).forEach(function(k){
+    var a = tot > 0 ? (next.base_weights[k] * 100 / tot) : 0;
+    var b = (cur.base_weights || {})[k];
+    if (b === undefined) return;
+    if (Math.abs(a - b) >= 0.05) lines.push(NAME[k] + " " + b.toFixed(1) + "% → " + a.toFixed(1) + "%");
+  });
+  var MK = {us_stock:"美股",crypto:"加密",macro_policy:"宏观",social_signal:"社会信号",
+            general:"综合",hk_stock:"港股",jp_stock:"日股",kr_stock:"韩股"};
+  Object.keys(MK).forEach(function(k){
+    var a = (next.market_weights || {})[k], b = (cur.market_weights || {})[k];
+    if (a === undefined || b === undefined) return;
+    if (Math.abs(a - b) >= 0.005) lines.push("市场·" + MK[k] + " ×" + b.toFixed(2) + " → ×" + a.toFixed(2));
+  });
+  [["k_align","情绪同向"],["k_reversal","反转信号"]].forEach(function(p){
+    var a = (next.bonus || {})[p[0]], b = (cur.bonus || {})[p[0]];
+    if (a === undefined || b === undefined) return;
+    if (Math.abs(a - b) >= 0.005) lines.push(p[1] + " +" + Math.round(b*100) + "% → +" + Math.round(a*100) + "%");
+  });
+  var an = (next.mood || {}).manual_override, bn = (cur.mood || {}).manual_override;
+  var fmt = function(v){ return (v === null || v === undefined) ? "跟随实时" : ("手动 " + Number(v).toFixed(2)); };
+  if (fmt(an) !== fmt(bn)) lines.push("大盘情绪方向 " + fmt(bn) + " → " + fmt(an));
+  return lines.length ? lines : ["与当前基线完全一致，没有任何改动"];
+}
+
+function closeModal(){
+  var m = document.querySelector(".b9-modal-mask");
+  if (m) m.remove();
+}
+function openModal(html){
+  closeModal();
+  var mask = document.createElement("div");
+  mask.className = "b9-modal-mask";
+  mask.innerHTML = '<div class="b9-modal" role="dialog" aria-modal="true">' + html + '</div>';
+  mask.addEventListener("click", function(e){ if (e.target === mask) closeModal(); });
+  document.body.appendChild(mask);
+  return mask;
+}
+
+function openSaveBaselineModal(){
+  var next = currentConfigPayload();
+  var lines = diffLines(next);
+  var noChange = (lines.length === 1 && lines[0].indexOf("完全一致") >= 0);
+  var mask = openModal(
+    '<h3>是否确认替换基线？</h3>' +
+    '<div class="b9-modal-body">' +
+      '替换后，<b>策略实验室（04/05）的默认配置</b>会变成下面这套参数；' +
+      '本轮暂不影响 01/02/03 的生产排序。旧版本不会删除，随时可回滚。' +
+      '<div class="b9-modal-diff"><b>本次改动：</b><br>' + lines.map(esc).join("<br>") + '</div>' +
+      '<label style="font-size:12px">备注（可选，方便日后回看这版为什么改）' +
+        '<input type="text" id="baseNote" maxlength="200" placeholder="例如：演示前基线，美股再提权"></label>' +
+    '</div>' +
+    '<div class="b9-modal-act">' +
+      '<button class="lb-btn sm" type="button" id="baseCancel">取消</button>' +
+      '<button class="lb-btn sm primary" type="button" id="baseConfirm"' + (noChange ? " disabled" : "") + '>确认替换</button>' +
+    '</div>');
+  mask.querySelector("#baseCancel").addEventListener("click", closeModal);
+  var btn = mask.querySelector("#baseConfirm");
+  if (!noChange) btn.addEventListener("click", function(){
+    btn.disabled = true; btn.textContent = "保存中…";
+    api("/api/strategy-config", {config: next, note: (mask.querySelector("#baseNote").value || null)})
+      .then(function(d){
+        activeBaseline = d.config;
+        var v = $("#baseVer"); if (v) v.textContent = "v" + d.version;
+        closeModal();
+        track("lab_baseline_saved", {version: d.version});
+      })
+      .catch(function(err){
+        // 后端把「哪一项不合法」写在 error 里，原样显示——只说"保存失败"
+        // 等于让用户去猜，而这类错误都是他自己能改对的。
+        btn.disabled = false; btn.textContent = "确认替换";
+        var box = mask.querySelector(".b9-modal-diff");
+        box.innerHTML = '<b style="color:#b3261e">保存失败：</b><br>' + esc(String(err && err.message || err));
+      });
+  });
+}
+
+function openBaselineHistory(){
+  api("/api/strategy-config", null, "GET").then(function(d){
+    var items = (d.versions || []).map(function(v){
+      return '<li><span>' + (v.is_active ? '<span class="cur">v' + v.version + ' · 当前</span>' : "v" + v.version) +
+             ' <span style="opacity:.7">' + esc(v.note || "") + '</span></span>' +
+             (v.is_active ? "" : '<button class="lb-btn sm" type="button" data-rb="' + v.version + '">回滚到此版</button>') +
+             '</li>';
+    }).join("");
+    var mask = openModal(
+      '<h3>基线版本历史</h3>' +
+      '<div class="b9-modal-body">回滚不会删除任何版本，只是把选中的那版重新置为生效。' +
+      '<ul class="b9-verlist">' + (items || "<li>暂无历史</li>") + '</ul></div>' +
+      '<div class="b9-modal-act"><button class="lb-btn sm" type="button" id="histClose">关闭</button></div>');
+    mask.querySelector("#histClose").addEventListener("click", closeModal);
+    Array.prototype.slice.call(mask.querySelectorAll("[data-rb]")).forEach(function(b){
+      b.addEventListener("click", function(){
+        b.disabled = true; b.textContent = "回滚中…";
+        api("/api/strategy-config/rollback", {version: parseInt(b.dataset.rb, 10)}).then(function(d){
+          activeBaseline = d.config;
+          var v = $("#baseVer"); if (v) v.textContent = "v" + d.version;
+          applyBaselineToPanels(d.config);
+          closeModal();
+        });
+      });
+    });
+  });
+}
+
+/* 把基线配置灌进滑杆。基线的意义就是"打开实验室时就是这套参数"，
+   不回灌等于存了个寂寞。 */
+function applyBaselineToPanels(cfg){
+  if (!cfg) return;
+  if (panelSingle && cfg.base_weights){
+    ["M","B","T","I","H","A","Q"].forEach(function(k){
+      if (cfg.base_weights[k] !== undefined) panelSingle.values[k] = cfg.base_weights[k];
+    });
+    panelSingle.build();
+  }
+  if (bonusSingle && cfg.bonus){
+    if (cfg.bonus.k_align !== undefined)    bonusSingle.values.k_align    = Math.round(cfg.bonus.k_align * 100);
+    if (cfg.bonus.k_reversal !== undefined) bonusSingle.values.k_reversal = Math.round(cfg.bonus.k_reversal * 100);
+    bonusSingle.build();
+  }
+  if (marketSingle && cfg.market_weights){
+    Object.keys(cfg.market_weights).forEach(function(k){
+      if (marketSingle.values[k] !== undefined) marketSingle.values[k] = Math.round(cfg.market_weights[k] * 100);
+    });
+    marketSingle.build();
+  }
+  var mo = (cfg.mood || {}).manual_override;
+  var auto = $("#moodAuto"), s = $("#moodSlider");
+  if (auto && s){
+    auto.checked = (mo === null || mo === undefined);
+    if (!auto.checked) s.value = Math.round(Number(mo) * 100);
+    refreshMoodUI();
+  }
+}
+
+function loadBaseline(){
+  return api("/api/strategy-config", null, "GET").then(function(d){
+    activeBaseline = d.config;
+    var v = $("#baseVer");
+    if (v) v.textContent = d.config._fallback ? "默认值" : ("v" + d.config._version);
+    applyBaselineToPanels(d.config);
+  }).catch(function(){
+    var v = $("#baseVer"); if (v) v.textContent = "读取失败";
+  });
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
    子 tab 切换
    原 lab.html 还会 history.replaceState("#sub"+n)；并入主站后 hash 归主脚本的
    showTab() 管（#tab5），子 tab 再去改 hash 会把主 tab 的定位冲掉，所以去掉。
@@ -6631,6 +6977,14 @@ function init(){
   panelB = new Panel("b", PRESETS.timeliness);
   bonusSingle = new BonusPanel("single", DEFAULT_BONUS);
   marketSingle = new MarketPanel("single", DEFAULT_MARKETS);
+
+  // 大盘情绪方向 + 存为基线（2026-07-30）。loadBaseline 会把已保存的基线
+  // 灌回三组滑杆——它必须在三个 Panel 构造之后跑，否则灌进去的值会被
+  // 构造函数的默认值覆盖掉。
+  bindMoodControls();
+  var sb = $("#saveBaseBtn");   if (sb) sb.addEventListener("click", openSaveBaselineModal);
+  var hb = $("#baseHistBtn");   if (hb) hb.addEventListener("click", openBaselineHistory);
+  loadBaseline();
 
   $all(".lb-presets").forEach(function(group){
     group.addEventListener("click", function(e){
@@ -6894,7 +7248,8 @@ function runReweight(){
   var body = Object.assign(baseParams(), {
     weights: panelSingle.rawWeights(),
     bonus: bonusSingle ? bonusSingle.coefs() : {},
-    market_weights: marketSingle ? marketSingle.weights() : {}
+    market_weights: marketSingle ? marketSingle.weights() : {},
+    mood_override: moodOverrideValue()
   });
   api("/api/tools/reweight", body).then(function(d){
     if (seq !== reweightSeq) return;                      // 过期响应，丢弃
@@ -6907,6 +7262,9 @@ function runReweight(){
     var moodTxt = (d.meta.mood_score === null || d.meta.mood_score === undefined)
       ? "大盘情绪不可用" : "大盘情绪 " + d.meta.mood_score.toFixed(3);
     $("#singleMeta").textContent = "Top " + d.results.length + " · 基准 " + d.meta.social_baseline + " · " + moodTxt;
+    // 「跟随实时」时情绪标签显示的是后端算出来的真实值，而那个值只有等这次
+    // 响应回来才知道——init 时先渲染一次会显示"不可用"，这里必须再刷一次。
+    refreshMoodUI();
     $("#labFootMeta").textContent = "上次计算：" + new Date(d.meta.generated_at).toLocaleString("zh-CN");
     if (!d.results.length){ el.innerHTML = '<div class="lb-empty">该时间范围内没有事件</div>'; return; }
     var moved = d.results.filter(function(r){ return r.rank_delta !== null && r.rank_delta !== undefined && r.rank_delta !== 0; }).length;
