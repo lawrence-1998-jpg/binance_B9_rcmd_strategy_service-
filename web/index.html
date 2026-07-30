@@ -273,6 +273,7 @@ main{padding:38px 0 90px}
 .tag.coin{background:var(--gold-wash);color:var(--gold-deep);border-color:var(--gold-line);font-family:var(--mono)}
 .tag.neu{background:var(--surface-2);color:var(--ink-3);border-color:var(--rule)}
 .tag.rumor{background:var(--red-wash);color:var(--red);border-color:#F0C6CD;font-weight:600}
+.tag.disputed{background:var(--amber-wash);color:var(--amber);border-color:var(--amber-line);font-weight:600}
 .tag.ver{background:var(--green-wash);color:var(--green);border-color:#BFE3D0}
 /* 2026-07-29：情绪同向/反转加成标签。Lawrence 原话「我都不知道哪条是反转，
    得一条条肉眼看」——此前策略实验室展开明细里能看到贡献值，但榜单本身和
@@ -1096,6 +1097,7 @@ footer{border-top:1px solid var(--rule);padding:26px 0 40px;font-size:12px;color
 #panel-5 .lb-tag.down{background:var(--lab-a200);color:var(--lab-a800)}
 #panel-5 .lb-tag.flat{background:var(--lab-n200);color:var(--lab-n600)}
 #panel-5 .lb-tag.rumor{background:var(--lab-a800);color:var(--lab-paper)}
+#panel-5 .lb-tag.disputed{background:var(--lab-a600);color:var(--lab-paper)}
 #panel-5 .lb-tag.ver{background:var(--lab-g100);color:var(--lab-g800)}
 /* 2026-07-29：情绪同向/反转加成标签，和 tab02（真实数据展示）保持同一套
    语义色——反转用最深的赤陶+反白，做成"值得多看一眼"的醒目样式（它本来就
@@ -2167,7 +2169,7 @@ footer{border-top:1px solid var(--rule);padding:26px 0 40px;font-size:12px;color
           <div class="step" style="grid-template-columns:92px 1fr"><div><span class="chip grn">VERIFIED</span></div><div class="ds">多个独立信源交叉确认，可直接进推荐位</div></div>
           <div class="step" style="grid-template-columns:92px 1fr"><div><span class="chip gold">PROBABLE</span></div><div class="ds">单一权威源报道，可信但未交叉验证</div></div>
           <div class="step" style="grid-template-columns:92px 1fr"><div><span class="chip">UNVERIFIED</span></div><div class="ds">来源权威性不足或缺少佐证，建议降权</div></div>
-          <div class="step" style="grid-template-columns:92px 1fr;border-bottom:0"><div><span class="chip red">DISPUTED</span></div><div class="ds">信源之间互相矛盾，不进推荐池</div></div>
+          <div class="step" style="grid-template-columns:92px 1fr;border-bottom:0"><div><span class="chip red">DISPUTED</span></div><div class="ds">信源之间互相矛盾，权威度打 5 折、验证分封顶 0.35，仍进推荐池但卡片标"有争议"</div></div>
         </div>
         <div class="note neu" style="margin-top:16px">
           人工核对抽样误判率 <b>3.3%</b>。谣言另有独立的 <code>is_rumor</code> 标记与 <code>rumor_reason</code> 说明，
@@ -4372,7 +4374,8 @@ function renderRows(){
     if(!srcs.length) srcTx='<span class="more">—</span>';
     var flags="";
     if(r.is_rumor) flags+=' <span class="tag rumor">谣言</span>';
-    else if(r.verification_status==="VERIFIED"||r.is_verified) flags+=' <span class="tag ver">已核实</span>';
+    else if(r.verification_status==="DISPUTED") flags+=' <span class="tag disputed">有争议</span>';
+    else if(r.verification_status==="VERIFIED") flags+=' <span class="tag ver">已核实</span>';
     if((r.x_posts||[]).length) flags+=' <span class="tag" style="background:#000;color:#fff;border-color:#000">𝕏 原贴</span>';
     // 情绪加成标签：同向/反转互斥（market_mood.mood_multiplier 本身就是互斥
     // 逻辑，一条事件不会同时命中两个），所以最多出现一个，不用担心挤爆一行。
@@ -7474,6 +7477,7 @@ function runReweight(){
             ((r.is_rumor || r.verification_status === "VERIFIED") ?
               '<div class="meta">' +
                 (r.is_rumor ? '<span class="lb-tag rumor">疑似传闻</span> ' : '') +
+                (!r.is_rumor && r.verification_status === "DISPUTED" ? '<span class="lb-tag disputed">有争议</span> ' : '') +
                 (r.verification_status === "VERIFIED" ? '<span class="lb-tag ver">已核实</span>' : '') +
               '</div>' : '') +
           '</div>' +
