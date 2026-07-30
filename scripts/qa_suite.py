@@ -559,18 +559,13 @@ def qa_market_expansion():
     # 标了 2 但其实没跑重算）。所以再核对一遍**数值真的对得上**当前公式，
     # 抽样而不是全量（全库逐行算一遍对 QA gate 来说太重，抽样已经够暴露"标记
     # 与实际不符"这类问题）。
-    # v3（2026-07-30）：加权和之后还有 CNBC 编辑背书 +0.05（封顶 1.0），SQL
-    # 复算必须逐字镜像 scoring.compute_macro_score，否则这条断言会把正确的分
-    # 全部误报成不吻合。JSON_SEARCH 的 'CNBC%' 走 LIKE 语义，命中任意 CNBC 频道。
+    # v4（2026-07-31）：CNBC 特例已随硬覆盖一并移除，镜像回到纯加权和。
     rows = sql("""
         SELECT COUNT(*) FROM (
           SELECT importance_score,
-                 ROUND(LEAST(1.0,
-                       0.26*score_market_impact + 0.16*score_breadth + 0.16*score_timeliness
+                 ROUND(0.26*score_market_impact + 0.16*score_breadth + 0.16*score_timeliness
                      + 0.14*score_punch + 0.10*score_hotness + 0.10*score_authority
-                     + 0.08*score_quality
-                     + IF(JSON_SEARCH(source_names,'one','CNBC%') IS NOT NULL, 0.05, 0)
-                 ), 3) AS recalculated
+                     + 0.08*score_quality, 3) AS recalculated
           FROM news_events
           WHERE scoring_version = {v} AND score_market_impact IS NOT NULL
           ORDER BY updated_at DESC LIMIT 300
@@ -580,6 +575,34 @@ def qa_market_expansion():
     mismatch_n = int(rows[0][0]) if rows and rows[0] else -1
     check(g3, f"抽样 300 条：标记为 v{scoring.SCORING_VERSION} 的行分数与当前公式吻合",
           mismatch_n == 0, f"不吻合 {mismatch_n}/300 条 —— 权重可能改了但版本号没跟着变")
+
+    # ── 权威度单一事实源同步（PRD-05，2026-07-31）────────────────────
+    # 病根就是"两份表不同步"（Benzinga 声明 5 分但 prompt 名单里没有它，
+    # LLM 按 aggregator 打 0.401）。以下断言保证四个消费方永远等于
+    # crawler/authority_table.py，改了别处不改表 → 立刻红。
+    from crawler import authority_table, benzinga_news, pipeline, sources as _src
+    bad = [(n, a, authority_table.channel_authority(n))
+           for group in (_src.RSS_SOURCES_P0, _src.RSS_SOURCES_RSSHUB,
+                         _src.RSS_SOURCES_P1, _src.RSS_SOURCES_P2,
+                         _src.RSS_SOURCES_MACRO, _src.RSS_SOURCES_GLOBAL_MARKETS)
+           for (_u, n, _l, a) in group
+           if n in authority_table.CHANNELS
+           and a != authority_table.channel_authority(n)]
+    check(g3, "sources.py RSS 声明分与权威表一致", not bad, f"不一致={bad[:4]}")
+    badx = [(h, w, authority_table.x_weight(h)) for (h, w, _t) in _src.CRYPTO_KOLS
+            if h in authority_table.X_ACCOUNTS and w != authority_table.x_weight(h)]
+    check(g3, "X 账号权重与权威表一致", not badx, f"不一致={badx[:4]}")
+    check(g3, "X 媒体号/个人 KOL 无 5 分（官方一手渠道除外）",
+          all(w <= 4 for (h, w, t) in _src.CRYPTO_KOLS
+              if t not in ("regulator", "exchange", "security") or h in ("BinanceResearch",)),
+          f"越界={[h for (h,w,t) in _src.CRYPTO_KOLS if w>4 and t in ('kol','media','onchain','research','macro')]}")
+    check(g3, "prompt 权威名单 == 权威表渲染结果",
+          authority_table.render_prompt_guidance() in pipeline.SYSTEM_PROMPT,
+          "pipeline.SYSTEM_PROMPT 未包含 render_prompt_guidance() 输出")
+    check(g3, "Benzinga 模块 authority 与权威表一致",
+          '"authority": %d' % authority_table.channel_authority("Benzinga")
+          in open(str(Path(__file__).resolve().parent.parent / "crawler" / "benzinga_news.py")).read(),
+          "benzinga_news.py 的 authority 与表不一致")
 
     # ── 时效性（2026-07-29 线上事故后新增的红线用例）─────────────────
     #

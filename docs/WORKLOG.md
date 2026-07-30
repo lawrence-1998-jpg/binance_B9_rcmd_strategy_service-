@@ -1758,3 +1758,17 @@ backfill_benzinga 非当天条目入库即自动降 P4（回填堵队列的机�
 
 长期记忆新增：backfill-three-traps、lab-prod-must-share-formula、
 mass-rewrite-guardrails；更新 keyword-blocklist-unreliable（双语窗口补记）。
+
+---
+
+# 需求 #89：权威度体系统一（PRD-05，公式 v4）
+
+裁决与方案见 docs/prd/PRD-05-信源权威度统一.md，分级表与判分 skill 见
+docs/信源权威分级表.md（由 crawler/authority_table.py 自动生成，doc==code）。
+
+要点：去 CNBC 硬覆盖两处（四文件同步删干净）；prompt 权威名单改由单一事实源
+渲染注入（发现并修掉 BlockBeats 跨档重复渲染的瑕疵）；共振因子排除社交/聚合/
+行情源；编辑式重校准 9 项（Benzinga→4、五个 X 号→4、Yahoo/Followin→3、
+Bloomberg-Politics→5）；QA 新增同步断言×5（120 项 119 绿）。全库重算走三护栏：
+预演（8588 行/变化 262/Top20 换血 7）→ 快照批次 20260731023623 → 写入，
+平价保持 ≥9/10。代价：prompt hash 变化使桥缓存失效，公司额度重新预热（已授权）。

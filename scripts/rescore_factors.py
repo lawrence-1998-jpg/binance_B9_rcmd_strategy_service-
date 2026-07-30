@@ -207,25 +207,10 @@ def rescore(conn, dry_run: bool = False) -> tuple:
         A = r["score_authority"] or 0.0
         Q = r["score_quality"] or 0.0
 
-        # v3（2026-07-30）：CNBC 覆盖 → 权威抬到满分再走既有折扣（与
-        # scoring.compute_authority 同一语义）。存量行的 score_authority 是
-        # 折扣后的净值，无法拆出原始折扣，所以这里用 is_rumor/verification
-        # 两列**重放折扣**算出"CNBC 抬底后的净值"，取两者较大——只抬不降。
-        if scoring.cnbc_covered(event):
-            floored = 1.0
-            if r.get("is_rumor"):
-                floored *= 0.7
-            floored *= verification.authority_multiplier(
-                {"verification_status": r.get("verification_status")})
-            A = max(A, round(floored, 4))
 
         total = (scoring.W_IMPACT * M + scoring.W_BREADTH * B
                  + scoring.W_TIME * T + scoring.W_PUNCH * punch["score"]
                  + scoring.W_HOT * H + scoring.W_AUTH * A + scoring.W_QUAL * Q)
-        # v3：CNBC 编辑背书 +0.05，封顶 1.0（与 compute_macro_score 同步）
-        if scoring.cnbc_covered(event):
-            total = min(1.0, total + scoring.CNBC_COVER_BONUS)
-
         new_total = round(total, 4)
         if abs((r.get("old_importance") or 0.0) - new_total) > 1e-4:
             changed += 1

@@ -74,7 +74,7 @@ def _map_result(n: dict) -> dict | None:
         "published_at": n.get("published", ""),
         "matched_symbols": ",".join(tickers[:12]),
         "lang": "en",
-        "authority": 5,
+        "authority": 4,
         "type": "benzinga",
     }
 

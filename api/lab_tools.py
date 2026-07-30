@@ -477,11 +477,7 @@ def rank_pool(events: list[dict], factors_by_id: dict, weights: dict,
     scored = []
     for e in events:
         f = factors_by_id[e["id"]]
-        base = weighted_score(f, weights)
-        # v3 公式的 CNBC 编辑背书 +0.05（scoring.CNBC_COVER_BONUS）。实验室
-        # 必须与生产同公式——今天刚为"实验室漏了新鲜度衰减"付过一次学费。
-        if scoring.cnbc_covered(e):
-            base = min(1.0, base + scoring.CNBC_COVER_BONUS)
+        base = weighted_score(f, weights)   # v4：纯加权和，无信源特例
         detail = market_mood.mood_multiplier(
             e, mood_score,
             k_align=bonus_coefs.get("k_align"),

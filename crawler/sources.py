@@ -17,7 +17,7 @@ RSS_SOURCES_P0 = [
     ("https://www.wublock123.com/rss",                                 "吴说区块链", "zh", 5),
     ("https://www.techflowpost.com/rss.aspx",                          "TechFlow深潮", "zh", 4),
     # 美股/宏观
-    ("https://finance.yahoo.com/news/rssindex",                        "YahooFinance","en", 4),
+    ("https://finance.yahoo.com/news/rssindex",                        "YahooFinance","en", 3),
 ]
 
 # ── 自建 RSSHub 中文源（docker rsshub @127.0.0.1:1200）───────────────
@@ -25,7 +25,7 @@ RSS_SOURCES_RSSHUB = [
     (f"{RSSHUB}/theblockbeats/newsflash",  "BlockBeats快讯", "zh", 5),
     (f"{RSSHUB}/theblockbeats/article",    "BlockBeats文章", "zh", 4),
     (f"{RSSHUB}/jinse/lives",              "金色财经",       "zh", 4),
-    (f"{RSSHUB}/followin/news/zh-Hans",    "Followin快讯",   "zh", 4),
+    (f"{RSSHUB}/followin/news/zh-Hans",    "Followin快讯",   "zh", 3),
     (f"{RSSHUB}/followin/news/en",         "Followin-EN",    "en", 3),
     # 币安上币/合约公告（利好信号，非竞对；OKX/Coinbase 公告已按要求移除）
     (f"{RSSHUB}/binance/announcement/new-cryptocurrency-listing", "币安上币公告", "zh", 5),
@@ -127,7 +127,7 @@ RSS_SOURCES_GLOBAL_MARKETS = [
     ("https://feeds.bloomberg.com/markets/news.rss",          "Bloomberg-Markets",    "en", 5),
     ("https://feeds.bloomberg.com/economics/news.rss",        "Bloomberg-Economics",  "en", 5),
     ("https://feeds.bloomberg.com/technology/news.rss",       "Bloomberg-Technology", "en", 5),
-    ("https://feeds.bloomberg.com/politics/news.rss",         "Bloomberg-Politics",   "en", 4),
+    ("https://feeds.bloomberg.com/politics/news.rss",         "Bloomberg-Politics",   "en", 5),
 
     # Forbes：吸取过 SCMP rss/91 的教训（不能只看 URL 猜频道，必须读 <title>
     # 确认），逐个试了 investing/markets/wealth/leadership/digital-assets/
@@ -197,17 +197,17 @@ BINANCE_SQUARE_QUERIES = [
 # 结构: (username, 权威分, 分类)
 CRYPTO_KOLS = [
     # 中文/热点核心（召回画风关键）
-    ("WuBlockchain",   5, "media"),      # 吴说英文，币圈热点风向标
+    ("WuBlockchain",   4, "media"),      # 吴说英文，币圈热点风向标
     ("wublockchain12", 4, "media"),      # 吴说中文
     ("BlockBeatsAsia", 4, "media"),
     ("PANewsCN",       4, "media"),
     # 交易所/官方
     ("binance",        5, "exchange"),
     ("binancezh",      5, "exchange"),   # 币安中文，广场热点补充
-    ("cz_binance",     5, "kol"),
-    ("heyibinance",    5, "kol"),
+    ("cz_binance",     4, "kol"),
+    ("heyibinance",    4, "kol"),
     # 链上数据/聪明钱
-    ("lookonchain",    5, "onchain"),    # 聪明钱动向核心源
+    ("lookonchain",    4, "onchain"),    # 聪明钱动向核心源
     ("spotonchain",    4, "onchain"),
     ("EmberCN",        4, "onchain"),    # 中文链上侦探
     ("glassnode",      4, "onchain"),
@@ -222,7 +222,7 @@ CRYPTO_KOLS = [
     ("SECGov",         5, "regulator"),
     # ── v2.1 扩充（2026-07-26，全部经 X API 验证存在且活跃）──────────
     # 快讯速报（分钟级抢先源）
-    ("bwenews",        5, "media"),      # 方程式新闻 BWEnews，91k粉，最快中文快讯之一
+    ("bwenews",        4, "media"),      # 方程式新闻 BWEnews，91k粉，最快中文快讯之一
     ("Tree_of_Alpha",  4, "media"),      # 247k粉，交易员快讯（推文少但条条重磅）
     ("WatcherGuru",    4, "media"),      # 4.5M粉，全球加密+宏观突发
     ("solidintel_x",   4, "media"),      # 93k粉，快讯速报

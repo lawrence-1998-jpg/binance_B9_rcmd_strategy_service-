@@ -24,7 +24,7 @@ from openai import OpenAI
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
-from . import source_trust, storage
+from . import authority_table, source_trust, storage
 from .dedup import (COSINE_THRESHOLD, aggregate_events, build_fingerprint,
                     embed_texts, fallback_id)
 from .market_cap import annotate_events as annotate_market_cap
@@ -620,13 +620,21 @@ Worked NEGATIVE examples — these must produce ZERO sector tags:
 
 ## Scoring
 - score_market_impact: within tier bounds above
-- score_authority: official announcement=0.9+, top media (crypto: CoinDesk/TheBlock/吴说/BlockBeats; mainstream markets: Reuters/Bloomberg/CNBC/WSJ/FT/Nikkei Asia/MarketWatch)=0.75-0.89, mid media (SCMP/Korea Herald/Cointelegraph-tier)=0.50-0.74, aggregator/search=0.30-0.49, anonymous≤0.30; rumors ×0.7
+{{AUTH_GUIDANCE}}
 - score_quality: 1.0 minus deductions (clickbait -0.2~0.5, PR/promotional -0.2~0.4, low info density -0.1~0.4); reward concrete numbers and multi-source facts
 - credibility_score: 0=unverifiable, 1=officially confirmed
 - is_rumor: true if unverifiable/speculative/"rumored/allegedly/据传/据悉/消息人士"
 - rumor_reason: explain why, or empty string
 
 Chinese newsflash items (快讯) are often the FIRST report of hot events — treat them as timely primary signals, not low-quality content."""
+
+
+
+# score_authority 判分名单从单一事实源渲染（crawler/authority_table.py），
+# QA 断言渲染结果确在 prompt 里——LLM 看到的名单永远等于声明表，
+# 杜绝"Benzinga 声明 5 分但 prompt 里没有它"这类两表不同步（PRD-05）。
+SYSTEM_PROMPT = SYSTEM_PROMPT.replace("{{AUTH_GUIDANCE}}",
+                                      authority_table.render_prompt_guidance())
 
 
 # prompt 版本指纹 —— enrich bridge（本地 Claude 预处理）用它保证口径一致：
