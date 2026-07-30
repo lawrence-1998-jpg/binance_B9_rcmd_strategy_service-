@@ -243,7 +243,18 @@ _PCT_RE = re.compile(r"(?<!\d)(\d{1,3}(?:\.\d+)?)\s*%")
 # 反而把本该排除的放行了。先判非波动、不做动词覆盖，9 条用例全过。
 _PCT_NOT_MOVE_RE = re.compile(
     r"关税|税率|征税|利率|占比|比例|份额|股权|持股|概率|胜率|收益率|准备金率|"
-    r"tariff|tax|stake|odds|probability",
+    # 2026-07-30 追加：同比/环比与持仓变动类。触发案例："全球央行二季度购金增
+    # 62%（同比）"被读成 62% 的行情波动，单源快讯冲到首屏 #4。冲击力因子要的
+    # 是"市场现在动了多少"（日内/短线剧烈波动），同比/环比的年度累计变化和
+    # 央行购金量这类**数量**变化都不是它——即使真是价格的同比涨幅（"比特币
+    # 同比涨120%"），那也是叙事回顾而非冲击，排除同样正确。
+    r"同比|环比|购金|增持|减持|持仓|净买入|净卖出|净流入|净流出|受访|通胀|"
+    # 英文侧同族词。教训：中文标题排除了，title_en 的 "gold buying jumps 62%"
+    # 又把 62 放了进来——extract 扫的是 title_zh+title_en+短摘要拼接文本，
+    # 排除表必须双语对齐，只堵一种语言等于没堵。
+    r"tariff|tax|stake|odds|probability|yoy|y/y|qoq|"
+    r"buying|purchas|holding|accumulat|inflow|outflow|year[- ]on[- ]year|"
+    r"inflation|cpi",
     re.IGNORECASE,
 )
 _PCT_WINDOW_BEFORE, _PCT_WINDOW_AFTER = 5, 6
@@ -274,7 +285,22 @@ def extract_magnitude_pct(text: str) -> float | None:
         # 而不是涨跌幅，跳过（见 _PCT_NOT_MOVE_RE 的说明）。
         head = text[max(0, m.start() - _PCT_WINDOW_BEFORE):m.start()]
         tail = text[m.end():m.end() + _PCT_WINDOW_AFTER]
-        if _PCT_NOT_MOVE_RE.search(head) or _PCT_NOT_MOVE_RE.search(tail):
+        # 英文窗口按**词**取，不按字符（2026-07-30）："gold buying jumps 62%"
+        # 里 buying 距百分号 12 个字符，5 字符窗口永远够不着；而把字符窗口放宽
+        # 到 20 会让中文误杀（"关税威胁下比特币暴跌8%"的 8% 会命中 16 字外的
+        # 关税）。所以中文保持 5 字符窄窗，英文另取紧邻的前后各 3 个单词。
+        head_words = " ".join(re.findall(r"[A-Za-z][A-Za-z'\-/]*",
+                                         text[max(0, m.start() - 40):m.start()])[-3:])
+        tail_words = " ".join(re.findall(r"[A-Za-z][A-Za-z'\-/]*",
+                                         text[m.end():m.end() + 40])[:3])
+        if (_PCT_NOT_MOVE_RE.search(head) or _PCT_NOT_MOVE_RE.search(tail)
+                or _PCT_NOT_MOVE_RE.search(head_words)
+                or _PCT_NOT_MOVE_RE.search(tail_words)):
+            continue
+        # 四位年份锚定的百分数（"塞地2025年升值约41%"）是**年度尺度**的回顾
+        # 叙事，不是冲击力要的短线波动——日期在句首时（"2026年7月30日，比特币
+        # 暴跌8%"）年份距百分号远超 9 字符，不会误伤。
+        if re.search(r"\d{4}年", text[max(0, m.start() - 9):m.start()]):
             continue
         vals.append(v)
     return max(vals) if vals else None
