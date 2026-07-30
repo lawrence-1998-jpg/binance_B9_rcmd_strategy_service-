@@ -233,13 +233,61 @@ def get_active(conn) -> dict:
 def list_versions(conn, limit: int = 30) -> list[dict]:
     cur = conn.cursor()
     cur.execute(
-        "SELECT version, note, created_by, is_active, created_at "
+        "SELECT version, note, created_by, is_active, created_at, is_prod, payload "
         "FROM strategy_config ORDER BY version DESC LIMIT %s", (limit,))
     rows = cur.fetchall()
     cur.close()
+    # payload 一并返回（版本管理弹窗要"点开看具体参数"）——整表也就几十行、
+    # 每行 <1KB，全量带出去比再做一个按版本取参数的端点简单得多。
     return [{"version": r[0], "note": r[1], "created_by": r[2],
              "is_active": bool(r[3]),
-             "created_at": r[4].isoformat() if r[4] else None} for r in rows]
+             "created_at": r[4].isoformat() if r[4] else None,
+             "is_prod": bool(r[5]),
+             "payload": _coerce(r[6])} for r in rows]
+
+
+def get_prod(conn) -> dict | None:
+    """当前部署到生产的配置；**没有部署过任何版本时返回 None**。
+
+    None 与「回退默认值」在这里是两个语义：None = 生产仍走旧路径（存量
+    importance_score 排序），调用方据此保持迁移前行为；一旦有版本被部署，
+    读失败才回退 DEFAULTS（生产不能因为配置表抖动而挂）。"""
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT payload, version FROM strategy_config WHERE is_prod = 1 LIMIT 1")
+        row = cur.fetchone()
+        cur.close()
+    except Exception as e:
+        logger.warning(f"读取生产配置失败，按未部署处理：{e}")
+        return None
+    if not row:
+        return None
+    cfg = _coerce(row[0])
+    cfg["_version"] = int(row[1])
+    return cfg
+
+
+def deploy_to_prod(conn, version: int) -> dict:
+    """把某个版本部署到生产（is_prod 唯一指针挪过去）。不动 is_active——
+    实验室默认和生产运行是两个独立指针，见 migration 017 说明。"""
+    cur = conn.cursor()
+    try:
+        cur.execute("SELECT payload FROM strategy_config WHERE version = %s", (version,))
+        row = cur.fetchone()
+        if not row:
+            raise ConfigError(f"版本 {version} 不存在")
+        cur.execute("UPDATE strategy_config SET is_prod = 0 WHERE is_prod = 1")
+        cur.execute("UPDATE strategy_config SET is_prod = 1, deployed_at = NOW() "
+                    "WHERE version = %s", (version,))
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        cur.close()
+    cfg = _coerce(row[0])
+    cfg["_version"] = version
+    return cfg
 
 
 def save_baseline(conn, payload: dict, note: str | None = None,

@@ -112,7 +112,10 @@ POOL_COLUMNS = """
     sentiment, sentiment_score, verification_status
 """
 
-MAX_POOL_LIMIT = 500
+# 2026-07-30 500→1200：生产"部署到 Agent"路径固定用 1200 池（api/server.py），
+# 实验室上限低于它的话，同参数请求会被静默夹到 500——池子不同 → 热度基准
+# P95 不同 → H 因子不同 → 平价核验永远对不齐。上限必须 ≥ 生产池。
+MAX_POOL_LIMIT = 1200
 
 
 def fetch_pool(conn, days: int, limit: int) -> list[dict]:
@@ -804,6 +807,27 @@ def strategy_config_save():
     finally:
         conn.close()
     return jsonify({"ok": True, "config": cfg, "version": cfg["_version"]})
+
+
+@lab_bp.route("/api/strategy-config/deploy", methods=["POST"])
+@require_api_key
+def strategy_config_deploy():
+    """部署到生产（"部署到 Agent"）。与 rollback 分开：rollback 挪的是实验室
+    默认指针，deploy 挪的是生产指针——生产从此按该版本参数查询时实时计算
+    排序（api/server.py 的 importance 分支）。"""
+    body = request.get_json(force=True, silent=True) or {}
+    try:
+        version = int(body.get("version"))
+    except (TypeError, ValueError):
+        return jsonify({"error": "version 必须是整数"}), 400
+    conn = storage.get_mysql_conn()
+    try:
+        cfg = strategy_config.deploy_to_prod(conn, version)
+    except strategy_config.ConfigError as e:
+        return jsonify({"error": str(e)}), 400
+    finally:
+        conn.close()
+    return jsonify({"ok": True, "version": cfg["_version"], "config": cfg})
 
 
 @lab_bp.route("/api/strategy-config/rollback", methods=["POST"])

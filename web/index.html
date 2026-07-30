@@ -1280,6 +1280,47 @@ footer{border-top:1px solid var(--rule);padding:26px 0 40px;font-size:12px;color
 .b9-modal .vsub{font-size:11px;color:var(--lab-n700,#6f6357)}
 .b9-modal .vcur{flex:none;font-size:12px;font-weight:600;color:var(--lab-g700,#5d7052)}
 
+/* 版本管理 v2（2026-07-30）：行头/动作区/参数详情 + 统一按钮 .vbtn */
+.b9-modal{max-width:640px}
+.b9-modal .vhead{display:flex;align-items:center;gap:12px;cursor:pointer;min-width:0}
+.b9-modal .vacts{flex:none;display:flex;gap:8px}
+.b9-modal .vbtn{
+  appearance:none;border:1px solid var(--lab-n400,#d9cfc0);border-radius:999px;
+  background:#fff;color:var(--lab-n900,#2a2521);
+  font-size:12px;font-weight:600;padding:7px 14px;cursor:pointer;
+  transition:transform .12s ease, box-shadow .12s ease, background .12s ease;
+}
+.b9-modal .vbtn:hover{transform:translateY(-1px);box-shadow:0 3px 10px rgba(0,0,0,.10)}
+.b9-modal .vbtn:disabled{opacity:.5;cursor:not-allowed;transform:none;box-shadow:none}
+.b9-modal .vbtn.primary{
+  background:var(--lab-g700,#5d7052);border-color:var(--lab-g700,#5d7052);color:#fff;
+}
+.b9-modal .vchip.prod{background:#8c5a3c;color:#fff}
+.b9-modal .vbadge{
+  display:inline-block;margin-left:8px;padding:2px 8px;border-radius:999px;
+  font-size:10px;font-weight:700;vertical-align:1px;
+}
+.b9-modal .vbadge.lab{background:color-mix(in srgb,var(--lab-g700,#5d7052) 15%,transparent);color:var(--lab-g700,#5d7052)}
+.b9-modal .vbadge.prod{background:color-mix(in srgb,#8c5a3c 15%,transparent);color:#8c5a3c}
+.b9-modal .vtoggle{color:var(--lab-g700,#5d7052);cursor:pointer}
+.b9-modal .vdetail{
+  display:none;margin-top:10px;padding-top:10px;
+  border-top:1px dashed var(--lab-n400,#d9cfc0);
+}
+.b9-modal li.expanded .vdetail{display:block}
+.b9-modal .vdrow{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;margin-bottom:6px}
+.b9-modal .vdlabel{flex:none;width:56px;font-size:11px;color:var(--lab-n700,#6f6357);font-weight:600}
+.b9-modal .vparam{
+  display:inline-block;padding:2px 8px;border-radius:6px;font-size:11px;
+  background:#fff;border:1px solid var(--lab-n300,#e6ddd0);
+}
+.b9-modal .vparam b{font-family:var(--lab-mono,monospace);font-variant-numeric:tabular-nums}
+#panel-5 .lb-prodtag{
+  display:inline-flex;align-items:center;gap:4px;padding:2px 10px;border-radius:999px;
+  font-size:11px;background:color-mix(in srgb,#8c5a3c 12%,transparent);color:#8c5a3c;
+}
+#panel-5 .lb-prodtag b{font-variant-numeric:tabular-nums}
+
 /* 重排结果里的公式总分（2026-07-30，Lawrence 要求加粗展示） */
 #panel-5 .lb-ritem .fsum{
   font-family:var(--lab-mono,monospace);font-variant-numeric:tabular-nums;
@@ -2921,7 +2962,8 @@ footer{border-top:1px solid var(--rule);padding:26px 0 40px;font-size:12px;color
              混在滑杆中间容易误点。 -->
         <div class="lb-baseline">
           <div class="lb-baseline-meta">
-            当前基线 <b id="baseVer">—</b>
+            实验室默认 <b id="baseVer">—</b>
+            <span class="lb-prodtag">生产 <b id="prodVer">未部署</b></span>
             <button class="lb-btn sm ghost" type="button" id="baseHistBtn">版本管理</button>
           </div>
           <button class="lb-btn primary" type="button" id="saveBaseBtn">存为基线</button>
@@ -6908,30 +6950,78 @@ function fmtVerTime(iso){
   }catch(e){ return ""; }
 }
 
+/* 版本参数详情（2026-07-30 Lawrence："点击后可以看见这个版本的具体参数"）。
+   直接用 GET 已带回的 payload 渲染，不再发请求。 */
+function verParamsHTML(p){
+  p = p || {};
+  var NAME = {M:"影响面",B:"广度",T:"时效",I:"冲击力",H:"热度",A:"权威",Q:"质量"};
+  var MK = {us_stock:"美股",crypto:"加密",macro_policy:"宏观",social_signal:"社会",
+            general:"综合",hk_stock:"港股",jp_stock:"日股",kr_stock:"韩股"};
+  var bw = p.base_weights || {}, mw = p.market_weights || {}, bo = p.bonus || {};
+  var mo = (p.mood || {}).manual_override;
+  var chips = function(pairs){ return pairs.map(function(x){
+    return '<span class="vparam">' + x[0] + ' <b>' + x[1] + '</b></span>'; }).join(""); };
+  return (
+    '<div class="vdetail">' +
+      '<div class="vdrow"><span class="vdlabel">基础因子</span>' +
+        chips(Object.keys(NAME).map(function(k){
+          return [NAME[k], (bw[k] !== undefined ? Number(bw[k]).toFixed(1) + "%" : "—")]; })) + '</div>' +
+      '<div class="vdrow"><span class="vdlabel">加分项</span>' +
+        chips([["同向", "+" + Math.round((bo.k_align||0)*100) + "%"],
+               ["反转", "+" + Math.round((bo.k_reversal||0)*100) + "%"],
+               ["封顶", "+" + Math.round((bo.cap||0)*100) + "%"]]) + '</div>' +
+      '<div class="vdrow"><span class="vdlabel">市场倍率</span>' +
+        chips(Object.keys(MK).map(function(k){
+          return [MK[k], "×" + (mw[k] !== undefined ? Number(mw[k]).toFixed(2) : "—")]; })) + '</div>' +
+      '<div class="vdrow"><span class="vdlabel">情绪方向</span>' +
+        chips([[(mo === null || mo === undefined) ? "跟随实时" : "手动 " + Number(mo).toFixed(2), ""]]) + '</div>' +
+    '</div>');
+}
+
 function openBaselineHistory(){
   api("/api/strategy-config", null, "GET").then(function(d){
     var items = (d.versions || []).map(function(v){
+      var badges = "";
+      if (v.is_active) badges += '<span class="vbadge lab">实验室默认</span>';
+      if (v.is_prod)   badges += '<span class="vbadge prod">生产运行中</span>';
       return (
-        '<li class="' + (v.is_active ? "on" : "") + '">' +
-          '<span class="vchip' + (v.is_active ? " on" : "") + '">v' + v.version + '</span>' +
-          '<span class="vmain">' +
-            '<span class="vnote">' + esc(v.note || "（无备注）") + '</span>' +
-            '<span class="vsub">' + fmtVerTime(v.created_at) +
-              (v.created_by === "seed" ? " · 初始种子" : "") +
-              (v.is_active ? " · <b>当前生效</b>" : "") + '</span>' +
-          '</span>' +
-          (v.is_active
-            ? '<span class="vcur">✓ 生效中</span>'
-            : '<button class="lb-btn sm" type="button" data-rb="' + v.version + '">切换到此版</button>') +
+        '<li class="' + (v.is_active || v.is_prod ? "on" : "") + '" data-ver="' + v.version + '">' +
+          '<div class="vhead">' +
+            '<span class="vchip' + (v.is_prod ? " prod" : (v.is_active ? " on" : "")) + '">v' + v.version + '</span>' +
+            '<span class="vmain">' +
+              '<span class="vnote">' + esc(v.note || "（无备注）") + badges + '</span>' +
+              '<span class="vsub">' + fmtVerTime(v.created_at) +
+                (v.created_by === "seed" ? " · 初始种子" : "") +
+                ' · <span class="vtoggle">点击查看参数 ▾</span></span>' +
+            '</span>' +
+            '<span class="vacts">' +
+              (v.is_active ? "" : '<button class="vbtn" type="button" data-rb="' + v.version + '">设为实验室默认</button>') +
+              (v.is_prod ? "" : '<button class="vbtn primary" type="button" data-dp="' + v.version + '" data-note="' + esc(v.note || "") + '">部署到 Agent</button>') +
+            '</span>' +
+          '</div>' +
+          verParamsHTML(v.payload) +
         '</li>');
     }).join("");
     var mask = openModal(
       '<h3>版本管理</h3>' +
-      '<div class="b9-modal-body">切换版本立即生效于实验室默认配置与下方排序，' +
-      '不删除任何历史版本，可随时切回。' +
+      '<div class="b9-modal-body">「设为实验室默认」只影响 04/05 的滑杆初始值与下方排序；' +
+      '「<b>部署到 Agent</b>」把该版本推到<b>生产</b>——01/02/03 的排序接口立即按这套参数实时计算。' +
+      '两者互相独立，历史版本永不删除。' +
       '<ul class="b9-verlist">' + (items || "<li>暂无历史</li>") + '</ul></div>' +
-      '<div class="b9-modal-act"><button class="lb-btn sm" type="button" id="histClose">关闭</button></div>');
+      '<div class="b9-modal-act"><button class="vbtn" type="button" id="histClose">关闭</button></div>');
     mask.querySelector("#histClose").addEventListener("click", closeModal);
+
+    // 点行头展开/收起参数详情（点按钮不触发）
+    Array.prototype.slice.call(mask.querySelectorAll(".vhead")).forEach(function(h){
+      h.addEventListener("click", function(e){
+        if (e.target.closest("button")) return;
+        var li = h.closest("li");
+        li.classList.toggle("expanded");
+        var t = li.querySelector(".vtoggle");
+        if (t) t.textContent = li.classList.contains("expanded") ? "收起参数 ▴" : "点击查看参数 ▾";
+      });
+    });
+
     Array.prototype.slice.call(mask.querySelectorAll("[data-rb]")).forEach(function(b){
       b.addEventListener("click", function(){
         b.disabled = true; b.textContent = "切换中…";
@@ -6946,8 +7036,43 @@ function openBaselineHistory(){
           closeModal();
           track("lab_baseline_rollback", {version: d.version});
         }).catch(function(err){
-          b.disabled = false; b.textContent = "切换到此版";
+          b.disabled = false; b.textContent = "设为实验室默认";
           alert("切换失败：" + String(err && err.message || err));
+        });
+      });
+    });
+
+    // 部署到 Agent：二次确认后把生产指针挪到该版本（api/server.py 的
+    // /api/news 从此按它实时计算）。这是影响所有调用方的动作，弹窗必须把
+    // 影响范围写死在字面上，不玩"是否确认"这种空话。
+    Array.prototype.slice.call(mask.querySelectorAll("[data-dp]")).forEach(function(b){
+      b.addEventListener("click", function(){
+        var ver = parseInt(b.dataset.dp, 10);
+        var m2 = openModal(
+          '<h3>部署 v' + ver + ' 到 Agent（生产）？</h3>' +
+          '<div class="b9-modal-body">' +
+            '<div class="b9-modal-diff"><b>' + esc(b.dataset.note || "（无备注）") + '</b><br>' +
+            '确认后，<b>01 生成流程 / 02 数据展示 / 03 API 接入</b>的排序立即按 v' + ver +
+            ' 的参数实时计算，所有下游调用方同时生效。旧版本保留，可随时改部署其它版本回退。</div>' +
+          '</div>' +
+          '<div class="b9-modal-act">' +
+            '<button class="vbtn" type="button" id="dpCancel">取消</button>' +
+            '<button class="vbtn primary" type="button" id="dpGo">确认部署到生产</button>' +
+          '</div>');
+        m2.querySelector("#dpCancel").addEventListener("click", function(){
+          closeModal(); openBaselineHistory();
+        });
+        m2.querySelector("#dpGo").addEventListener("click", function(){
+          var g = m2.querySelector("#dpGo"); g.disabled = true; g.textContent = "部署中…";
+          api("/api/strategy-config/deploy", {version: ver}).then(function(d){
+            var pv = $("#prodVer"); if (pv) pv.textContent = "v" + d.version;
+            track("lab_baseline_deploy", {version: d.version});
+            closeModal(); openBaselineHistory();
+          }).catch(function(err){
+            g.disabled = false; g.textContent = "确认部署到生产";
+            var box = m2.querySelector(".b9-modal-diff");
+            box.innerHTML = '<b style="color:#b3261e">部署失败：</b>' + esc(String(err && err.message || err));
+          });
         });
       });
     });
@@ -6989,6 +7114,11 @@ function loadBaseline(){
     activeBaseline = d.config;
     var v = $("#baseVer");
     if (v) v.textContent = d.config._fallback ? "默认值" : ("v" + d.config._version);
+    // 生产指针独立展示：两者不同步是常态（实验室试 v7、生产跑 v6），
+    // 不亮出来的话"线上到底跑的哪版"要去查库才知道。
+    var prod = ((d.versions || []).filter(function(x){ return x.is_prod; })[0] || null);
+    var pv = $("#prodVer");
+    if (pv) pv.textContent = prod ? ("v" + prod.version) : "未部署";
     applyBaselineToPanels(d.config);
     // 基线可能在首次 runReweight 之后才加载完成——灌完滑杆必须再重排一次，
     // 否则打开页面看到的 Top N 是代码默认参数的结果，和滑杆显示的基线不一致

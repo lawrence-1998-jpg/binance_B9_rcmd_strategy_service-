@@ -328,6 +328,35 @@ def qa_tools(run_paid: bool):
     check(g, "基线配置：加分项超封顶应 400", st == 400, f"status={st}")
     st, _d = http("/api/strategy-config/rollback", "POST", {"version": 999999})
     check(g, "基线配置：回滚到不存在版本应 400", st == 400, f"status={st}")
+    st, _d = http("/api/strategy-config/deploy", "POST", {"version": 999999})
+    check(g, "部署到生产：不存在版本应 400", st == 400, f"status={st}")
+
+    # ── 生产×实验室平价（2026-07-30"部署到Agent"的核心红线）────────────
+    # 有版本部署到生产时，生产 /api/news 与实验室同参数同池同情绪必须给出
+    # **完全相同的 Top10 顺序**——这是"实验室调的就是线上跑的"的可执行定义。
+    # 上线当天这条断言就抓到过真 bug：EVENT_COLUMNS 漏了 breadth_level 等
+    # 四列，广度因子在生产侧全退化成默认值，三条 B=1.0 的事件被压低 0.13 分。
+    # 未部署任何版本时跳过（生产走旧路径，无平价语义）。
+    st, dnews = http("/api/news?limit=10")
+    meta_n = (dnews or {}).get("meta") or {}
+    if meta_n.get("strategy_version"):
+        st2, dcfg = http("/api/strategy-config")
+        dep = next((v for v in (dcfg or {}).get("versions", []) if v.get("is_prod")), None)
+        pl = (dep or {}).get("payload") or {}
+        st3, dlab = http("/api/tools/reweight", "POST", {
+            "weights": pl.get("base_weights", {}), "bonus": pl.get("bonus", {}),
+            "market_weights": pl.get("market_weights", {}),
+            "days": 5, "pool_limit": 1200, "top_n": 10,
+            "mood_override": meta_n.get("mood_score")})
+        ids_p = [e["id"] for e in (dnews or {}).get("data", [])]
+        ids_l = [r["id"] for r in (dlab or {}).get("results", [])]
+        same = sum(1 for a, b in zip(ids_p, ids_l) if a == b)
+        # 两次请求间新事件入库会造成个位错位，容忍 1 个；系统性公式/取数
+        # 分叉的错位是大面积的，8/10 挡不住的情况不存在。
+        check(g, "生产×实验室平价：同参数同池 Top10 顺序一致(≥9/10)",
+              st3 == 200 and same >= 9, f"一致 {same}/10")
+    else:
+        check(g, "生产×实验室平价（未部署任何版本，按设计跳过）", True, "")
     # 实验室与生产必须用同一根时间轴取数（2026-07-30 回填事故的直接教训：
     # 实验室按入库时间取池、生产按事件日期过滤，一次历史回填就让实验室首屏
     # 变成单一信源的旧闻）。这里断言 reweight 默认池里最新事件不早于昨天——

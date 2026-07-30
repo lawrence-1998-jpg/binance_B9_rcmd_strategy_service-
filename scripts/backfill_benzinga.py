@@ -63,11 +63,34 @@ def main() -> int:
     conn = storage.get_mysql_conn()
     try:
         result = staging.stage_items(items, conn)
+
+        # ── 回填自动降级（2026-07-30 事故的机制化）────────────────────
+        # 回填条目会继承信源的高优先级（Benzinga=P0），与当天新闻同级 FIFO
+        # 排队且 fetched_at 更早——1859 条历史存量把当天新闻堵了 4-5 小时，
+        # 靠人工 UPDATE 才解开。现在**非当天**的回填条目入库后立即降到 P4，
+        # 当天的保留原优先级（回填窗口通常含今天，今天那部分就是实时新闻）。
+        today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        old_hashes = [staging.url_hash(it["url"]) for it in items
+                      if (it.get("published_at") or "")[:10] < today and it.get("url")]
+        demoted = 0
+        if old_hashes:
+            cur = conn.cursor()
+            for i in range(0, len(old_hashes), 500):
+                chunk = old_hashes[i:i + 500]
+                ph = ",".join(["%s"] * len(chunk))
+                cur.execute(
+                    f"UPDATE raw_items_staging SET priority = 4 "
+                    f"WHERE consumed_at IS NULL AND priority < 4 AND url_hash IN ({ph})",
+                    tuple(chunk))
+                demoted += cur.rowcount
+            conn.commit()
+            cur.close()
+
         stats = staging.staging_stats(conn)
         logger.info(
             f"回填完成：fetched={len(items)} new={result['new']} "
-            f"duplicate={result['duplicate']} | staging: total={stats['total']} "
-            f"unconsumed={stats['unconsumed']}")
+            f"duplicate={result['duplicate']} demoted_to_P4={demoted} | "
+            f"staging: total={stats['total']} unconsumed={stats['unconsumed']}")
     finally:
         conn.close()
     return 0

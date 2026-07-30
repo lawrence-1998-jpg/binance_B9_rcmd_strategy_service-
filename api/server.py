@@ -16,7 +16,10 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from flask import Flask, request, jsonify, g, send_from_directory, redirect
 import mysql.connector
 
-from lab_tools import lab_bp
+from lab_tools import (lab_bp, compute_factors as lab_compute_factors,
+                       rank_pool as lab_rank_pool,
+                       normalize_weights as lab_normalize_weights)
+import strategy_config
 from eval_tools import eval_bp
 from sector_insight import sector_insight_bp
 from history_tools import history_bp
@@ -24,7 +27,21 @@ from enrich_bridge import enrich_bridge_bp
 from source_catalog import source_catalog_bp
 from persona_tools import persona_bp
 from crawler.timeutil import now_local
-from crawler import freshness, market_mood, market_weight
+from crawler import freshness, market_mood, market_weight, scoring
+
+
+def _normalize_pool_row(e: dict) -> None:
+    """把 row_to_dict 的产出补成 lab_compute_factors 能直接吃的形状。
+
+    与 api/lab_tools.fetch_pool 的行准备逻辑对齐（那边是实验室取数、这边是
+    生产取数，喂给的是**同一个** compute_factors）：JSON 列已由 row_to_dict
+    反序列化，这里只补 published_at——compute_timeliness 读它；优先真实事件
+    时间，缺失退化到入库时间。"""
+    if not e.get("published_at"):
+        e["published_at"] = e.get("time_event") or e.get("time_get_data")
+    for f in ("sectors", "sector_relevance", "coins", "source_names", "sources"):
+        if e.get(f) is None:
+            e[f] = []
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -101,6 +118,10 @@ EVENT_COLUMNS = """
     sectors, coins, news_type, market_scope, event_tier,
     score_market_impact, score_timeliness, score_hotness,
     score_authority, score_quality, importance_score,
+    -- PRD-03 两因子（2026-07-30 补：此前漏加，"部署到Agent"的查询时重算
+    -- 读不到 breadth_level，广度全退化成默认 0.35——三条 B=1.0 的事件在
+    -- 生产被压低 0.13 分，与实验室永远对不齐。这四列 tab02 明细也要用。）
+    breadth_level, score_breadth, score_punch, punch_magnitude_pct,
     credibility_score, is_rumor, rumor_reason,
     sources, source_names, source_count, is_verified, language_origin,
     cluster_id, merged_sources_count,
@@ -418,15 +439,82 @@ def get_news():
         # 该出现的条目因为加成被挤到第1页，但 SQL 已经把它排除在候选之外）。
         # 候选池上限 500：翻页翻到几百条之外时，"今天的大盘情绪"对那么靠后的
         # 内容已经没有意义，不值得为了理论上的精确性无限扩大候选池。
-        pool_size = min(500, offset + limit * 5)
+        # ── 已部署基线：生产与实验室同一套公式（2026-07-30，"部署到 Agent"）──
+        #
+        # 有版本被部署到生产（strategy_config.is_prod=1）时，这条主排序路径
+        # **不再用存量 importance_score 排序**，改为按部署版本的参数、用与
+        # 策略实验室完全相同的函数（compute_factors + rank_pool）查询时实时
+        # 计算——"实验室调的就是线上跑的"从此由同一份代码保证，而不是靠两边
+        # 手工同步。未部署时走下面的原路径，行为与本改动之前逐字节一致。
+        #
+        # 候选池仍按存量分预筛（1000 条）：存量分是当前公式固定权重的产出，
+        # 作为"哪些事件值得进重排池"的粗筛足够；被它挡在池外、却能被某套
+        # 部署参数拉进 Top20 的事件理论上存在，实测在 5 天窗口 ~6000 条里
+        # 排名 1000 开外的事件没有任何一套合理参数能翻进前 20。
+        prod_cfg = strategy_config.get_prod(db)
+        # 取池口径必须与实验室一致（按事件时间取近窗，而不是按存量分预筛）
+        # ——首版按存量分取池，实测同参数下生产与实验室 Top10 位置一致 0/10：
+        # 池子不同 → 热度基准(P95)不同 → H 因子不同 → 全乱。部署的全部意义
+        # 是"实验室调出来什么样、线上就什么样"，输入必须逐项对齐：同池、
+        # 同情绪、同参数。1200 上限：足够覆盖 5 天窗口里所有可能进首屏的
+        # 事件（新鲜度 48h 半衰期下，两天以外的内容翻不进 Top20），单请求
+        # 纯 Python 计算 ~150ms 可接受。
+        pool_size = 1200 if prod_cfg else min(500, offset + limit * 5)
+        pool_order = ("COALESCE(time_event, date, time_get_data) DESC" if prod_cfg
+                      else "importance_score DESC")
         pool_sql = (f"SELECT {EVENT_COLUMNS} FROM news_events WHERE {' AND '.join(where)} "
-                   f"ORDER BY importance_score DESC LIMIT %s")
+                   f"ORDER BY {pool_order} LIMIT %s")
         cursor.execute(pool_sql, params + [pool_size])
         pool_rows = cursor.fetchall()
         pool = [row_to_dict(cursor, r) for r in pool_rows]
 
         mood = _get_market_mood()
         mood_score = mood.get("mood_score") if mood.get("available") else None
+
+        if prod_cfg:
+            for e in pool:
+                _normalize_pool_row(e)
+            # 情绪同实验室：池内 S/A 档现算；配置手动锁定时用锁定值
+            mo = (prod_cfg.get("mood") or {}).get("manual_override")
+            if mo is not None:
+                eff_mood = mo
+            else:
+                _m = market_mood.compute_market_mood(pool)
+                eff_mood = _m.get("mood_score") if _m.get("available") else None
+            weights = lab_normalize_weights(
+                {k: float(v) for k, v in (prod_cfg.get("base_weights") or {}).items()},
+                use_rel=False)
+            bonus_coefs = {"k_align": (prod_cfg.get("bonus") or {}).get("k_align", 0.25),
+                           "k_reversal": (prod_cfg.get("bonus") or {}).get("k_reversal", 0.20)}
+            mkt_weights = market_weight.resolve_weights(prod_cfg.get("market_weights"))
+            baseline = scoring.social_baseline(pool)
+            now_dt = now_local()
+            factors_by_id = {e["id"]: lab_compute_factors(e, baseline, now_dt, None)
+                             for e in pool}
+            scored = lab_rank_pool(pool, factors_by_id, weights, eff_mood,
+                                   bonus_coefs, mkt_weights)
+            data = []
+            for e, factors, final, base, detail, mkt in scored[offset:offset + limit]:
+                e["bonus"] = detail
+                e["market"] = mkt
+                e["freshness"] = freshness.explain(e)
+                e["strategy"] = {"version": prod_cfg.get("_version"),
+                                 "base_score": round(base, 4),
+                                 "final_score": round(final, 4)}
+                data.append(e)
+            attach_x_posts(data, cursor)
+            cursor.execute(f"SELECT COUNT(*) FROM news_events WHERE {' AND '.join(where)}",
+                           params)
+            total = cursor.fetchone()[0]
+            cursor.close()
+            # 响应形状与未部署路径完全一致（data + meta），仅 meta 多一个
+            # strategy_version 供前端/调用方识别"这份排序是哪版参数算的"。
+            return jsonify({"data": data, "meta": {
+                "total": total, "limit": limit, "offset": offset,
+                "strategy_version": prod_cfg.get("_version"),
+                # 本次排序实际使用的情绪值——平价核验和排查"为什么这条有加成"
+                # 都要它；不暴露的话线上排序就有一个看不见的输入。
+                "mood_score": eff_mood}})
         # 2026-07-29 修：这里之前调的是 mood_alignment_multiplier——那是拆分
         # 同向/反转两个因子**之前**的旧单一倍率，策略实验室（api/lab_tools.py）
         # 早就换成了 mood_multiplier，但生产这条主排序路径一直没跟着换。后果

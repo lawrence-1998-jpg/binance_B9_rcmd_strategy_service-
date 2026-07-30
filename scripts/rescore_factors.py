@@ -168,12 +168,15 @@ def _json_col(value, default):
         return default
 
 
-def rescore(conn) -> int:
+def rescore(conn, dry_run: bool = False) -> tuple:
+    """重算全库。dry_run=True 时只计算不写库，返回值第三项给出按新分排的
+    首屏 Top20（供预演打印"会换血几条"）。返回 (总行数, 数值有变行数, top20ids)。"""
     cur = conn.cursor(dictionary=True)
     cur.execute("""
-        SELECT id, title_zh, title_en, description_short_zh, sources,
+        SELECT id, date, title_zh, title_en, description_short_zh, sources,
                breadth_level, score_market_impact, score_timeliness,
                score_hotness, score_authority, score_quality,
+               importance_score AS old_importance,
                is_rumor, verification_status
         FROM news_events
         WHERE score_market_impact IS NOT NULL
@@ -182,8 +185,11 @@ def rescore(conn) -> int:
     cur.close()
     print(f"[B/C] 待重算：{len(rows)} 条")
 
+    from datetime import date as _date, timedelta as _td
+    window_cut = _date.today() - _td(days=5)
     wcur = conn.cursor()
-    updated = 0
+    updated = changed = 0
+    window_scores = []          # (new_total, id) —— 预演/收尾都要算 Top20 换血
     for idx, r in enumerate(rows, 1):
         event = {
             "title_zh": r.get("title_zh"),
@@ -220,29 +226,170 @@ def rescore(conn) -> int:
         if scoring.cnbc_covered(event):
             total = min(1.0, total + scoring.CNBC_COVER_BONUS)
 
-        wcur.execute("""
-            UPDATE news_events
-               SET score_breadth=%s, score_punch=%s, punch_magnitude_pct=%s,
-                   score_authority=%s, importance_score=%s, scoring_version=%s
-             WHERE id=%s
-        """, (round(B, 4), round(punch["score"], 4), punch["magnitude_pct"],
-              round(A, 4), round(total, 4), scoring.SCORING_VERSION, r["id"]))
+        new_total = round(total, 4)
+        if abs((r.get("old_importance") or 0.0) - new_total) > 1e-4:
+            changed += 1
+        d = r.get("date")
+        if d is not None and d >= window_cut:
+            window_scores.append((new_total, r["id"]))
+
+        if not dry_run:
+            wcur.execute("""
+                UPDATE news_events
+                   SET score_breadth=%s, score_punch=%s, punch_magnitude_pct=%s,
+                       score_authority=%s, importance_score=%s, scoring_version=%s
+                 WHERE id=%s
+            """, (round(B, 4), round(punch["score"], 4), punch["magnitude_pct"],
+                  round(A, 4), new_total, scoring.SCORING_VERSION, r["id"]))
         updated += 1
         if idx % 500 == 0:
-            conn.commit()
+            if not dry_run:
+                conn.commit()
             print(f"  [B/C] {idx}/{len(rows)}")
-    conn.commit()
+    if not dry_run:
+        conn.commit()
     wcur.close()
-    return updated
+    window_scores.sort(reverse=True)
+    return updated, changed, [i for _, i in window_scores[:20]]
+
+
+# ══════════════════════════════════════════════════════════════════════
+# 全库改写三护栏（2026-07-30，Lawrence："不能再犯 把整个页面的库改乱 覆盖掉
+# 这种恐怖事件了"）。当天这个脚本被裸跑了 4 次、每次覆盖全库 6800+ 行的
+# importance_score——公式对就没事，公式错一次就是全库污染且无路可退。三道闸：
+#
+#   1) 先快照：写之前把要动的列备份进 rescore_backup（带批次号），
+#      `--restore <批次号>` 一条命令整批还原。
+#   2) 差异门：默认**预演**（与 purge_untrusted_stale.py 同一约定），打印
+#      将改动的行数 + Top20 会换掉几条；看过再 --apply。
+#   3) 互斥锁：pipeline 正在写库时拒绝跑——两个写者并发覆盖同一批行，
+#      结果取决于毫秒级时序，事后无法解释。
+# ══════════════════════════════════════════════════════════════════════
+
+BACKUP_TABLE_SQL = """
+CREATE TABLE IF NOT EXISTS rescore_backup (
+  batch      VARCHAR(20) NOT NULL,
+  id         VARCHAR(32) NOT NULL,
+  score_breadth        FLOAT NULL,
+  score_punch          FLOAT NULL,
+  punch_magnitude_pct  FLOAT NULL,
+  score_authority      FLOAT NULL,
+  importance_score     FLOAT NULL,
+  scoring_version      TINYINT UNSIGNED NULL,
+  PRIMARY KEY (batch, id),
+  KEY idx_batch (batch)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  COMMENT='rescore_factors 的写前快照，--restore <batch> 整批还原'
+"""
+# ↑ COLLATE 必须与 news_events 一致（utf8mb4_unicode_ci）：restore 的
+#   JOIN ON b.id = e.id 在两表 collation 不一致时直接报 Illegal mix of
+#   collations——首次往返测试当场撞上，不是理论风险。
+
+_MUTATED_COLS = ("score_breadth", "score_punch", "punch_magnitude_pct",
+                 "score_authority", "importance_score", "scoring_version")
+
+
+def _pipeline_lock_held() -> bool:
+    from pathlib import Path
+    lock_path = Path(__file__).resolve().parent.parent / "logs" / "pipeline.lock"
+    if not lock_path.exists():
+        return False
+    import fcntl
+    f = open(lock_path, "w")
+    try:
+        fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        fcntl.flock(f, fcntl.LOCK_UN)
+        return False
+    except BlockingIOError:
+        return True
+    finally:
+        f.close()
+
+
+def snapshot(conn, batch: str) -> int:
+    cur = conn.cursor()
+    cur.execute(BACKUP_TABLE_SQL)
+    cols = ", ".join(_MUTATED_COLS)
+    cur.execute(
+        f"INSERT INTO rescore_backup (batch, id, {cols}) "
+        f"SELECT %s, id, {cols} FROM news_events WHERE score_market_impact IS NOT NULL",
+        (batch,))
+    n = cur.rowcount
+    conn.commit()
+    cur.close()
+    return n
+
+
+def restore(conn, batch: str) -> int:
+    cur = conn.cursor()
+    sets = ", ".join(f"e.{c} = b.{c}" for c in _MUTATED_COLS)
+    cur.execute(
+        f"UPDATE news_events e JOIN rescore_backup b ON b.id = e.id AND b.batch = %s "
+        f"SET {sets}", (batch,))
+    n = cur.rowcount
+    conn.commit()
+    cur.close()
+    return n
+
+
+def top20_ids(conn) -> list:
+    cur = conn.cursor()
+    cur.execute("SELECT id FROM news_events WHERE date >= CURDATE() - INTERVAL 5 DAY "
+                "ORDER BY importance_score DESC LIMIT 20")
+    ids = [r[0] for r in cur.fetchall()]
+    cur.close()
+    return ids
 
 
 def main():
+    import argparse
+    parser = argparse.ArgumentParser(description="全库因子/总分重算（默认预演）")
+    parser.add_argument("--apply", action="store_true",
+                        help="真正写库（默认只预演：打印将改动的规模与 Top20 换血数）")
+    parser.add_argument("--restore", metavar="BATCH",
+                        help="按批次号从 rescore_backup 整批还原，然后退出")
+    parser.add_argument("--skip-llm", action="store_true",
+                        help="跳过 A 阶段的 LLM 回填（兼容旧用法，仅 B/C 离线重算）")
+    parser.add_argument("--yes-i-know-pipeline-is-running", action="store_true",
+                        help="无视 pipeline 互斥锁强行执行（仅限确知安全时）")
+    args = parser.parse_args()
+
     conn = storage.get_mysql_conn()
     try:
-        filled = backfill_breadth(conn)
-        print(f"[A] 完成，回填 {filled} 条")
-        n = rescore(conn)
-        print(f"[B/C] 完成，重算 {n} 条 · {now_local().isoformat()}")
+        if args.restore:
+            n = restore(conn, args.restore)
+            print(f"[restore] 批次 {args.restore} 还原 {n} 行")
+            return 0
+
+        if _pipeline_lock_held() and not args.yes_i_know_pipeline_is_running:
+            print("拒绝执行：pipeline 正在运行（logs/pipeline.lock 被持有）。"
+                  "两个写者并发覆盖同一批行的结果不可解释。等它跑完，或确知安全时加 "
+                  "--yes-i-know-pipeline-is-running。")
+            return 2
+
+        if not args.apply:
+            # 预演：算但不写，报告规模与首屏影响
+            before = top20_ids(conn)
+            n, changed, new_top20 = rescore(conn, dry_run=True)
+            swapped = len(set(before) - set(new_top20))
+            print(f"[预演] 覆盖 {n} 行，其中数值有变化 {changed} 行；"
+                  f"首屏 Top20 将换掉 {swapped}/20 条。")
+            print("确认无误后加 --apply 执行（执行时自动快照，可 --restore 回滚）。")
+            return 0
+
+        batch = now_local().strftime("%Y%m%d%H%M%S")
+        before = top20_ids(conn)
+        snap_n = snapshot(conn, batch)
+        print(f"[快照] 批次 {batch} 备份 {snap_n} 行 → rescore_backup")
+
+        if not args.skip_llm:
+            filled = backfill_breadth(conn)
+            print(f"[A] 完成，回填 {filled} 条")
+        n, changed, _ = rescore(conn, dry_run=False)
+        after = top20_ids(conn)
+        swapped = len(set(before) - set(after))
+        print(f"[B/C] 完成，重算 {n} 条（数值变化 {changed}）· Top20 换血 {swapped}/20 "
+              f"· 回滚：--restore {batch} · {now_local().isoformat()}")
     finally:
         conn.close()
     return 0
