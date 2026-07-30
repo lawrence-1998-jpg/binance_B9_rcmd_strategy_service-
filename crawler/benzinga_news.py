@@ -17,16 +17,17 @@ HTML 正文、ticker 列表、真实发布时间戳，`published.gt` 增量过�
 额外维护一张水位线状态表，和 CNBC/MarketWatch 等 RSS 源"抓一个比节奏更宽
 的窗口 + 去重"是同一套简单方案，没有为这条源单独发明新机制。
 
-## authority 定 4 分（2026-07-30 Lawrence 明确要求"至少4分，这个应该是个
-## 比较好的接口"）
+## authority 定 5 分（2026-07-30 两次上调：先 3→4，后 Lawrence 看了 24h
+## 覆盖率核实结果——美股硬新闻命中率高、Fed决议实测比CNBC快2分钟——说
+## "本来我们就是要美股为主"，定 5，对齐 CNBC/Reuters/Bloomberg 档）
 
-初版按 `crawler/web_search.py` 域名分级表（`_TIER_3`，紧跟头部媒体但成文
-偏零售财经）给了 3 分，理由是"直连 API 换来的是时间戳可信+正文完整，不是
-编辑质量的跃升"。Lawrence 认为这条接口质量应该更高，明确要求上调——采纳。
-仍然**不对齐** `crawler/dxfeed_news.py` 的机构级 5 分（dxFeed 转发的是
-MT Newswires，与 CNBC/Reuters/Bloomberg 同量级，是另一个档位的机构通讯社）；
-4 分卡在"三线财经媒体"和"机构级"之间，反映"比原来判断的更权威、但仍不是
-Bloomberg/Reuters 那一级"这个更新后的判断。
+初版按 `crawler/web_search.py` 域名分级表（`_TIER_3`）给了 3 分，理由是
+"直连 API 换来的是时间戳可信+正文完整，不是编辑质量的跃升"。用真实 24
+小时数据核实覆盖率后（见 docs/WORKLOG.md 同名章节），美股相关硬新闻头条
+命中率高且实测更快，这个判断被证据推翻——不是"编辑质量没变、只是管道
+升级"，是"这条源在我们最看重的美股维度上表现确实够格"。5 分与
+`crawler/dxfeed_news.py` 的机构级档位并列，两者现在是同一档、不同信源
+的关系，不是谁对齐谁。
 
 ## 为什么在 staging.py 优先级里给它 P0（权威大盘媒体档）
 
@@ -55,6 +56,27 @@ LOOKBACK_MINUTES = int(os.environ.get("B9_BENZINGA_LOOKBACK_MIN", "90"))
 MAX_ITEMS_PER_CALL = int(os.environ.get("B9_BENZINGA_LIMIT", "300"))
 
 _HTML_TAG_RE = re.compile(r"<[^>]+>")
+
+
+def _map_result(n: dict) -> dict | None:
+    """把 Massive 原始响应行映射成 news_events 兼容的 item。标题为空则丢弃。"""
+    title = (n.get("title") or "").strip()
+    if not title:
+        return None
+    body = (n.get("body") or n.get("teaser") or "").strip()
+    body = _HTML_TAG_RE.sub(" ", body).strip()  # 正文是带标签的富文本，去标签留纯文本供 LLM 判读
+    tickers = n.get("tickers") or []
+    return {
+        "source": "Benzinga",
+        "title": title,
+        "url": n.get("url", ""),
+        "summary": body,
+        "published_at": n.get("published", ""),
+        "matched_symbols": ",".join(tickers[:12]),
+        "lang": "en",
+        "authority": 5,
+        "type": "benzinga",
+    }
 
 
 def fetch_benzinga_news() -> list[dict]:
@@ -91,25 +113,42 @@ def fetch_benzinga_news() -> list[dict]:
             f"Benzinga News: 命中单次上限 {MAX_ITEMS_PER_CALL}，"
             f"回溯窗口 {LOOKBACK_MINUTES} 分钟内可能有截断，考虑调小窗口或调大上限")
 
-    items = []
-    for n in results:
-        title = (n.get("title") or "").strip()
-        if not title:
-            continue
-        body = (n.get("body") or n.get("teaser") or "").strip()
-        body = _HTML_TAG_RE.sub(" ", body).strip()  # 正文是带标签的富文本，去标签留纯文本供 LLM 判读
-        tickers = n.get("tickers") or []
-        items.append({
-            "source": "Benzinga",
-            "title": title,
-            "url": n.get("url", ""),
-            "summary": body,
-            "published_at": n.get("published", ""),
-            "matched_symbols": ",".join(tickers[:12]),
-            "lang": "en",
-            "authority": 4,
-            "type": "benzinga",
-        })
-
+    items = [it for n in results if (it := _map_result(n))]
     logger.info(f"Benzinga News: {len(items)} items (回溯 {LOOKBACK_MINUTES} 分钟)")
+    return items
+
+
+def backfill_benzinga_news(since_iso: str, page_limit: int = 500, max_pages: int = 50) -> list[dict]:
+    """一次性历史回填：从 `since_iso`（含）到现在，翻页拉全部结果。
+
+    只用于 scripts/backfill_benzinga.py 这类一次性操作，不进生产 30 分钟
+    循环——生产路径固定用短回溯窗 + 去重（见模块顶部说明），翻页机制只在
+    需要补历史存量时才用得上。`next_url` 已经带好下一页的 cursor，直接接
+    apiKey 参数即可继续翻页。
+    """
+    api_key = os.environ.get("MASSIVE_API_KEY")
+    if not api_key:
+        logger.info("Benzinga backfill: 未配置 MASSIVE_API_KEY，跳过")
+        return []
+
+    items: list[dict] = []
+    url = (f"{MASSIVE_API_BASE}?published.gt={since_iso}&limit={page_limit}"
+           f"&sort=published.asc&apiKey={api_key}")
+    for page in range(max_pages):
+        try:
+            resp = requests.get(url, timeout=REQUEST_TIMEOUT)
+            resp.raise_for_status()
+            payload = resp.json()
+        except Exception as e:
+            logger.warning(f"Benzinga backfill 第 {page+1} 页拉取失败，停止翻页：{e}")
+            break
+
+        results = payload.get("results", [])
+        items.extend(it for n in results if (it := _map_result(n)))
+        next_url = payload.get("next_url")
+        if not next_url or not results:
+            break
+        url = f"{next_url}&apiKey={api_key}"
+
+    logger.info(f"Benzinga backfill: {len(items)} items since {since_iso}")
     return items

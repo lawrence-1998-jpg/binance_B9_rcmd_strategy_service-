@@ -24,7 +24,7 @@ from enrich_bridge import enrich_bridge_bp
 from source_catalog import source_catalog_bp
 from persona_tools import persona_bp
 from crawler.timeutil import now_local
-from crawler import market_mood, market_weight
+from crawler import freshness, market_mood, market_weight
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -442,8 +442,16 @@ def get_news():
             # "我们产品更关心哪个市场"这种运营偏好就污染了，且改权重要全库重算。
             mkt = market_weight.explain(e)
             e["market"] = mkt
+            # 新鲜度衰减（crawler/freshness.py，2026-07-30）。同为查询时倍率：
+            # "有多新"是"你什么时候看"的函数，写进库里必然过时——存量
+            # score_timeliness 正是这么坏掉的（入库时算一次就冻住，3天前的
+            # 内容 T=0.973、当天 T=0.980，时效在排序里几乎没区分度，结果旧闻
+            # 靠跨轮累积信源堆高 H 反压当天真实事件）。
+            fresh = freshness.explain(e)
+            e["freshness"] = fresh
             e["_display_score"] = ((e.get("importance_score") or 0.0)
-                                   * mkt["multiplier"] * detail["multiplier"])
+                                   * mkt["multiplier"] * detail["multiplier"]
+                                   * fresh["multiplier"])
         pool.sort(key=lambda e: e["_display_score"], reverse=True)
         data = pool[offset:offset + limit]
         for e in data:
@@ -464,6 +472,7 @@ def get_news():
             # 字段形状与 importance 分支保持一致（按时间排序不重排，但不能让
             # 前端因为排序方式不同就要处理两种 schema）
             e["market"] = market_weight.explain(e)
+            e["freshness"] = freshness.explain(e)
 
     attach_x_posts(data, cursor)
 

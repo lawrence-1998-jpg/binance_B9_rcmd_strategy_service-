@@ -35,6 +35,20 @@
 3. **加成有方向性但不是单向放大**：只有当某条事件的情绪方向与大盘一致时才加成，
    反向或大盘接近中性时不加成也不减成——这样"大悲观时段"里少数逆势乐观的消息不会被
    排序打压到看不见，用户仍然能看到"情况没有那么糟"的信号，只是不会被推到最前面。
+
+4. **样本权重叠加市场重要性与新鲜度**（2026-07-30 补）。上线时权重只用
+   `importance_score`，结果实测情绪横幅的三条"驱动因素"清一色是韩股
+   （韩国KOSPI跌7% / KOSDAQ熔断 / 韩股暴跌后外资观望），而首屏排序在 PRD-04
+   之后已经是美股为主——**同一个产品的两块界面在讲互相矛盾的故事**。
+
+   根因和 PRD-04 是同一个：门槛用的 `event_tier` 由 LLM 相对"事件自己所在市场"
+   判定，小市场的 S/A 档率被系统性抬高（实测韩股 13.6% vs 美股 0.15%），
+   于是韩股在 S/A 样本池里严重超配。PRD-04 在排序层用市场权重修正了这件事，
+   但情绪层当时没跟着改。
+
+   现在样本权重改为 `importance_score × 市场重要性 × 新鲜度`，与排序层用同一套
+   倍率——"我们认为哪个市场更重要"和"多久以前的事还算数"这两个判断，不该在
+   排序和情绪两处给出不同答案。门槛仍然是 tier（不变，理由见上面第 1 条）。
 """
 
 # 48 小时而不是字面意义的"今天"：主流水线现在是每 2 天 1 轮（2026-07-27 起，
@@ -83,15 +97,32 @@ def compute_market_mood(events: list[dict]) -> dict:
             "sample_size": 0,
         }
 
-    total_weight = sum(e["importance_score"] for e in scored)
-    mood_score = sum(e["sentiment_score"] * e["importance_score"] for e in scored) / total_weight
+    # 样本权重 = 重要性 × 市场重要性 × 新鲜度（见模块说明 4）。延迟 import：
+    # market_weight/freshness 都不反向依赖本模块，但放在函数内可以避免
+    # crawler 包 import 期的循环依赖风险。
+    from . import freshness, market_weight
+    for e in scored:
+        e["_mood_weight"] = (float(e["importance_score"])
+                             * market_weight.market_multiplier(e)
+                             * freshness.decay_multiplier(e))
+
+    total_weight = sum(e["_mood_weight"] for e in scored)
+    if total_weight <= 0:      # 全被衰减到地板且重要性为 0 的极端情况
+        return {
+            "available": False,
+            "reason": "近期 S/A 档事件的加权总权重为 0",
+            "sample_size": len(scored),
+        }
+    mood_score = sum(e["sentiment_score"] * e["_mood_weight"] for e in scored) / total_weight
     mood_score = max(-1.0, min(1.0, mood_score))
     zh, en, color = mood_bucket(mood_score)
 
-    # 贡献最大的几条：跟大盘同向、且 |情绪|×重要性 最高的——这些是"解释这个情绪
+    # 贡献最大的几条：跟大盘同向、且 |情绪|×权重 最高的——这些是"解释这个情绪
     # 判断从哪来"的证据链，前端横幅直接引用，用户能一眼验证这个判断是否合理。
+    # 用与 mood_score 同一套权重排序，否则会出现"横幅说偏悲观、但列出的理由
+    # 并不是真正把它拉悲观的那几条"这种自相矛盾。
     same_dir = [e for e in scored if (e["sentiment_score"] >= 0) == (mood_score >= 0)]
-    top = sorted(same_dir, key=lambda e: abs(e["sentiment_score"]) * e["importance_score"],
+    top = sorted(same_dir, key=lambda e: abs(e["sentiment_score"]) * e["_mood_weight"],
                 reverse=True)[:3]
 
     return {
