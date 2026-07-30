@@ -17,17 +17,16 @@ HTML 正文、ticker 列表、真实发布时间戳，`published.gt` 增量过�
 额外维护一张水位线状态表，和 CNBC/MarketWatch 等 RSS 源"抓一个比节奏更宽
 的窗口 + 去重"是同一套简单方案，没有为这条源单独发明新机制。
 
-## 为什么 authority=3 而不是对齐 dxFeed 的机构级 5 分
+## authority 定 4 分（2026-07-30 Lawrence 明确要求"至少4分，这个应该是个
+## 比较好的接口"）
 
-`crawler/dxfeed_news.py` 把 authority 定成 5（对齐 CNBC/Reuters/Bloomberg），
-理由是 dxFeed 转发的是 MT Newswires——一家和 CNBC 同量级的机构级新闻通讯社，
-直连本身就代表内容量级的跃升。但这里不一样：Benzinga 自己的编辑内容在
-`crawler/web_search.py` 的域名分级表里本来就是 `_TIER_3`（三线，紧跟头部
-媒体但成文风格偏零售财经、"Why It's Moving" 快讯类居多）——换成直连 API
-拿到的只是**时间戳可信 + 正文完整**（不再被 `source_trust.py` 的"聚合器+
-无正文"闸门拦截），不是编辑质量本身的提升。把 authority 和 dxFeed 对齐会
-把"数据管道升级"误标成"内容变权威了"，这正是 `crawler/source_trust.py`
-反复强调的"authority(内容权威度) 和时间可信度是两个维度，不要混为一谈"。
+初版按 `crawler/web_search.py` 域名分级表（`_TIER_3`，紧跟头部媒体但成文
+偏零售财经）给了 3 分，理由是"直连 API 换来的是时间戳可信+正文完整，不是
+编辑质量的跃升"。Lawrence 认为这条接口质量应该更高，明确要求上调——采纳。
+仍然**不对齐** `crawler/dxfeed_news.py` 的机构级 5 分（dxFeed 转发的是
+MT Newswires，与 CNBC/Reuters/Bloomberg 同量级，是另一个档位的机构通讯社）；
+4 分卡在"三线财经媒体"和"机构级"之间，反映"比原来判断的更权威、但仍不是
+Bloomberg/Reuters 那一级"这个更新后的判断。
 
 ## 为什么在 staging.py 优先级里给它 P0（权威大盘媒体档）
 
@@ -108,7 +107,7 @@ def fetch_benzinga_news() -> list[dict]:
             "published_at": n.get("published", ""),
             "matched_symbols": ",".join(tickers[:12]),
             "lang": "en",
-            "authority": 3,
+            "authority": 4,
             "type": "benzinga",
         })
 
