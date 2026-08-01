@@ -109,7 +109,8 @@ POOL_COLUMNS = """
     score_market_impact, score_breadth, score_punch, punch_magnitude_pct,
     score_timeliness, score_hotness, score_authority, score_quality,
     importance_score, is_rumor, sources, source_names, source_count, social_interactions,
-    sentiment, sentiment_score, verification_status
+    sentiment, sentiment_score, verification_status,
+    tradable_entities, tradable_count
 """
 
 # 2026-07-30 500→1200：生产"部署到 Agent"路径固定用 1200 池（api/server.py），
@@ -481,7 +482,10 @@ def rank_pool(events: list[dict], factors_by_id: dict, weights: dict,
         detail = market_mood.mood_multiplier(
             e, mood_score,
             k_align=bonus_coefs.get("k_align"),
-            k_reversal=bonus_coefs.get("k_reversal"))
+            k_reversal=bonus_coefs.get("k_reversal"),
+            k_tradable=bonus_coefs.get("k_tradable"),
+            k_tradable_broad=bonus_coefs.get("k_tradable_broad"),
+            cap=bonus_coefs.get("cap"))
         mkt = market_weight.explain(e, market_weights)
         fresh = freshness.decay_multiplier(e)
         final = base * mkt["multiplier"] * fresh * detail["multiplier"]

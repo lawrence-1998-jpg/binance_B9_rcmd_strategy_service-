@@ -604,6 +604,65 @@ def qa_market_expansion():
           in open(str(Path(__file__).resolve().parent.parent / "crawler" / "benzinga_news.py")).read(),
           "benzinga_news.py 的 authority 与表不一致")
 
+    # ── 成本硬闸与交易实体（ADR-002，2026-08-02）─────────────────────
+    #
+    # 这组断言守的是本次架构升级最容易悄悄失效的三件事：闸口被绕过、
+    # 配置只存不读、投影漏列。三者的共同点是**坏了不报错**，只能靠断言钉住。
+    _ROOT = Path(__file__).resolve().parent.parent
+    sys.path.insert(0, str(_ROOT / "api"))     # api/ 目录平铺，与 lab_tools 同法
+    import strategy_config as _sc              # noqa: E402
+    from crawler import llm_gate as _gate      # noqa: E402
+
+    # 1) fail-closed：闸口关闭时任何优先级都拿不到个人 key 客户端。
+    #    这是"关掉就一分钱不花"这个承诺的唯一机器可验证形式。
+    _gate._invalidate_cache()
+    _gate.reset_stats()
+    _closed = (not _gate.is_personal_enabled()
+               and _gate.acquire("qa_probe", item={"priority": 0}) is None)
+    check(g3, "成本闸：关闭状态下最高优先级也拿不到个人 key",
+          _closed, f"闸口未生效（reason={_gate.last_reason()}）——关掉开关仍会花钱")
+
+    # 2) 死配置守卫（检修报告合并 A 的教训泛化）：strategy_config 的 bonus 段
+    #    每个键都必须在消费方 market_mood.mood_multiplier 的签名里有对应参数，
+    #    否则就是又一个"能调、能存、能部署，就是不生效"的旋钮。
+    import inspect  # noqa: E402
+    from crawler import market_mood as _mm  # noqa: E402
+    _sig = set(inspect.signature(_mm.mood_multiplier).parameters)
+    _bonus_keys = set(_sc.DEFAULTS["bonus"])
+    _unconsumed = {k for k in _bonus_keys if k not in _sig}
+    check(g3, "策略配置 bonus 段每个键都有消费点（防死配置）",
+          not _unconsumed,
+          f"这些键只存不读、改了不生效：{sorted(_unconsumed)}")
+
+    # 3) 投影缺列（本项目已栽 4 次）：新列必须同时出现在生产与实验室两处投影，
+    #    漏一处就会出现"实验室能看到、线上是空"或反过来的分叉。
+    _srv = open(str(_ROOT / "api" / "server.py")).read()
+    _lab = open(str(_ROOT / "api" / "lab_tools.py")).read()
+    check(g3, "交易实体两列在生产与实验室投影中都存在",
+          all(c in _srv for c in ("tradable_entities", "tradable_count"))
+          and all(c in _lab for c in ("tradable_entities", "tradable_count")),
+          "server.py / lab_tools.py 的取数列缺 tradable 列，标的物 tag 与加分会静默失效")
+
+    # 4) tradable_count 必须与 tradable_entities 里 tradable=true 的个数一致，
+    #    否则加分项读的是一个和展示对不上的数（"界面正常≠数据对"）。
+    # 用各 MySQL 版本都支持的不变量表达：JSON 路径过滤语法（$[*]?(@.x == true)）
+    # 要 8.0.17+，写了在老版本上只会静默返回空、断言变成永远"通过"——
+    # 一条永远不会红的断言比没有断言更糟。这里退一步用两个必然成立的关系：
+    #   ① 可交易数不可能超过实体总数
+    #   ② count>0 必然有 entities
+    _r1 = sql("""SELECT COUNT(*) FROM news_events
+                  WHERE tradable_entities IS NOT NULL
+                    AND tradable_count > JSON_LENGTH(tradable_entities)
+                    AND date >= CURDATE() - INTERVAL 7 DAY""")
+    _r2 = sql("""SELECT COUNT(*) FROM news_events
+                  WHERE tradable_count > 0 AND tradable_entities IS NULL
+                    AND date >= CURDATE() - INTERVAL 7 DAY""")
+    _n1 = int(_r1[0][0]) if _r1 and _r1[0] else -1
+    _n2 = int(_r2[0][0]) if _r2 and _r2[0] else -1
+    check(g3, "tradable_count 与 entities 自洽（数量不超总数、有数必有实体）",
+          _n1 == 0 and _n2 == 0,
+          f"越界 {_n1} 行 / 有数无实体 {_n2} 行（-1 表示查询本身失败）")
+
     # ── 时效性（2026-07-29 线上事故后新增的红线用例）─────────────────
     #
     # 事故：一条 2024-08-21 的币安广场帖（DOGS 第 57 期 Launchpool）以

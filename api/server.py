@@ -122,6 +122,10 @@ EVENT_COLUMNS = """
     -- 读不到 breadth_level，广度全退化成默认 0.35——三条 B=1.0 的事件在
     -- 生产被压低 0.13 分，与实验室永远对不齐。这四列 tab02 明细也要用。）
     breadth_level, score_breadth, score_punch, punch_magnitude_pct,
+    -- 交易实体（ADR-002 块 B）：加分项要读 tradable_count，前端 tag 要读
+    -- tradable_entities。这两列漏掉的话，加成恒为 0 且 tag 永远不显示——
+    -- 正是本项目已经栽过 4 次的"投影缺列"，这次跟着新列一起加。
+    tradable_entities, tradable_count,
     credibility_score, is_rumor, rumor_reason,
     sources, source_names, source_count, is_verified, language_origin,
     cluster_id, merged_sources_count,
@@ -522,8 +526,17 @@ def get_news():
         # 回音室"——实际上从没在用户真正看到的主站生效过，只在实验室的推演里
         # 生效。同时也是"用户看不出哪条被反转命中"的根源之一：主站 API 压根
         # 没算过、没吐出过这个信息，前端自然无从展示。
+        # 加分项系数从**已部署的策略配置**取（没部署则回落模块默认）。
+        # 写死默认值的话，PM 在实验室调了 k_tradable、点了"部署到 Agent"，
+        # 线上纹丝不动——那正是检修报告里"死配置"的复刻。
+        _pb = (prod_cfg or {}).get("bonus", {}) if prod_cfg else {}
         for e in pool:
-            detail = market_mood.mood_multiplier(e, mood_score)
+            detail = market_mood.mood_multiplier(
+                e, mood_score,
+                k_align=_pb.get("k_align"), k_reversal=_pb.get("k_reversal"),
+                k_tradable=_pb.get("k_tradable"),
+                k_tradable_broad=_pb.get("k_tradable_broad"),
+                cap=_pb.get("cap"))
             e["bonus"] = detail
             # 市场重要性倍率（PRD-04，2026-07-29）。与情绪加成同为查询时的外层
             # 倍率，不写回 importance_score——那是"事件本身有多重要"的口径，掺进

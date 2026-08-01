@@ -30,6 +30,7 @@ Mac 主动拉（HTTP 出站），VM 永远不依赖 Mac 在线——Mac 关机/�
 from __future__ import annotations
 
 import concurrent.futures as cf
+import datetime
 import json
 import logging
 import os
@@ -70,6 +71,57 @@ LOCK_STALE_S = 2 * 3600
 logging.basicConfig(level=logging.INFO,
                     format="%(asctime)s [%(levelname)s] %(message)s")
 log = logging.getLogger("enrich-worker")
+
+# ── 凭据注册表（ADR-002 A2）──────────────────────────────────────────
+CRED_FILE = os.path.expanduser("~/.b9/credentials.json")
+# 当轮生效的凭据，由 main() 每次唤醒时解析一次（见 load_credential）。
+# 模块级是为了让 enrich_with_gateway 里的请求直接用，不必层层传参。
+_ACTIVE_CRED: dict = {}
+
+
+def load_credential() -> dict:
+    """凭据来源，优先级：环境变量 > ~/.b9/credentials.json > 本文件内置默认。
+
+    公司 key 每 7 天轮换一次。以前换 key 要改这个文件里的默认值，而 launchd
+    实际跑的是 ~/.b9/local_enrich_worker.py 这个**副本**——改了仓库不改副本
+    等于没改（本项目"手写副本必腐化"的又一个实例，这次提前堵掉）。现在两边
+    都读同一个 credentials.json，换 key 只动那一个文件、谁都不用改代码。
+
+    **到期日只预警、不停机**（2026-08-02 修正）：第一版写成"过期即拒绝返回"，
+    想清楚之后改掉了——到期日是人手填的、不确定的元数据（公司 key 的真实到期
+    时间我们并不掌握，只能听同事说"大约 7 天"）。拿一个可能填错的日期去强制
+    停机，等于自己制造一种新的停摆方式：日期填早了，key 明明还能用却不干活。
+
+    真正权威的失效信号是**网关自己返回 401/403**——那时 enrich 失败、条目不
+    提交、原样留在队列里，VM 那边成本闸关着也不会回落个人账号，数据一样不丢。
+    所以让真实调用去裁决，日期只负责提前提醒该找同事要新 key 了。
+    """
+    if os.environ.get("B9_GATEWAY_KEY"):
+        return {"key": os.environ["B9_GATEWAY_KEY"], "base_url": GATEWAY_BASE,
+                "model": GATEWAY_MODEL, "name": "env"}
+    try:
+        with open(CRED_FILE) as f:
+            data = json.load(f)
+        name = data.get("active")
+        cred = (data.get("keys") or {}).get(name or "")
+        if cred and cred.get("key"):
+            exp = cred.get("expires_at")
+            if exp and datetime.date.fromisoformat(exp) < datetime.date.today():
+                log.warning(
+                    f"公司 key「{name}」登记的到期日 {exp} 已过 —— 仍会照常尝试，"
+                    f"真失效的话网关会返回 401、条目留在队列里等新 key。"
+                    f"换 key：python3 scripts/b9key.py add --key sk-新key "
+                    f"--expires YYYY-MM-DD")
+            return {"key": cred["key"],
+                    "base_url": cred.get("base_url", GATEWAY_BASE),
+                    "model": cred.get("model", GATEWAY_MODEL),
+                    "name": name, "expires_at": exp}
+    except FileNotFoundError:
+        pass          # 还没用 b9key.py 建过注册表，走内置默认，行为与从前一致
+    except Exception as e:
+        log.warning(f"读取 {CRED_FILE} 失败（{e}），回落到内置默认 key")
+    return {"key": GATEWAY_KEY, "base_url": GATEWAY_BASE,
+            "model": GATEWAY_MODEL, "name": "builtin-default"}
 
 
 class RateLimiter:
@@ -204,7 +256,11 @@ def enrich_with_gateway(spec: dict, item: dict) -> dict | None:
         f"Published: {item.get('published_at', '')}"
     )
     body = json.dumps({
-        "model": GATEWAY_MODEL,
+        # 模型跟着凭据走：不同 key 可能绑不同模型（比如同事给的 key 只开了
+        # 某几个模型）。写死 GATEWAY_MODEL 的话，换 key 后会拿旧模型名去请求，
+        # 报错还算好的，最怕的是网关静默降级到别的模型——那样 prompt hash 没变、
+        # 缓存照常命中，产出质量却悄悄变了。
+        "model": _ACTIVE_CRED.get("model") or GATEWAY_MODEL,
         "messages": [
             {"role": "system", "content": spec["system_prompt"]},
             {"role": "user", "content": user_content},
@@ -219,9 +275,9 @@ def enrich_with_gateway(spec: dict, item: dict) -> dict | None:
         _rate_limiter.acquire()   # 从源头限速，见 GATEWAY_RPM 注释——不是靠 429 后重试穿过去
         try:
             req = urllib.request.Request(
-                f"{GATEWAY_BASE}/chat/completions", data=body,
+                f"{_ACTIVE_CRED['base_url']}/chat/completions", data=body,
                 headers={"Content-Type": "application/json",
-                        "Authorization": f"Bearer {GATEWAY_KEY}"},
+                        "Authorization": f"Bearer {_ACTIVE_CRED['key']}"},
                 method="POST",
             )
             with urllib.request.urlopen(req, timeout=GATEWAY_TIMEOUT_S) as resp:
@@ -308,6 +364,22 @@ def main() -> int:
     if not acquire_lock():
         return 0
     try:
+        # 每次唤醒重新解析凭据 —— 换了 key 下一次唤醒（≤15 分钟）自动生效，
+        # 不用重启 launchd、不用改任何代码。
+        global _ACTIVE_CRED
+        _ACTIVE_CRED = load_credential()
+        if not _ACTIVE_CRED:
+            # 拿不到任何可用凭据：不领任务、不处理、更不碰个人账号。
+            # 条目留在 VM 队列里（30 天窗口），有 key 之后自动回补。
+            log.error("没有可用的公司凭据，本轮跳过（条目留在队列里等新 key）")
+            return 0
+        if _ACTIVE_CRED.get("expires_at"):
+            left = (datetime.date.fromisoformat(_ACTIVE_CRED["expires_at"])
+                    - datetime.date.today()).days
+            if left <= 2:
+                log.warning(f"⚠️ 公司 key「{_ACTIVE_CRED['name']}」登记到期日还剩 "
+                            f"{left} 天（{_ACTIVE_CRED['expires_at']}）——该找同事要"
+                            f"新 key 了。真到期后入库会停摆，但数据不丢。")
         spec = api("/api/enrich/prompt")
         pending = api(f"/api/enrich/pending?limit={BATCH_SIZE}")
         items = pending.get("items") or []
@@ -318,7 +390,9 @@ def main() -> int:
             log.warning("prompt changed between calls, aborting this wake")
             return 0
         log.info(f"processing {len(items)} items "
-                 f"(prompt {spec['prompt_hash']}, model {GATEWAY_MODEL} via gateway, "
+                 f"(prompt {spec['prompt_hash']}, "
+                 f"model {_ACTIVE_CRED.get('model') or GATEWAY_MODEL} via gateway "
+                 f"[key: {_ACTIVE_CRED.get('name')}], "
                  f"concurrency {CONCURRENCY})")
 
         t0 = time.time()
@@ -343,7 +417,8 @@ def main() -> int:
                 if enriched is not None:
                     results.append({"url_hash": item["url_hash"],
                                     "enriched": enriched,
-                                    "model": f"litellm-gateway/{GATEWAY_MODEL}"})
+                                    "model": "litellm-gateway/"
+                                             + (_ACTIVE_CRED.get("model") or GATEWAY_MODEL)})
         progress.finish()
 
         spent = time.time() - t0

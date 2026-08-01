@@ -191,7 +191,35 @@ def reversal_bonus(event_sentiment_score, mood_score, event_tier, k=None) -> flo
     return k * abs(mood_score) * abs(event_sentiment_score)
 
 
-def mood_multiplier(event: dict, mood_score, k_align=None, k_reversal=None) -> dict:
+# 交易实体加成（ADR-002 块 B）。老板要的是"刺激标的物交易"的感觉——
+# 一条能落到具体可买标的的新闻，比一条纯宏观评论更容易引发交易动作。
+#
+# **分档而不是一刀切**是关键：实测 Benzinga 的"盘前综述"一条挂 7 个 ticker
+# （DJI,IXIC,SPX,SPY,QQQ,IWM,MSFT），那恰恰是最没有交易指向性的内容；真正
+# 刺激交易的是"NVDA 财报炸了"这种单一主标的事件。不分档会把泛泛的大盘综述
+# 系统性顶上去，与需求意图正好相反。
+TRADABLE_BONUS_FOCUSED = 0.06     # 1-2 个可交易标的：指向明确
+TRADABLE_BONUS_BROAD = 0.02       # ≥5 个：宽泛市场评论，给一点但不多
+TRADABLE_BROAD_THRESHOLD = 5
+
+
+def tradable_bonus(event: dict, k_focused=None, k_broad=None) -> float:
+    """有可交易标的的加成。没有标的物 → 0，不惩罚，只是不加分。"""
+    n = event.get("tradable_count")
+    if n is None:
+        # 兼容还没跑过 persist_tradable_entities 的存量行：现场从 JSON 数
+        from . import tradable as _t
+        n = _t.tradable_count(event.get("tradable_entities"))
+    n = int(n or 0)
+    if n <= 0:
+        return 0.0
+    kf = TRADABLE_BONUS_FOCUSED if k_focused is None else k_focused
+    kb = TRADABLE_BONUS_BROAD if k_broad is None else k_broad
+    return kb if n >= TRADABLE_BROAD_THRESHOLD else kf
+
+
+def mood_multiplier(event: dict, mood_score, k_align=None, k_reversal=None,
+                    k_tradable=None, k_tradable_broad=None, cap=None) -> dict:
     """算出某条事件的展示层倍率。返回明细，便于策略实验室展示"为什么是这个分"。
 
     只应用于查询/展示时的排序，绝不写回 importance_score——见模块头部说明 2。
@@ -199,10 +227,14 @@ def mood_multiplier(event: dict, mood_score, k_align=None, k_reversal=None) -> d
     s = event.get("sentiment_score")
     align = sentiment_align_bonus(s, mood_score, k_align)
     rev = reversal_bonus(s, mood_score, event.get("event_tier"), k_reversal)
-    total = min(align + rev, BONUS_TOTAL_CAP)
+    trad = tradable_bonus(event, k_tradable, k_tradable_broad)
+    # 三个加分项共用同一个封顶：新增加分项必须纳入既有 cap，否则叠加起来
+    # 会突破策略配置里声明的上限，让"封顶"这个概念失效。
+    total = min(align + rev + trad, BONUS_TOTAL_CAP if cap is None else cap)
     return {
         "sentiment_align": round(align, 4),
         "reversal": round(rev, 4),
+        "tradable": round(trad, 4),
         "total_bonus": round(total, 4),
         "multiplier": round(1.0 + total, 4),
     }

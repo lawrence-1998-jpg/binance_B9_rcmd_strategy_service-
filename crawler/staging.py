@@ -179,7 +179,20 @@ MAX_ITEMS_PER_RUN = int(os.environ.get("B9_PIPELINE_BATCH", "400"))
 DISABLED_SOURCES = ("BinanceSquare",)
 
 
-def fetch_staged_items(conn, max_age_days: int = 7) -> list[dict]:
+# 积压回溯窗口。2026-08-02（ADR-002 A3）由 7 天放宽到 30 天。
+#
+# 起因是需求"重新开启后重新扫描并处理积压"暴露的结构性障碍：这个窗口和
+# /api/enrich/pending 的同名窗口是**数据能不能回补的硬天花板**——公司 key 断供
+# 或 Mac 离线一旦超过窗口天数，那批条目就再也不会被任何一方取走，而且是静默的
+# （没有报错、没有计数，只是查询条件把它们排除掉了）。7 天对"每 7 天轮换一次
+# key"的节奏毫无余量：轮换晚一天就开始丢数据。
+#
+# 30 天的代价是 staging 表变大（约 6000 条/天 → 约 18 万行），已配套加了
+# idx_unconsumed_age 复合索引（migration 018）。
+STAGING_MAX_AGE_DAYS = int(os.environ.get("B9_STAGING_MAX_AGE_DAYS", "30"))
+
+
+def fetch_staged_items(conn, max_age_days: int | None = None) -> list[dict]:
     """只读取（不标记）未消费的存档条目，返回可直接送入 pipeline 的 item 列表。
 
     2026-07-26 review 修复（HIGH）：旧版 consume_staged_items 在 SELECT 之后
@@ -193,11 +206,24 @@ def fetch_staged_items(conn, max_age_days: int = 7) -> list[dict]:
     数据不丢，值得。
 
     `max_age_days` 兜底：防存档表堆积时把过老内容当"新鲜存货"送进 LLM。
+    不传则用 STAGING_MAX_AGE_DAYS（30 天，见该常量的说明——它同时是"断供多久
+    之内的数据还能回补"的硬天花板）。
     """
+    if max_age_days is None:
+        max_age_days = STAGING_MAX_AGE_DAYS
     cursor = conn.cursor(dictionary=True)
     disabled_ph = ", ".join(["%s"] * len(DISABLED_SOURCES))
     cursor.execute(
-        f"""SELECT id, source, title, url, summary, published_at, lang, authority, type
+        # 投影列表：新增字段**必须同步加到这里**，否则下游拿到的永远是 None
+        # 且不报错。本项目已经栽过 4 次（EVENT_COLUMNS 少 4 列让广度因子恒为
+        # 默认值、_get_market_mood 少 3 列让新鲜度衰减恒为 1.0…）。这次一次补两个：
+        #   · priority        —— 成本闸紧急模式按它过滤档位；不取的话
+        #                        item.get("priority") 恒为 None，档位闸静默失效
+        #   · matched_symbols —— Benzinga/dxFeed 编辑部标注的真实 ticker，
+        #                        98.1%/95% 覆盖率，此前一路取不到，交易实体
+        #                        因此全靠 LLM 猜（实测美股侧覆盖率仅 0.8%）
+        f"""SELECT id, source, title, url, summary, published_at, lang, authority,
+                  type, priority, matched_symbols
            FROM raw_items_staging
            WHERE consumed_at IS NULL
              AND fetched_at >= NOW() - INTERVAL %s DAY
@@ -239,14 +265,40 @@ def fetch_staged_items(conn, max_age_days: int = 7) -> list[dict]:
         "summary": r["summary"] or "", "published_at": r["published_at"] or "",
         "lang": r["lang"] or "en", "authority": r["authority"] or 3,
         "type": r["type"] or "rss",
+        # 取到了就要传下去——SELECT 补了列却忘了往 item 里塞，等于没补。
+        "priority": r["priority"],
+        "matched_symbols": r["matched_symbols"] or "",
     } for r in rows]
     logger.info(f"Staging: fetched {len(items)} unconsumed items (not yet marked)")
     return items
 
 
-def mark_staged_consumed(conn, staged_items: list[dict]) -> None:
-    """写库成功后统一标记本轮取走的存档条目。只在 pipeline 的 Step 9 之后调用。"""
-    ids = [it["_staging_id"] for it in staged_items if it.get("_staging_id")]
+def mark_staged_consumed(conn, staged_items: list[dict],
+                         deferred_urls: set | None = None) -> None:
+    """写库成功后统一标记本轮取走的存档条目。只在 pipeline 的 Step 9 之后调用。
+
+    `deferred_urls`：**被成本闸拦下**的 url 集合（llm_gate.deferred_urls()）。
+    这些**不**标记消费，原样留在队列里等公司额度或紧急开闸；其余一律标记。
+
+    2026-08-02（ADR-002）加这个参数，起因是成本闸的端到端验证：闸口关闭时
+    `enrich_one` 返回 None、条目被丢弃，但这里照样把**本轮取出的全部**条目
+    标记成已消费——桥再也领不到它们，数据永久丢失。这与"断供期间数据不丢、
+    恢复后自动回补"的需求正好相反，而且是静默的（日志只说 marked N items）。
+
+    **口径必须是"排除被闸拦下的"，不能是"只标记成功结构化的"**——这一版
+    改对之前先踩了一次：用"成功结构化的 url"做正向筛选，结果把 68 条被时间
+    可信度闸故意丢弃的聚合器条目、以及被预过滤去重掉的条目一并留在了队列里。
+    它们已经判定不要，却每轮都被重新捞出来处理一遍，队列还会无限增长。
+    "没被处理"有两种截然不同的原因，只有成本闸那一种该重试。
+    """
+    if deferred_urls:
+        ids = [it["_staging_id"] for it in staged_items
+               if it.get("_staging_id") and it.get("url") not in deferred_urls]
+        held = len(staged_items) - len(ids)
+        if held:
+            logger.info(f"Staging: {held} 条被成本闸拦下，保留在队列中等下一轮")
+    else:
+        ids = [it["_staging_id"] for it in staged_items if it.get("_staging_id")]
     if not ids:
         return
     cursor = conn.cursor()

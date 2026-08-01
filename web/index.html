@@ -274,6 +274,11 @@ main{padding:38px 0 90px}
 .tag.neu{background:var(--surface-2);color:var(--ink-3);border-color:var(--rule)}
 .tag.rumor{background:var(--red-wash);color:var(--red);border-color:#F0C6CD;font-weight:600}
 .tag.disputed{background:var(--amber-wash);color:var(--amber);border-color:var(--amber-line);font-weight:600}
+/* 交易实体（ADR-002）：可交易的用强调色（赤陶）+ 等宽数字，让 ticker 一眼可读；
+   指数这类"看得懂但买不了"的走弱化灰，两者必须一眼能区分，否则 tag 反而误导。 */
+.tag.trade{background:var(--gold-wash);color:var(--gold-deep);border-color:var(--gold-line);
+  font-weight:700;font-variant-numeric:tabular-nums;letter-spacing:.02em}
+.tag.trade-idx{background:transparent;color:var(--ink-3);border-color:var(--rule);font-weight:500}
 .tag.ver{background:var(--green-wash);color:var(--green);border-color:#BFE3D0}
 /* 2026-07-29：情绪同向/反转加成标签。Lawrence 原话「我都不知道哪条是反转，
    得一条条肉眼看」——此前策略实验室展开明细里能看到贡献值，但榜单本身和
@@ -4372,6 +4377,20 @@ function renderRows(){
     var srcs=r.source_names||[], srcTx=srcs.slice(0,2).map(esc).join("、");
     if(srcs.length>2) srcTx+=' <span class="more">+'+(srcs.length-2)+'</span>';
     if(!srcs.length) srcTx='<span class="more">—</span>';
+    // 交易实体 tag（ADR-002 块 B）：标题后直接告诉用户"这条对应哪个能买的标的"。
+    // 只展示前 3 个——一条盘前综述可能挂 7 个 ticker，全铺出来标题就没法看了。
+    // 可交易的给强调色，指数这类看得懂但买不了的走弱化样式。
+    var tents = r.tradable_entities || [];
+    if(typeof tents === "string"){ try{ tents = JSON.parse(tents); }catch(e){ tents = []; } }
+    var tradeTags = tents.slice(0,3).map(function(t){
+      var cls = t.tradable ? "tag trade" : "tag trade-idx";
+      var venue = t.venue === "binance_spot" ? "·币安" : "";
+      return '<span class="'+cls+'" title="'+esc(t.name||"")+
+             (t.tradable?'（可交易）':'（指数，不可直接交易）')+'">'+
+             esc(t.symbol)+venue+'</span>';
+    }).join("");
+    if(tents.length>3) tradeTags += '<span class="more">+'+(tents.length-3)+'</span>';
+
     var flags="";
     if(r.is_rumor) flags+=' <span class="tag rumor">谣言</span>';
     else if(r.verification_status==="DISPUTED") flags+=' <span class="tag disputed">有争议</span>';
@@ -4387,7 +4406,7 @@ function renderRows(){
       '<td class="c-score"><div class="score-cell"><span class="tier tier-'+tier+'">'+tier+'</span>'+
         '<span class="score-num">'+score.toFixed(3)+'</span></div>'+
         '<div class="bar" style="margin-top:7px"><i style="width:'+Math.round(score*100)+'%"></i></div></td>'+
-      '<td class="c-title"><div class="t-zh">'+esc(r.title_zh||r.title_en||"(无标题)")+flags+'</div>'+
+      '<td class="c-title"><div class="t-zh">'+esc(r.title_zh||r.title_en||"(无标题)")+tradeTags+flags+'</div>'+
         '<div class="t-en">'+esc(r.title_en||"")+'</div></td>'+
       '<td class="c-tags">'+marketBadge(r.market_scope)+secs+coins+'<div style="margin-top:5px"><span class="tag neu">'+esc(r.news_type||"—")+'</span></div></td>'+
       '<td class="c-src"><div class="src-list">'+srcTx+'</div>'+

@@ -24,7 +24,7 @@ from openai import OpenAI
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
-from . import authority_table, source_trust, storage
+from . import authority_table, llm_gate, source_trust, storage
 from .dedup import (COSINE_THRESHOLD, aggregate_events, build_fingerprint,
                     embed_texts, fallback_id)
 from .market_cap import annotate_events as annotate_market_cap
@@ -787,9 +787,21 @@ def enrich_one(item: dict, tracker=None, cached: dict | None = None) -> dict | N
             "authority":    item.get("authority", 3),
             "type":         item.get("type", "rss"),
             "tweet_id":     item.get("tweet_id"),
+            # 编辑部标注的真实 ticker，交易实体识别要用（ADR-002 块 B）。
+            # 两条路径（缓存命中 / OpenAI）都必须带上，漏一条就有一半事件没标的物。
+            "matched_symbols": item.get("matched_symbols", ""),
             "_enriched_by": "claude-local",   # 观测用；write_events 按列写库，多余键自然忽略
         })
         return enriched
+
+    # ── 成本硬闸（ADR-002）────────────────────────────────────────────
+    # 走到这里说明缓存没命中，接下来这一步是**要花 Lawrence 个人账号的钱的**。
+    # 闸口关闭（默认）时直接返回 None：不调用、不消费 staging、不产生任何费用。
+    # 该条目会原样留在待办队列里，等公司额度（Mac 走网关）或紧急开闸后再处理，
+    # 所以"跳过"不等于"丢失"——这是自动回补能力的地基，见 llm_gate 模块说明。
+    client = llm_gate.acquire("enrich", item=item)
+    if client is None:
+        return None
 
     user_content = build_enrich_input(item)
 
@@ -798,7 +810,7 @@ def enrich_one(item: dict, tracker=None, cached: dict | None = None) -> dict | N
     last_error = None
     for attempt in range(LLM_MAX_RETRIES):
         try:
-            resp = get_openai_client().chat.completions.create(
+            resp = client.chat.completions.create(
                 model=model,
                 messages=[
                     {"role": "system", "content": SYSTEM_PROMPT},
@@ -826,6 +838,7 @@ def enrich_one(item: dict, tracker=None, cached: dict | None = None) -> dict | N
                 "authority":    item.get("authority", 3),
                 "type":         item.get("type", "rss"),
                 "tweet_id":     item.get("tweet_id"),
+                "matched_symbols": item.get("matched_symbols", ""),
                 "_cache_writeback": raw_llm_output,
                 "_cache_model":     model,
             })
@@ -898,6 +911,43 @@ UPDATE news_events
        impact_horizon   = %s
  WHERE id = %s
 """
+
+
+_TRADABLE_SQL = ("UPDATE news_events SET tradable_entities=%s, tradable_count=%s "
+                 "WHERE id=%s")
+
+
+def persist_tradable_entities(events: list[dict], conn) -> int:
+    """识别并写回交易实体（ADR-002 块 B）。必须在 market_cap 之后调用——
+    加密侧的可交易判据来自 coin_metrics.binance_spot，那是 market_cap 算的。
+
+    零 LLM 成本：数据来源是编辑部标注的 ticker + 已有的 coin_metrics，
+    不需要改 prompt，因此也不会让 enrich 缓存失效。
+    """
+    if not events:
+        return 0
+    from . import tradable
+    cursor = conn.cursor()
+    written = 0
+    for event in events:
+        try:
+            entities = tradable.resolve(event)
+            n = tradable.tradable_count(entities)
+            cursor.execute(_TRADABLE_SQL, (
+                json.dumps(entities, ensure_ascii=False), n, event["id"]))
+            written += cursor.rowcount
+            # 顺手回填进内存里的 event，后面 scoring 的加分项直接用，不用再查库
+            event["tradable_entities"] = entities
+            event["tradable_count"] = n
+        except Exception as e:
+            logger.warning(f"tradable entities write failed [{event.get('id')}]: {e}")
+    conn.commit()
+    cursor.close()
+    if written:
+        with_tradable = sum(1 for e in events if e.get("tradable_count"))
+        logger.info(f"交易实体：{written} 条已写入，其中 {with_tradable} 条有可交易标的 "
+                    f"({100 * with_tradable // max(1, len(events))}%)")
+    return written
 
 
 def persist_content_tags(events: list[dict], conn) -> int:
@@ -1008,7 +1058,15 @@ def run_pipeline() -> dict:
         #    第二道是 2026-07-28 加的，抓的是第一道天然抓不住的跨语言/改写重复，
         #    成本近似为零（见 semantic_prefilter 的说明）。
         deduped = prefilter_duplicates(raw_items)
-        deduped = semantic_prefilter(deduped, get_openai_client(), tracker=tracker)
+        # 成本闸：这道语义预过滤的**唯一目的是省 LLM 钱**。闸口关闭时它省的
+        # 那笔开销本来就不会发生（enrich 已经不走个人 key 了），却还要自己
+        # 花一笔 embedding 的钱——纯亏。所以关闸时直接跳过，只保留免费的
+        # 字面预过滤；跨语言/改写重复仍由后面 aggregate_events 的语义层兜住。
+        _pf_client = llm_gate.acquire("semantic_prefilter")
+        if _pf_client is not None:
+            deduped = semantic_prefilter(deduped, _pf_client, tracker=tracker)
+        else:
+            logger.info("成本闸：跳过语义预过滤（个人 key 已禁用，字面预过滤仍生效）")
         stats["deduped"] = len(deduped)
         lap("prefilter")
 
@@ -1027,14 +1085,33 @@ def run_pipeline() -> dict:
             PROMPT_VERSION_HASH)
         enriched = enrich_batch(deduped, tracker=tracker, cache_map=cache_map)
         stats["enriched"] = len(enriched)
+        gate_stats = llm_gate.stats()
+        stats["cost_gate"] = gate_stats
         if deduped and not enriched:
-            # 全军覆没 = LLM 侧系统性故障（key 失效/欠费/全面限流），不是数据问题。
-            # 必须炸出来：staging 条目未标记消费，下一轮会原样重取，零丢失；
-            # 若这里静默续跑，本轮会以 status=success、0 事件收场，批次无声蒸发
-            # （2026-07-26 review 确认过这条静默路径真实存在）。
-            raise RuntimeError(
-                f"LLM enrichment returned 0/{len(deduped)} — aborting run; "
-                f"staged items remain unconsumed for retry next round")
+            if gate_stats.get("deferred", 0) > 0 and gate_stats.get("allowed", 0) == 0:
+                # 成本闸关闭 + 全部缓存未命中 = **设计内的正常状态**，不是故障。
+                # 不抛异常、也不提前 return（提前 return 会跳过收尾逻辑）：让空列表
+                # 自然流过下游——聚合 0 条得 0 事件、写库写 0 行，各步本来就处理得了；
+                # 而这一轮所有条目都在 llm_gate.deferred_urls() 里，一条也不会标记消费，
+                # 条目原样留在队列里等公司额度或紧急开闸。
+                #
+                # 若沿用下面那条 RuntimeError，闸口关闭期间每轮都会以失败告终，
+                # 把"按要求不花钱"误报成"系统坏了"，反而掩盖真正的故障。
+                logger.warning(
+                    f"成本闸：本轮 {len(deduped)} 条全部延后（{gate_stats['reasons']}），"
+                    f"数据保留在队列中，等公司额度或紧急开闸后处理")
+                llm_gate.record_deferred(
+                    conn, [it["_staging_id"] for it in staged_items
+                           if it.get("_staging_id")], llm_gate.last_reason())
+                stats["deferred"] = len(deduped)
+            else:
+                # 全军覆没 = LLM 侧系统性故障（key 失效/欠费/全面限流），不是数据问题。
+                # 必须炸出来：staging 条目未标记消费，下一轮会原样重取，零丢失；
+                # 若这里静默续跑，本轮会以 status=success、0 事件收场，批次无声蒸发
+                # （2026-07-26 review 确认过这条静默路径真实存在）。
+                raise RuntimeError(
+                    f"LLM enrichment returned 0/{len(deduped)} — aborting run; "
+                    f"staged items remain unconsumed for retry next round")
         used_hashes = [_url_hash_fn(e.get("url", "")) for e in enriched
                        if e.get("_enriched_by") == "claude-local"]
         stats["llm_cache_hits"] = len(used_hashes)
@@ -1095,8 +1172,15 @@ def run_pipeline() -> dict:
                 "；".join(f"{d['event_date']} {d['title'][:24]}" for d in stale_dropped[:5]))
 
         # 5. 事件指纹 + 语义聚合（DC-1 ~ DC-3）
+        #    成本闸关闭时 client 为 None：embed_texts 显式退化为零向量，
+        #    语义层不参与归并，只剩 DC-1/DC-2 规则去重。这会**降低**去重质量
+        #    （检修报告已确认"同事件刷屏"是活跃 P0），所以 A4 让 Mac 随 enrich
+        #    把向量一起算好回传——那之后这里就不再依赖个人 key 了。
         attach_fingerprints(enriched)
-        events = aggregate_events(enriched, get_openai_client(), tracker=tracker)
+        _agg_client = llm_gate.acquire("aggregate_embedding")
+        if _agg_client is None:
+            logger.warning("成本闸：语义聚合无可用 embedding 通道，本轮退化为规则去重")
+        events = aggregate_events(enriched, _agg_client, tracker=tracker)
         stats["events"] = len(events)
         lap("dedup_aggregate")
 
@@ -1140,8 +1224,17 @@ def run_pipeline() -> dict:
             persist_coin_metrics(events, conn)
         except Exception as e:
             logger.warning(f"coin metrics persist skipped: {e}")
-        # 存档标记放在写库全部成功之后（见 staging.fetch_staged_items 的说明）
-        staging.mark_staged_consumed(conn, staged_items)
+        # 交易实体必须排在 coin_metrics 之后：加密侧的"能不能买到"判据是
+        # coin_metrics.binance_spot，那是上一步刚算出来的。
+        try:
+            persist_tradable_entities(events, conn)
+        except Exception as e:
+            logger.warning(f"tradable entities persist skipped: {e}")
+        # 存档标记放在写库全部成功之后（见 staging.fetch_staged_items 的说明）。
+        # 只把**被成本闸拦下**的条目留在队列里等下一轮（断供不丢数据、恢复
+        # 自动回补的关键一环）；被信任闸/预过滤故意丢弃的照常标记消费，
+        # 否则它们会每轮重来一遍且队列无限增长。见 mark_staged_consumed。
+        staging.mark_staged_consumed(conn, staged_items, llm_gate.deferred_urls())
         lap("score_and_write")
 
         duration = round(time.time() - start, 2)

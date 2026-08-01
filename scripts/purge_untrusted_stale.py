@@ -127,14 +127,38 @@ def main():
 
         cur = conn.cursor()
         cur.execute(f"CREATE TABLE IF NOT EXISTS {BACKUP_TABLE} LIKE news_events")
+
+        # 列交集，显式列名 —— 不能用 SELECT *。
+        #
+        # 2026-08-02 实测炸过一次：BACKUP_TABLE 名字带日期（purged_stale_20260729），
+        # `IF NOT EXISTS` 会复用几天前建的那张表；而 news_events 期间加了
+        # tradable_entities/tradable_count 两列，`SELECT *` 就比备份表多出两列，
+        # 直接 1136 "Column count doesn't match value count"。
+        # 也就是说：**每次给 news_events 加列，这个脚本都会在下一次运行时炸**，
+        # 而且是在"要删数据了"这一步炸——最不该出问题的地方。
+        # 取两表列交集并显式写列名，加列减列都不再影响它。
+        def _cols(table):
+            c = conn.cursor()
+            c.execute(f"SHOW COLUMNS FROM {table}")
+            names = [r[0] for r in c.fetchall()]
+            c.close()
+            return names
+
+        shared = [c for c in _cols("news_events") if c in set(_cols(BACKUP_TABLE))]
+        col_list = ", ".join(f"`{c}`" for c in shared)
+        missing = [c for c in _cols("news_events") if c not in set(shared)]
+        if missing:
+            # 不静默：备份会缺这些列，删除本身仍安全，但恢复时要知道少了什么
+            print(f"⚠️  备份表 {BACKUP_TABLE} 缺少新列 {missing}，这些列不会进备份")
+
         ids = [r["id"] for r in targets]
         # 分批：id 列表可能上千，一次 IN 太长
         deleted = 0
         for i in range(0, len(ids), 200):
             chunk = ids[i:i + 200]
             ph = ",".join(["%s"] * len(chunk))
-            cur.execute(f"INSERT IGNORE INTO {BACKUP_TABLE} "
-                        f"SELECT * FROM news_events WHERE id IN ({ph})", chunk)
+            cur.execute(f"INSERT IGNORE INTO {BACKUP_TABLE} ({col_list}) "
+                        f"SELECT {col_list} FROM news_events WHERE id IN ({ph})", chunk)
             cur.execute(f"DELETE FROM news_events WHERE id IN ({ph})", chunk)
             deleted += cur.rowcount
             conn.commit()

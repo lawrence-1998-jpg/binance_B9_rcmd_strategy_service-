@@ -41,7 +41,11 @@ MARKET_KEYS = ("us_stock", "crypto", "macro_policy", "social_signal",
 # 这份 DEFAULTS 同时是「配置读不到时的兜底」和「校验时补齐缺失字段的来源」。
 DEFAULTS = {
     "base_weights": {"M": 26, "B": 16, "T": 16, "I": 14, "H": 10, "A": 10, "Q": 8},
-    "bonus": {"k_align": 0.25, "k_reversal": 0.20, "cap": 0.50},
+    # k_tradable/k_tradable_broad：交易实体加成（ADR-002 块 B）。分档的理由见
+    # crawler/market_mood.py 的 TRADABLE_BONUS_* 注释——挂 7 个 ticker 的盘前
+    # 综述恰恰最没有交易指向性，不分档会把它系统性顶上首屏。
+    "bonus": {"k_align": 0.25, "k_reversal": 0.20, "cap": 0.50,
+              "k_tradable": 0.06, "k_tradable_broad": 0.02},
     "market_weights": {"us_stock": 1.20, "crypto": 1.00, "macro_policy": 1.00,
                        "social_signal": 0.85, "general": 0.70, "hk_stock": 0.65,
                        "jp_stock": 0.60, "kr_stock": 0.55},
@@ -52,7 +56,8 @@ DEFAULTS = {
 # 各字段的允许区间。超界直接拒绝而不是夹紧——夹紧会让"我明明填了 500"
 # 变成静默的 200，用户以为生效了其实没有，比报错更难查。
 _RANGES = {
-    "bonus": {"k_align": (0.0, 1.0), "k_reversal": (0.0, 1.0), "cap": (0.0, 2.0)},
+    "bonus": {"k_align": (0.0, 1.0), "k_reversal": (0.0, 1.0), "cap": (0.0, 2.0),
+              "k_tradable": (0.0, 0.5), "k_tradable_broad": (0.0, 0.5)},
     "freshness": {"halflife_hours": (1.0, 720.0), "floor": (0.0, 1.0)},
     "mood": {"lookback_hours": (1, 720), "manual_override": (-1.0, 1.0)},
     "market": (0.0, 2.0),      # 与 crawler/market_weight.py 的 MIN/MAX_WEIGHT 一致
@@ -125,7 +130,10 @@ def validate(payload: dict) -> dict:
         for k, (lo, hi) in _RANGES["bonus"].items():
             if k in b:
                 out["bonus"][k] = _check_range(_num(b[k], f"bonus.{k}"), lo, hi, f"bonus.{k}")
-        if out["bonus"]["k_align"] + out["bonus"]["k_reversal"] > out["bonus"]["cap"] + 1e-9:
+        # 三项之和都要受 cap 约束：新增加分项若不纳入这条校验，
+        # 用户可以配出一个"声明封顶 0.5、实际能到 0.56"的配置。
+        if (out["bonus"]["k_align"] + out["bonus"]["k_reversal"]
+                + out["bonus"]["k_tradable"]) > out["bonus"]["cap"] + 1e-9:
             # 不自动夹紧：两个系数之和超过封顶说明用户对封顶的理解和实现不一致，
             # 这时候静默截断会让实验室显示的加成和实际生效的对不上。
             raise ConfigError(

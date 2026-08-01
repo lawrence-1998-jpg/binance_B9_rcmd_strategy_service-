@@ -158,6 +158,15 @@ def embed_texts(texts: list[str], client, tracker=None) -> np.ndarray:
     if not texts:
         return np.zeros((0, EMBED_DIM), dtype=np.float32)
 
+    # client=None 是**成本闸关闭**时的显式约定（ADR-002）：没有可用的付费通道，
+    # 直接退化为零向量，效果等同于"整批 embedding 失败"——零向量之间余弦为 0，
+    # 不会误归簇，只是语义层不再贡献归并，DC-1/DC-2 规则去重照常工作。
+    # 写成显式分支而不是让 None 掉进下面的 try/except：靠异常兜住能跑，
+    # 但把"设计内的降级"和"真的出故障了"混成同一条日志，事后没法区分。
+    if client is None:
+        logger.info(f"embedding 通道不可用（成本闸关闭），{len(texts)} 条退化为零向量")
+        return np.zeros((len(texts), EMBED_DIM), dtype=np.float32)
+
     vectors: list[list[float]] = []
     for start in range(0, len(texts), EMBED_BATCH):
         batch = [t[:8000] or " " for t in texts[start:start + EMBED_BATCH]]
@@ -301,6 +310,15 @@ def merge_cluster(group_items: list[dict], embeddings: list[np.ndarray]) -> dict
         })
 
     event = {**primary}
+    # 编辑部 ticker 取全簇并集：同一件事的不同报道标注的 ticker 未必一样
+    # （比如一家只标 MSFT、另一家标 MSFT+SPX），只取代表条会漏。
+    all_symbols = []
+    for item in group_items:
+        for sym in (item.get("matched_symbols") or "").split(","):
+            sym = sym.strip()
+            if sym and sym not in all_symbols:
+                all_symbols.append(sym)
+    event["matched_symbols"] = ",".join(all_symbols)
     # 事件身份就是它的指纹——这是本次重构的核心：id 不再来自 LLM 改写的标题，
     # 所以同一事件跨轮重复抓到时 id 保持稳定，写库会走 UPDATE 而非 INSERT。
     # 跨轮归并若在库里找到既有行，会在 storage 层用既有 id 覆盖这里的值。
