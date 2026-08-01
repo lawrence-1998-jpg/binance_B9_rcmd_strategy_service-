@@ -815,8 +815,27 @@ def persona_eval():
                       "文本粘贴或截图上传的新闻没有这些字段可用。",
         }
 
+    # 这条新闻涉及哪些**可交易标的**（ADR-002 块 B）。评测场景下尤其有用：
+    # "这条提到 NVDA，人设到底关不关心"是判断评分合理性的重要上下文。
+    # 走标题匹配那条阶梯（纯本地、零成本），所以粘贴文本/截图上传也能算，
+    # 不像 Momentum/Novelty 那样必须先有 event_id。
+    try:
+        from crawler import tradable as _tradable
+        _ents = _tradable.from_title(news_text[:400], news_text[:400])
+        if event_meta is not None:
+            # 有库内事件时叠加它已经算好的实体（含币安在架校验），去重
+            _seen = {e["symbol"] for e in _ents}
+            for e in _tradable.resolve(event_meta):
+                if e["symbol"] not in _seen:
+                    _ents.append(e)
+                    _seen.add(e["symbol"])
+    except Exception:
+        logger.exception("交易实体识别失败（不影响评测结果本身）")
+        _ents = []
+
     return jsonify({
         "news_text": news_text,
+        "tradable_entities": _ents,
         "personas": personas_out,
         "persona_errors": errors,
         "cost_usd": _chat_cost_usd(tracker),

@@ -495,8 +495,11 @@ def get_news():
             now_dt = now_local()
             factors_by_id = {e["id"]: lab_compute_factors(e, baseline, now_dt, None)
                              for e in pool}
+            # 混排配额同样从已部署配置取——不传的话线上永远是"开关关着"，
+            # 又是一个"实验室调了、部署了、线上没反应"的死配置。
             scored = lab_rank_pool(pool, factors_by_id, weights, eff_mood,
-                                   bonus_coefs, mkt_weights)
+                                   bonus_coefs, mkt_weights,
+                                   mix_cfg=(prod_cfg or {}).get("mix"))
             data = []
             for e, factors, final, base, detail, mkt in scored[offset:offset + limit]:
                 e["bonus"] = detail

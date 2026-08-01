@@ -1108,6 +1108,15 @@ footer{border-top:1px solid var(--rule);padding:26px 0 40px;font-size:12px;color
 #panel-5 .lb-tag.trade-idx{background:transparent;color:var(--ink-3);
   border:1px solid var(--rule);font-weight:500}
 #panel-5 .lb-tag.bonus-trade{background:var(--lab-a100);color:var(--lab-a800)}
+#panel-5 .lb-tag.mix{background:var(--lab-g100);color:var(--lab-g800);font-weight:600}
+#panel-5 .lb-mix{margin:14px 0 4px;padding:12px 14px;border:1px solid var(--rule);
+  border-radius:10px;background:var(--paper)}
+#panel-5 .lb-mix-h{font-weight:700;font-size:13px;margin-bottom:8px}
+#panel-5 .lb-mix-h .sub{font-weight:400;color:var(--ink-3);font-size:11px;margin-left:6px}
+#panel-5 .lb-mix-row{display:flex;align-items:center;gap:8px;font-size:13px;
+  margin:6px 0;cursor:pointer}
+#panel-5 .lb-mix-num{width:48px;padding:2px 6px;border:1px solid var(--rule);
+  border-radius:6px;text-align:center;font-variant-numeric:tabular-nums}
 #panel-5 .lb-tag.ver{background:var(--lab-g100);color:var(--lab-g800)}
 /* 2026-07-29：情绪同向/反转加成标签，和 tab02（真实数据展示）保持同一套
    语义色——反转用最深的赤陶+反白，做成"值得多看一眼"的醒目样式（它本来就
@@ -3020,6 +3029,24 @@ footer{border-top:1px solid var(--rule);padding:26px 0 40px;font-size:12px;color
             <label class="lb-moodauto">
               <input type="checkbox" id="moodAuto" checked> 跟随实时情绪（取消勾选后可手动指定方向）
             </label>
+          </div>
+
+          <div class="lb-mix">
+            <div class="lb-mix-h">混排策略 <span class="sub">Mix · 版面配额</span></div>
+            <label class="lb-mix-row">
+              <input type="checkbox" id="mixQuotaOn">
+              <span>每 <input type="number" id="mixQuotaN" min="1" max="10" value="3"
+                    class="lb-mix-num"> / 10 条至少含交易实体</span>
+            </label>
+            <label class="lb-mix-row">
+              <input type="checkbox" id="mixPinTop">
+              <span>置顶实体（强制 Top1、Top3 为有实体内容）</span>
+            </label>
+            <p class="lb-hint" style="margin:8px 0 0">
+              加分项是<b>连续倾向</b>，保证不了"每 10 条必有 N 条"——分数分布一变比例就变。
+              混排是<b>结构性配额</b>：只重排、不改分，被提上来的条目会标注原因，
+              所以"为什么这条在这里"始终可解释。整池没有实体内容时不硬凑。
+            </p>
           </div>
 
           <p class="lb-hint" id="bonusHint">
@@ -5453,6 +5480,22 @@ function renderEvalResults(body, isExample){
     </div>`;
   }
   html += `<div class="news-preview">${escapeHtml(body.news_text)}</div>`;
+  // 这条新闻涉及的可交易标的（ADR-002）。评测时很关键：人设给了低分，是
+  // 因为内容本身弱，还是因为它压根没落到用户能买的标的上？摆出来才好判断。
+  const _te = body.tradable_entities || [];
+  if (_te.length){
+    html += `<div class="note" style="margin:10px 0 14px">
+      <span class="lbl">可交易标的</span>` +
+      _te.slice(0,6).map(t => `<span class="tag ${t.tradable ? 'trade' : 'trade-idx'}">` +
+        escapeHtml(t.symbol) + (t.venue === 'binance_spot' ? '·币安' : '') + `</span>`).join(' ') +
+      `<span style="color:var(--ink-3);margin-left:8px">
+        这条新闻能直接对应到用户可下单的标的，通常更容易引发交易动作</span></div>`;
+  } else {
+    html += `<div class="note" style="margin:10px 0 14px">
+      <span class="lbl">可交易标的</span>
+      <span style="color:var(--ink-3)">未识别到 —— 纯宏观/政策类内容常见。
+      人设若给低分，可能正是因为"看完不知道能买什么"</span></div>`;
+  }
   html += `<div class="kpi-row" style="margin-bottom:4px">
     <div class="kpi"><div class="l">评测 Persona 数</div><div class="v">${body.personas.length}</div></div>
     <div class="kpi"><div class="l">本次成本</div><div class="v">$${body.cost_usd.toFixed(4)}</div></div>
@@ -6524,7 +6567,9 @@ var BONUSES = [
      它命中面很广（26% 的事件有可交易标的），系数给大了会把"有没有 ticker"
      变成事实上的主排序键，盖过重要性本身。挂 ≥5 个 ticker 的泛市场综述走
      另一档更低的系数，见后端 TRADABLE_BONUS_BROAD。 */
-  {k:"k_tradable", name:"交易实体加成", sub:"Tradable", max:20, color:"var(--lab-f-m)"}
+  /* 上限 2026-08-02 由 20 提到 60（Lawrence：「这个上限太低了，要再打高」）。
+     配合 cap 由 50% 提到 100%——否则调到 20% 以上会撞封顶，滑杆能拖但不生效。 */
+  {k:"k_tradable", name:"交易实体加成", sub:"Tradable", max:60, color:"var(--lab-f-m)"}
 ];
 var DEFAULT_BONUS = {k_align:25, k_reversal:20, k_tradable:6};
 
@@ -6804,6 +6849,22 @@ function currentSector(){ return $("#labFSector").value || null; }
    勾选「跟随实时情绪」时发 null，后端按原逻辑用池子现算的值；取消勾选后发
    -1..1 的数字，后端直接用它算同向/反转加成。滑杆本身是 -100..100 的整数
    （range 控件不支持小数步进得很别扭），发出去之前除以 100。 */
+/* 混排配额的当前设置。开关关着时返回全 0/false，等价于"不混排"——
+   不返回 null 是刻意的：null 会走后端默认值，而用户明确关掉的意思是关掉。 */
+function mixCfgValue(){
+  var on = $("#mixQuotaOn"), n = $("#mixQuotaN"), pin = $("#mixPinTop");
+  return {
+    min_tradable_per_10: (on && on.checked && n) ? Math.max(1, Math.min(10, +n.value || 0)) : 0,
+    pin_tradable_top: !!(pin && pin.checked)
+  };
+}
+function bindMixControls(){
+  ["mixQuotaOn","mixQuotaN","mixPinTop"].forEach(function(id){
+    var el = $("#" + id);
+    if (el) el.addEventListener("change", function(){ if (window.runReweight) runReweight(); });
+  });
+}
+
 function moodOverrideValue(){
   var auto = $("#moodAuto");
   if (!auto || auto.checked) return null;
@@ -6892,6 +6953,9 @@ function currentConfigPayload(){
                  k_tradable_broad: (broad === undefined || broad === null) ? 0.02 : broad,
                  cap: (cap === undefined || cap === null) ? 0.5 : cap};
   }
+  // 混排配额要跟着基线一起存/部署——只在实验室生效而存不进版本的话，
+  // "部署到 Agent"之后线上就没有配额，又是一次"实验室调了线上没反应"。
+  cfg.mix = mixCfgValue();
   var mo = moodOverrideValue();
   cfg.mood.manual_override = mo;
   if (activeBaseline && activeBaseline.mood && activeBaseline.mood.lookback_hours){
@@ -7137,6 +7201,12 @@ function applyBaselineToPanels(cfg){
     if (cfg.bonus.k_align !== undefined)    bonusSingle.values.k_align    = Math.round(cfg.bonus.k_align * 100);
     if (cfg.bonus.k_reversal !== undefined) bonusSingle.values.k_reversal = Math.round(cfg.bonus.k_reversal * 100);
     if (cfg.bonus.k_tradable !== undefined)  bonusSingle.values.k_tradable  = Math.round(cfg.bonus.k_tradable * 100);
+  }
+  if (cfg.mix){
+    var qn = cfg.mix.min_tradable_per_10 || 0;
+    if ($("#mixQuotaOn")) $("#mixQuotaOn").checked = qn > 0;
+    if ($("#mixQuotaN") && qn > 0) $("#mixQuotaN").value = qn;
+    if ($("#mixPinTop")) $("#mixPinTop").checked = !!cfg.mix.pin_tradable_top;
     bonusSingle.build();
   }
   if (marketSingle && cfg.market_weights){
@@ -7210,6 +7280,7 @@ function init(){
   // 灌回三组滑杆——它必须在三个 Panel 构造之后跑，否则灌进去的值会被
   // 构造函数的默认值覆盖掉。
   bindMoodControls();
+  bindMixControls();
   var sb = $("#saveBaseBtn");   if (sb) sb.addEventListener("click", openSaveBaselineModal);
   var hb = $("#baseHistBtn");   if (hb) hb.addEventListener("click", openBaselineHistory);
   loadBaseline();
@@ -7491,7 +7562,8 @@ function runReweight(){
     weights: panelSingle.rawWeights(),
     bonus: bonusSingle ? bonusSingle.coefs() : {},
     market_weights: marketSingle ? marketSingle.weights() : {},
-    mood_override: moodOverrideValue()
+    mood_override: moodOverrideValue(),
+    mix: mixCfgValue()
   });
   api("/api/tools/reweight", body).then(function(d){
     if (seq !== reweightSeq) return;                      // 过期响应，丢弃
@@ -7534,6 +7606,9 @@ function runReweight(){
               (((r.bonus || {}).tradable || 0) > 0
                 ? '  ·  <span class="lb-tag bonus-trade">◎实体 +' + (r.bonus.tradable*100).toFixed(1) + '%</span>'
                 : '') +
+              // 被混排提上来的条目要标出来：否则用户看到分数不高的内容排在
+              // 前面会以为排序坏了。"为什么这条在这里"必须始终可解释。
+              (r.mix_reason ? '  ·  <span class="lb-tag mix">⇅ ' + esc(r.mix_reason) + '</span>' : '') +
             '</div>' +
             ((r.is_rumor || r.verification_status === "VERIFIED") ?
               '<div class="meta">' +

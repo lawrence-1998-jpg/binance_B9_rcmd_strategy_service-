@@ -323,9 +323,21 @@ def qa_tools(run_paid: bool):
     st, _d = http("/api/strategy-config", "POST",
                   {"config": {"market_weights": {"us_stock": 5.0}}})
     check(g, "基线配置：市场权重越界应 400", st == 400, f"status={st}")
+    # 2026-08-02 口径更新：封顶校验比的是**单条事件实际可能拿到的最大加成**
+    # ——同向与反转互斥（一条只会命中其一），所以是 max(align, reversal) +
+    # tradable，不是三项之和。旧用例发的是 0.4+0.3（和 0.7 > 0.5）但实际峰值
+    # 只有 0.4，在新口径下**本来就该通过**，改成真正会越界的组合。
     st, _d = http("/api/strategy-config", "POST",
-                  {"config": {"bonus": {"k_align": 0.4, "k_reversal": 0.3, "cap": 0.5}}})
-    check(g, "基线配置：加分项超封顶应 400", st == 400, f"status={st}")
+                  {"config": {"bonus": {"k_align": 0.4, "k_reversal": 0.3,
+                                        "k_tradable": 0.3, "cap": 0.5}}})
+    check(g, "基线配置：加分项超封顶应 400（峰值 0.4+0.3=0.7 > 0.5）",
+          st == 400, f"status={st}")
+    # 反向用例：和超封顶但峰值没超，必须放行——否则又会出现"默认配置都存不进去"
+    st, _d = http("/api/strategy-config", "POST",
+                  {"config": {"bonus": {"k_align": 0.4, "k_reversal": 0.3,
+                                        "k_tradable": 0.05, "cap": 0.5}}})
+    check(g, "基线配置：三项和超封顶但峰值未超应放行（互斥口径）",
+          st == 200, f"status={st}")
     st, _d = http("/api/strategy-config/rollback", "POST", {"version": 999999})
     check(g, "基线配置：回滚到不存在版本应 400", st == 400, f"status={st}")
     st, _d = http("/api/strategy-config/deploy", "POST", {"version": 999999})
@@ -645,6 +657,25 @@ def qa_market_expansion():
     _probe = {k: 0.123 for k in _bonus_keys}
     _resolved = _lt.resolve_bonus_coefs(_probe)
     _dropped = {k for k in _bonus_keys if k != "cap" and k not in _resolved}
+    # 混排配额同理走一遍行为验证（今天在 k_tradable 上栽过，不再只靠信任）
+    _mix_probe = _lt.resolve_mix_cfg({"min_tradable_per_10": 7, "pin_tradable_top": True})
+    check(g3, "混排配额能穿过请求解析层",
+          _mix_probe.get("min_tradable_per_10") == 7
+          and _mix_probe.get("pin_tradable_top") is True,
+          f"解析结果={_mix_probe}")
+
+    # 默认配置必须能通过校验——2026-08-02 实测栽过：加了 k_tradable 之后
+    # 三项和 0.51 > cap 0.50，**连默认值都存不进去**，"存为基线"整个挂掉。
+    # 这条断言把"默认配置自身合法"钉死，任何新增加分项都逃不过。
+    try:
+        _sc.validate({"bonus": dict(_sc.DEFAULTS["bonus"]),
+                      "mix": dict(_sc.DEFAULTS["mix"])})
+        _defaults_ok, _why = True, ""
+    except Exception as _e:
+        _defaults_ok, _why = False, str(_e)
+    check(g3, "DEFAULTS 自身能通过 validate（存为基线不会当场失败）",
+          _defaults_ok, _why)
+
     check(g3, "bonus 系数能真正穿过请求解析层（不被硬编码名单过滤）",
           not _dropped,
           f"这些键在 resolve_bonus_coefs 就被丢了，滑杆调了不生效：{sorted(_dropped)}")

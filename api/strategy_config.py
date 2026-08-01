@@ -44,22 +44,29 @@ DEFAULTS = {
     # k_tradable/k_tradable_broad：交易实体加成（ADR-002 块 B）。分档的理由见
     # crawler/market_mood.py 的 TRADABLE_BONUS_* 注释——挂 7 个 ticker 的盘前
     # 综述恰恰最没有交易指向性，不分档会把它系统性顶上首屏。
-    "bonus": {"k_align": 0.25, "k_reversal": 0.20, "cap": 0.50,
+    # cap 2026-08-02 由 0.50 提到 1.00：加了交易实体这一项后，0.5 的空间要被
+    # 三项分，任何一项想调到有感的强度都会撞顶。Lawrence 明确要求"上限太低了，
+    # 要再打高"。cap 本身仍是硬封顶，只是给出了调节余地。
+    "bonus": {"k_align": 0.25, "k_reversal": 0.20, "cap": 1.00,
               "k_tradable": 0.06, "k_tradable_broad": 0.02},
     "market_weights": {"us_stock": 1.20, "crypto": 1.00, "macro_policy": 1.00,
                        "social_signal": 0.85, "general": 0.70, "hk_stock": 0.65,
                        "jp_stock": 0.60, "kr_stock": 0.55},
     "freshness": {"halflife_hours": 48, "floor": 0.15, "enabled": True},
     "mood": {"lookback_hours": 24, "manual_override": None},
+    # 混排配额（2026-08-02）。加分项是连续倾向，保证不了"每 10 条必有 X 条"
+    # 这种结构性版面要求——分数分布一变比例就变。这一段管的是版面结构。
+    "mix": {"min_tradable_per_10": 0, "pin_tradable_top": False},
 }
 
 # 各字段的允许区间。超界直接拒绝而不是夹紧——夹紧会让"我明明填了 500"
 # 变成静默的 200，用户以为生效了其实没有，比报错更难查。
 _RANGES = {
     "bonus": {"k_align": (0.0, 1.0), "k_reversal": (0.0, 1.0), "cap": (0.0, 2.0),
-              "k_tradable": (0.0, 0.5), "k_tradable_broad": (0.0, 0.5)},
+              "k_tradable": (0.0, 1.0), "k_tradable_broad": (0.0, 1.0)},
     "freshness": {"halflife_hours": (1.0, 720.0), "floor": (0.0, 1.0)},
     "mood": {"lookback_hours": (1, 720), "manual_override": (-1.0, 1.0)},
+    "mix": {"min_tradable_per_10": (0, 10)},
     "market": (0.0, 2.0),      # 与 crawler/market_weight.py 的 MIN/MAX_WEIGHT 一致
     "base": (0.0, 100.0),
 }
@@ -120,6 +127,21 @@ def validate(payload: dict) -> dict:
         out["base_weights"] = {k: round(v * 100.0 / total, 4) for k, v in vals.items()}
 
     # ── 情绪加分项 ────────────────────────────────────────────────
+    if "mix" in payload:
+        m = payload["mix"]
+        if not isinstance(m, dict):
+            raise ConfigError("mix 必须是对象")
+        extra = set(m) - set(DEFAULTS["mix"])
+        if extra:
+            raise ConfigError(f"mix 含未知字段：{sorted(extra)}")
+        if "min_tradable_per_10" in m:
+            lo, hi = _RANGES["mix"]["min_tradable_per_10"]
+            out["mix"]["min_tradable_per_10"] = int(_check_range(
+                _num(m["min_tradable_per_10"], "mix.min_tradable_per_10"),
+                lo, hi, "mix.min_tradable_per_10"))
+        if "pin_tradable_top" in m:
+            out["mix"]["pin_tradable_top"] = bool(m["pin_tradable_top"])
+
     if "bonus" in payload:
         b = payload["bonus"]
         if not isinstance(b, dict):
@@ -130,15 +152,24 @@ def validate(payload: dict) -> dict:
         for k, (lo, hi) in _RANGES["bonus"].items():
             if k in b:
                 out["bonus"][k] = _check_range(_num(b[k], f"bonus.{k}"), lo, hi, f"bonus.{k}")
-        # 三项之和都要受 cap 约束：新增加分项若不纳入这条校验，
-        # 用户可以配出一个"声明封顶 0.5、实际能到 0.56"的配置。
-        if (out["bonus"]["k_align"] + out["bonus"]["k_reversal"]
-                + out["bonus"]["k_tradable"]) > out["bonus"]["cap"] + 1e-9:
+        # 校验的是**单条事件实际可能拿到的最大加成**，不是三项之和。
+        #
+        # 2026-08-02 修正：原来写的是 k_align + k_reversal（后来我又加上
+        # k_tradable）三项相加比封顶——那对应一个**永远不会发生**的场景：
+        # 同向与反转在 market_mood 里是互斥的（reversal_bonus 对同向事件
+        # 直接返回 0），一条事件只可能拿到其中一个。按三项和限制，等于用一个
+        # 不存在的极端去卡真实配置，直接后果是加了交易实体之后**连默认配置
+        # 都存不进去**（0.25+0.20+0.06=0.51 > 0.50），"存为基线"整个功能挂掉。
+        _peak = (max(out["bonus"]["k_align"], out["bonus"]["k_reversal"])
+                 + out["bonus"]["k_tradable"])
+        if _peak > out["bonus"]["cap"] + 1e-9:
             # 不自动夹紧：两个系数之和超过封顶说明用户对封顶的理解和实现不一致，
             # 这时候静默截断会让实验室显示的加成和实际生效的对不上。
             raise ConfigError(
-                f"同向({out['bonus']['k_align']}) + 反转({out['bonus']['k_reversal']}) "
-                f"超过封顶 {out['bonus']['cap']}，请调低系数或提高封顶")
+                f"单条最大加成 {_peak:.2f}（同向{out['bonus']['k_align']}与反转"
+                f"{out['bonus']['k_reversal']}互斥取大 + 交易实体"
+                f"{out['bonus']['k_tradable']}）超过封顶 {out['bonus']['cap']}，"
+                f"请调低系数或提高封顶")
 
     # ── 市场重要性 ────────────────────────────────────────────────
     if "market_weights" in payload:

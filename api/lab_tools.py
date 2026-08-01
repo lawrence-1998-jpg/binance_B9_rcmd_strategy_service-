@@ -382,6 +382,10 @@ def event_card(e: dict, factors: dict | None = None, score: float | None = None,
         # 实体标签空"。取数、计算、序列化、渲染是四个独立环节，加字段要四处都过。
         "tradable_entities": e.get("tradable_entities"),
         "tradable_count": e.get("tradable_count"),
+        # 混排把这条提上来的原因。今天第 5 次栽在"响应字段清单"上了——
+        # 取数/计算/序列化/渲染是四个独立环节，新字段要四处都过。
+        # 没有它，用户看到一条分数不高的内容排在前面会以为是排序错了。
+        "mix_reason": e.get("mix_reason"),
         "source_names": e.get("source_names"),
         # 2026-07-29：补原文信源链接。此前卡片只有 source_names（纯名字，没有
         # url），点开展开区没法直接跳到原文核实——Lawrence 明确要"点开要有
@@ -468,9 +472,100 @@ def resolve_bonus_coefs(raw: dict) -> dict:
     return out
 
 
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 混排策略（ADR-002 追加，2026-08-02）
+#
+# 需求原话："每10个稿件中，至少有X个是实体内容，并基于此作混排生效"
+#          "置顶实体，开启后，Top1和TOP3位置强制是有实体内容"
+#
+# 为什么单独做一层，而不是继续调加分系数：加分是**连续**的，只能改变倾向，
+# 保证不了"每 10 条里必有 X 条"这种**结构性配额**——分数分布一变，比例就变了。
+# 老板要的是稳定的版面结构（打开就能看到可交易标的），那是配额问题不是权重问题。
+#
+# 两个开关都**只重排、不改分**：分数仍是排序依据与展示值，混排只调整呈现顺序。
+# 这样"为什么这条在这里"始终可解释——要么因为分高，要么因为被配额提上来，
+# 后者在返回里带 mix_reason 标记，前端/实验室能显示出来。
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _has_tradable(entry) -> bool:
+    """entry 是 rank_pool 的元组 (event, factors, final, base, bonus, market)。"""
+    e = entry[0]
+    n = e.get("tradable_count")
+    if n is None:
+        from crawler import tradable as _t
+        n = _t.tradable_count(e.get("tradable_entities"))
+    return int(n or 0) > 0
+
+
+def apply_mix_strategy(scored: list, mix_cfg: dict | None):
+    """按配额重排。scored 必须已按分数降序。返回新列表（不原地改）。
+
+    min_tradable_per_10：每个 10 条窗口里至少 X 条有可交易标的。做法是在窗口内
+      从后面的候选里"借"最高分的实体条目上来，被换下去的是窗口内最低分的
+      非实体条目——保证代价最小（换掉的是这一窗里最不重要的）。
+    pin_tradable_top：把 Top1 / Top3 强制换成实体条目（各取当前最高分的实体条）。
+
+    两者叠加时先做配额、再做置顶：置顶是更强的约束，放在后面才不会被配额打乱。
+    """
+    if not scored or not mix_cfg:
+        return scored
+    out = list(scored)
+
+    quota = int(mix_cfg.get("min_tradable_per_10") or 0)
+    if quota > 0:
+        window = 10
+        for start in range(0, len(out), window):
+            end = min(start + window, len(out))
+            if end - start < window:
+                break        # 不足一窗不强求，否则尾部会被反复搬运
+            idx = list(range(start, end))
+            have = [i for i in idx if _has_tradable(out[i])]
+            need = quota - len(have)
+            if need <= 0:
+                continue
+            # 候选：窗口之后、尚未使用的实体条目，按分数（即顺序）从高到低
+            donors = [j for j in range(end, len(out)) if _has_tradable(out[j])]
+            # 被换下的：窗口内非实体条目里分最低的（从窗口末尾往前）
+            victims = [i for i in reversed(idx) if not _has_tradable(out[i])]
+            for _ in range(min(need, len(donors), len(victims))):
+                j, i = donors.pop(0), victims.pop(0)
+                out[i], out[j] = out[j], out[i]
+                out[i][0]["mix_reason"] = f"配额提升（每{window}条保底{quota}条实体）"
+
+    if mix_cfg.get("pin_tradable_top"):
+        for pos in (0, 2):          # Top1 与 Top3（0-based）
+            if pos >= len(out) or _has_tradable(out[pos]):
+                continue
+            donor = next((j for j in range(pos + 1, len(out)) if _has_tradable(out[j])), None)
+            if donor is None:
+                break               # 整池都没有实体内容，不硬凑
+            entry = out.pop(donor)
+            out.insert(pos, entry)  # 用插入而不是交换：被顶下去的条目整体后移
+            entry[0]["mix_reason"] = f"置顶实体（强制 Top{pos + 1}）"
+    return out
+
+
+def resolve_mix_cfg(raw: dict) -> dict:
+    """解析混排配额。键名与默认值同样取自 strategy_config.DEFAULTS，
+    不再手写第二份名单——刚在 k_tradable 上栽过一次（透传写了、源头名单没加，
+    表现是滑杆调了完全没反应）。"""
+    raw = raw or {}
+    out = dict(strategy_config.DEFAULTS["mix"])
+    if "min_tradable_per_10" in raw:
+        try:
+            lo, hi = strategy_config._RANGES["mix"]["min_tradable_per_10"]
+            out["min_tradable_per_10"] = max(lo, min(hi, int(raw["min_tradable_per_10"])))
+        except (TypeError, ValueError):
+            pass
+    if "pin_tradable_top" in raw:
+        out["pin_tradable_top"] = bool(raw["pin_tradable_top"])
+    return out
+
+
 def rank_pool(events: list[dict], factors_by_id: dict, weights: dict,
               mood_score=None, bonus_coefs: dict | None = None,
-              market_weights: dict | None = None):
+              market_weights: dict | None = None, mix_cfg: dict | None = None):
     """四段式打分排序：BaseScore(加权) × 市场重要性 × 新鲜度 × (1 + 加分项)。
 
     返回 [(event, factors, final_score, base_score, bonus_detail, market_detail), ...]
@@ -503,7 +598,11 @@ def rank_pool(events: list[dict], factors_by_id: dict, weights: dict,
         final = base * mkt["multiplier"] * fresh * detail["multiplier"]
         scored.append((e, f, final, base, detail, mkt))
     scored.sort(key=lambda x: -x[2])
-    return scored
+    # 混排放在**这个函数内部**，而不是各调用方自己做——生产（api/server.py）
+    # 与实验室共用 rank_pool，放里面才能从结构上保证两边行为一致。
+    # 这正是"实验工具必须与生产同公式"那条教训的做法：不是靠纪律记得两边都改，
+    # 是让两边根本没有分开的机会。
+    return apply_mix_strategy(scored, mix_cfg)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -531,11 +630,13 @@ def reweight():
     weights = normalize_weights(weights_raw, use_rel)
 
     bonus_coefs = resolve_bonus_coefs(body.get("bonus", {}))
+    mix_cfg = resolve_mix_cfg(body.get("mix", {}))
     mkt_weights = market_weight.resolve_weights(body.get("market_weights"))
     mood, mood_manual = resolve_mood(events, body.get("mood_override"))
 
     factors_by_id = {e["id"]: compute_factors(e, baseline, now, sector) for e in events}
-    scored = rank_pool(events, factors_by_id, weights, mood, bonus_coefs, mkt_weights)
+    scored = rank_pool(events, factors_by_id, weights, mood, bonus_coefs, mkt_weights,
+                       mix_cfg=mix_cfg)
 
     prod_order = sorted(events, key=lambda e: -(e.get("importance_score") or 0))
     prod_rank = {e["id"]: i + 1 for i, e in enumerate(prod_order)}
@@ -628,8 +729,12 @@ def compare():
     mood, _mood_manual = resolve_mood(events, body.get("mood_override"))
 
     mkt_weights = market_weight.resolve_weights(body.get("market_weights"))
-    scored_a = rank_pool(events, factors_by_id, weights_a, mood, bonus_a, mkt_weights)
-    scored_b = rank_pool(events, factors_by_id, weights_b, mood, bonus_b, mkt_weights)
+    # 两版共用同一份混排配额：对比的是权重/加分差异，版面配额必须是受控变量。
+    mix_cfg = resolve_mix_cfg(body.get("mix", {}))
+    scored_a = rank_pool(events, factors_by_id, weights_a, mood, bonus_a, mkt_weights,
+                         mix_cfg=mix_cfg)
+    scored_b = rank_pool(events, factors_by_id, weights_b, mood, bonus_b, mkt_weights,
+                         mix_cfg=mix_cfg)
 
     rank_a = {e["id"]: i + 1 for i, (e, *_rest) in enumerate(scored_a)}
     rank_b = {e["id"]: i + 1 for i, (e, *_rest) in enumerate(scored_b)}
