@@ -325,6 +325,34 @@ NEWS_SCHEMA = {
                 "breadth_level": {"type": "string",
                                   "enum": ["cross_market", "market_index", "sector",
                                            "multi_asset", "single_asset"]},
+                # ── 行情变动（2026-08-02，冲击力因子的根治）─────────────
+                #
+                # 此前冲击力的"幅度"完全靠正则从文本里抠百分比，然后用排除词表
+                # 判断"这个百分数是不是涨跌幅"。实测证明这条路走不通：百分比在
+                # 财经文本里能表示的东西是无穷集合（支持率/占比/覆盖率/税率/
+                # 波动率/整合率/市值占GDP比/门票处理量…），排除表连补四轮仍在漏，
+                # 一度让"BIP-110 满额信号 100%"这种协议投票阈值排到首屏第一。
+                #
+                # 判断"这个数字是不是价格变动"本质是**语义理解**，不是模式匹配。
+                # 让已经在读全文的 LLM 直接回答，才是根治。
+                #
+                # 刻意拆成三个字段而不是一个数：
+                #   is_price_move —— 布尔判断单独拿出来，便于 QA 断言与人工核查
+                #   move_pct      —— 只有 is_price_move=true 时才有意义
+                #   move_horizon  —— 日内剧烈波动和"年内累计涨120%"是两回事，
+                #                    后者是叙事回顾不是冲击力，必须能区分
+                "price_move": {
+                    "type": "object",
+                    "properties": {
+                        "is_price_move": {"type": "boolean"},
+                        "move_pct": {"type": ["number", "null"]},
+                        "move_horizon": {"type": "string",
+                                         "enum": ["intraday", "multi_day",
+                                                  "long_term", "none"]},
+                    },
+                    "required": ["is_price_move", "move_pct", "move_horizon"],
+                    "additionalProperties": False,
+                },
                 "event_tier": {"type": "string", "enum": ["S", "A", "B", "C", "D"]},
                 # 事件指纹三元组 —— 去重的第一道网，见 dedup.build_fingerprint
                 "event_subject": {"type": "string"},
@@ -341,7 +369,7 @@ NEWS_SCHEMA = {
                 "title_en", "title_zh", "description_short_en", "description_short_zh",
                 "description_long_zh", "sector_tags", "coins",
                 "entities", "sentiment", "sentiment_score", "impact_horizon",
-                "news_type", "market_scope", "breadth_level", "event_tier",
+                "news_type", "market_scope", "breadth_level", "price_move", "event_tier",
                 "event_subject", "event_action", "event_date",
                 "score_market_impact", "score_authority", "score_quality",
                 "credibility_score", "is_rumor", "rumor_reason",
@@ -419,6 +447,52 @@ A-share tickers) with any value — this content should not reach you at all (fi
 if it slips through, classify as macro_policy ONLY if the story is about broad Chinese economic
 policy (PBOC rate moves, GDP, tariffs affecting global markets), never if it is about specific
 A-share index levels or individual mainland-listed stocks.
+
+## PRICE MOVE (for `price_move`) — is a number in this story an actual PRICE change?
+
+This exists because percentages in financial text mean many different things, and only ONE of
+them belongs in an impact score. Ask: **did the market price of a tradable asset actually move
+by this much?**
+
+`is_price_move: true` ONLY when the number is how much an asset's PRICE (or an index level)
+actually moved:
+  "Bitcoin fell 8%" · "Nikkei -4.2%" · "AVAX up 8.24% in 24h" · "ASTEROID down 52% in 20 min"
+  "Tesla shares surge 12%" · "gold hits record, +3% today"
+
+`is_price_move: false` for EVERYTHING else, even though a move verb is often right next to it:
+  · market share / dominance   "Upbit share RISES to 67.4%", "Bitcoin dominance RISES above 58%"
+  · ratios and rates           tax rate 20%, interest rate, approval rating 33%, volatility 60%,
+                               AI adoption rate 75%, staking ratio, unemployment rate
+  · coverage / proportion      "tariffs COVER 99% of imports", "72% of institutional volume"
+  · earnings vs expectations   "EPS BEAT estimates by 30.67%", "revenue 10.95% above forecast"
+  · analyst targets            "price target RAISED 5.1%" (the target moved, not the price)
+  · statistics and history     "August's best month, +65% in 2017", "median return", seasonality
+  · flows and quantities       "$18B of oil sold", "central banks bought 62% more gold",
+                               "TVL fell 38% over six months" (that's a half-year aggregate)
+  · protocol / governance      "BIP-110 signalling at 100%", "97% of nodes upgraded"
+
+The trap to avoid: **a rise/fall verb next to a number does NOT make it a price move.**
+Market share rises, approval ratings fall, adoption rates climb — none of those are prices.
+Ask what the number MEASURES, not what verb sits beside it.
+
+`move_pct`: **how much the price CHANGED**, as a positive number (8.24 for both +8.24% and
+-8.24%; direction lives in `sentiment`). Null when `is_price_move` is false.
+
+Two traps on `move_pct` specifically:
+  · A LEVEL is not a CHANGE. "30-year Treasury yield rose TO 5.26%" — 5.26 is where the yield
+    now sits, not how far it moved; move_pct is null here. Same for "BTC dominance at 58%",
+    "funding rate at 0.01%". Only "rose BY x%" gives you a move_pct.
+  · If the story clearly describes a price move but never states its size ("TLT fell to a
+    10-month low", "gold hit a record"), keep `is_price_move: true` but set `move_pct: null`.
+    Never borrow an unrelated number from elsewhere in the text to fill it.
+
+`move_horizon`: over what period did the price move?
+  · intraday   — today / last 24h / "in 20 minutes" (this is what real impact looks like)
+  · multi_day  — over a few days or this week
+  · long_term  — year-to-date, since launch, over six months (narrative recap, NOT impact)
+  · none       — when `is_price_move` is false
+
+If several assets moved, report the one the headline is actually about (usually the largest).
 
 ## EVENT FINGERPRINT — read this carefully, it drives de-duplication
 `event_subject`, `event_action` and `event_date` identify WHICH REAL-WORLD EVENT this item

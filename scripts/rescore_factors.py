@@ -174,7 +174,7 @@ def rescore(conn, dry_run: bool = False) -> tuple:
     cur = conn.cursor(dictionary=True)
     cur.execute("""
         SELECT id, date, title_zh, title_en, description_short_zh, sources,
-               breadth_level, score_market_impact, score_timeliness,
+               breadth_level, price_move, score_market_impact, score_timeliness,
                score_hotness, score_authority, score_quality,
                importance_score AS old_importance,
                is_rumor, verification_status
@@ -197,6 +197,9 @@ def rescore(conn, dry_run: bool = False) -> tuple:
             "description_short_zh": r.get("description_short_zh"),
             "sources": _json_col(r.get("sources"), []),
             "breadth_level": r.get("breadth_level"),
+            # 语义判断优先于正则兜底（见 scoring.compute_punch）。不取这一列的话，
+            # 重算会退回正则口径，把刚补好的语义结果又覆盖回去。
+            "price_move": _json_col(r.get("price_move"), None),
         }
         punch = scoring.compute_punch(event)
         B = scoring.compute_breadth(event)

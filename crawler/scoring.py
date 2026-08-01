@@ -404,12 +404,55 @@ def _resonance_score(event: dict) -> float:
     return 0.15
 
 
+def _punch_text(event: dict) -> str:
+    """冲击力判定用的文本：标题 + 短摘要。两条路径（LLM 语义 / 正则兜底）
+    必须用同一段文本，否则 _EXTREME_WORDS_RE 的"暴跌/崩盘直接满分"在两条路上
+    表现不一致，同一条新闻换个路径分就变了。"""
+    return " ".join(filter(None, [
+        event.get("title_zh") or event.get("title") or "",
+        event.get("title_en") or "",
+        event.get("description_short_zh") or "",
+    ]))
+
+
 def compute_punch(event: dict) -> dict:
     """返回 {"score": 0-1, "magnitude_pct": float|None}。
 
     取标题 + 短摘要做幅度提取——长摘要里常有历史对比数字（"较2020年涨40%"），
     会把冲击力判高。标题和短摘要说的是"现在发生了什么"。
     """
+    # ── 优先用 LLM 的语义判断（2026-08-02 根治）────────────────────
+    #
+    # `price_move` 是 enrich 阶段让 LLM 直接回答的"这个数字是不是价格变动"。
+    # 有它就不必再猜——下面那整套正则 + 排除表 + 标题权威的启发式，是在没有
+    # 语义字段时代的兜底，逻辑上永远追不上"百分比能表示什么"的无穷集合。
+    #
+    # 兜底保留而不是删掉：存量数据（改 prompt 之前入库的）没有这个字段，
+    # 删了会让它们的冲击力全部归零、造成一次无声的全库降级。
+    pm = event.get("price_move")
+    if isinstance(pm, str):
+        try:
+            pm = json.loads(pm)
+        except (TypeError, ValueError):
+            pm = None
+    if isinstance(pm, dict) and "is_price_move" in pm:
+        if not pm.get("is_price_move"):
+            pct = None
+        else:
+            try:
+                pct = abs(float(pm.get("move_pct")))
+            except (TypeError, ValueError):
+                pct = None
+            # 长周期回顾（年内累计涨120%、半年跌38%）不是冲击力——冲击力问的是
+            # "市场**现在**动了多少"。这一层此前只能靠"同比/环比"等词去猜，
+            # 现在由 LLM 直接给出周期，判断可靠得多。
+            if pct is not None and pm.get("move_horizon") == "long_term":
+                pct = None
+        score = (W_PUNCH_MAGNITUDE * _magnitude_score(pct, _punch_text(event))
+                 + W_PUNCH_RESONANCE * _resonance_score(event))
+        return {"score": _clamp(score), "magnitude_pct": pct,
+                "magnitude_source": "llm"}
+
     title = " ".join(filter(None, [
         event.get("title_zh") or event.get("title") or "",
         event.get("title_en") or "",
@@ -433,7 +476,8 @@ def compute_punch(event: dict) -> dict:
         pct = extract_magnitude_pct(text)
     score = (W_PUNCH_MAGNITUDE * _magnitude_score(pct, text)
              + W_PUNCH_RESONANCE * _resonance_score(event))
-    return {"score": _clamp(score), "magnitude_pct": pct}
+    return {"score": _clamp(score), "magnitude_pct": pct,
+            "magnitude_source": "regex"}
 
 
 # ── 合成 ─────────────────────────────────────────────────────────────

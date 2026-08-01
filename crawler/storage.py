@@ -286,7 +286,7 @@ INSERT INTO news_events (
     id, title_en, title_zh, date, time_event, time_get_data,
     description_short_en, description_short_zh,
     description_long_en, description_long_zh,
-    sectors, coins, news_type, market_scope, breadth_level, event_tier,
+    sectors, coins, news_type, market_scope, breadth_level, price_move, event_tier,
     score_market_impact, score_breadth, score_punch, punch_magnitude_pct,
     score_timeliness, score_hotness,
     score_authority, score_quality, importance_score, scoring_version,
@@ -295,7 +295,7 @@ INSERT INTO news_events (
     cluster_id, merged_sources_count,
     event_subject, event_action, event_fingerprint, embedding, social_interactions
 ) VALUES (
-    %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,
+    %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,
     %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,
     %s,%s,%s,%s,%s,%s,%s,%s,%s
 )
@@ -334,6 +334,7 @@ ON DUPLICATE KEY UPDATE
     -- 一次性回填已经把老的 145 行缺口填平（scoring_version=2 覆盖全表），
     -- COALESCE 存在的理由不再成立，所以退回 VALUES。
     breadth_level        = VALUES(breadth_level),
+    price_move           = VALUES(price_move),
     score_breadth        = VALUES(score_breadth),
     punch_magnitude_pct  = VALUES(punch_magnitude_pct),
     -- score_market_impact 和 score_quality 直到刚才都**没在这个 UPDATE 子句里
@@ -389,6 +390,9 @@ def write_events(events: list[dict], conn) -> int:
                 event.get("news_type", "other"),
                 event.get("market_scope", "crypto"),
                 event.get("breadth_level"),
+                # 语义判断整体存 JSON（见 migration 021 的说明：三个字段同生共死）
+                json.dumps(event["price_move"], ensure_ascii=False)
+                if isinstance(event.get("price_move"), dict) else None,
                 event.get("event_tier", "C"),
                 scores.get("score_market_impact", 0.0),
                 scores.get("score_breadth", 0.0),

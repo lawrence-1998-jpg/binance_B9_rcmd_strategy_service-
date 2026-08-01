@@ -709,6 +709,42 @@ def qa_market_expansion():
           _n1 == 0 and _n2 == 0,
           f"越界 {_n1} 行 / 有数无实体 {_n2} 行（-1 表示查询本身失败）")
 
+    # ── 冲击力语义字段（ADR-002 根治，2026-08-02）────────────────────
+    #
+    # 这组守的是"根治别退化回猜"：schema 里有字段、prompt 里有指令、
+    # compute_punch 真的优先用它——三者缺一，冲击力就会静默退回正则口径。
+    from crawler import pipeline as _pl  # noqa: E402
+    check(g3, "enrich schema 含 price_move 语义字段",
+          "price_move" in _pl.NEWS_SCHEMA["json_schema"]["schema"]["properties"]
+          and "price_move" in _pl.NEWS_SCHEMA["json_schema"]["schema"]["required"],
+          "字段缺失或非必填 → LLM 可能不返回，冲击力退回正则猜")
+    check(g3, "prompt 含 PRICE MOVE 判定指令",
+          "PRICE MOVE" in _pl.SYSTEM_PROMPT and "dominance" in _pl.SYSTEM_PROMPT,
+          "schema 有字段但 prompt 没教怎么判，等于让模型自由发挥")
+
+    # 行为断言：给定语义判断，compute_punch 必须真的听它的（而不是自己再猜一遍）
+    _ev_no = {"title_zh": "份额升至67.4%",
+              "price_move": {"is_price_move": False, "move_pct": None,
+                             "move_horizon": "none"}, "sources": []}
+    _ev_yes = {"title_zh": "比特币跌8%",
+               "price_move": {"is_price_move": True, "move_pct": 8.0,
+                              "move_horizon": "intraday"}, "sources": []}
+    _ev_lt = {"title_zh": "上半年跌38%",
+              "price_move": {"is_price_move": True, "move_pct": 38.0,
+                             "move_horizon": "long_term"}, "sources": []}
+    check(g3, "compute_punch 优先采信 LLM 语义判断",
+          scoring.compute_punch(_ev_no)["magnitude_pct"] is None
+          and scoring.compute_punch(_ev_yes)["magnitude_pct"] == 8.0
+          and scoring.compute_punch(_ev_lt)["magnitude_pct"] is None,
+          "语义字段没被消费，或长周期回顾没被排除掉")
+
+    # 存量兜底不能被删：改 prompt 之前入库的行没有这个字段，
+    # 兜底一旦失效它们的冲击力会整体归零，是一次无声的全库降级。
+    check(g3, "无语义字段时正则兜底仍工作",
+          scoring.compute_punch({"title_zh": "比特币暴跌8%", "sources": []})
+          ["magnitude_pct"] == 8.0,
+          "存量数据（无 price_move）的冲击力会全部归零")
+
     # ── 时效性（2026-07-29 线上事故后新增的红线用例）─────────────────
     #
     # 事故：一条 2024-08-21 的币安广场帖（DOGS 第 57 期 Launchpool）以
