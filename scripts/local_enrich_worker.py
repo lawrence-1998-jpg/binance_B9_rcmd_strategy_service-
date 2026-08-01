@@ -360,6 +360,45 @@ def acquire_lock() -> bool:
     return True
 
 
+def embed_batch(spec, texts: "list[str]") -> "list":
+    """用同一把公司 key 批量算 embedding（ADR-002 A4）。
+
+    为什么放在 worker 里算：VM 连不通公司网关，而 embedding 的输入正是 enrich
+    的输出（title_en + description_short_en），这里算最顺——省掉一次往返，也
+    保证向量和结构化结果同源同版本。单条成本约为 enrich 的千分之一，几乎不
+    增加网关压力，但直接消灭了 VM 侧最后两个走个人账号的付费点。
+
+    模型与维度由 VM 下发（spec），worker 端不硬编码——换模型只改 VM。
+    整批失败返回全 None：向量是加速/提质项，绝不能因为它挂了而丢掉 enrich
+    结果（那才是花了钱算出来的东西）。
+    """
+    model = spec.get("embedding_model") or "text-embedding-3-small"
+    dim = int(spec.get("embedding_dim") or 256)
+    out = [None] * len(texts)
+    for start in range(0, len(texts), 64):
+        chunk = [t[:8000] or " " for t in texts[start:start + 64]]
+        body = json.dumps({"model": model, "input": chunk, "dimensions": dim}).encode()
+        _rate_limiter.acquire()          # 与 chat 共用同一个 25/min 配额
+        try:
+            req = urllib.request.Request(
+                f"{_ACTIVE_CRED['base_url']}/embeddings", data=body,
+                headers={"Content-Type": "application/json",
+                         "Authorization": f"Bearer {_ACTIVE_CRED['key']}"},
+                method="POST")
+            with urllib.request.urlopen(req, timeout=GATEWAY_TIMEOUT_S) as resp:
+                data = json.loads(resp.read().decode())
+            for j, row in enumerate(data.get("data") or []):
+                vec = row.get("embedding")
+                if isinstance(vec, list) and len(vec) == dim:
+                    out[start + j] = vec
+        except Exception as e:
+            log.warning(f"embedding batch @{start} 失败（不影响 enrich 结果）：{e}")
+    got = sum(1 for v in out if v)
+    if texts:
+        log.info(f"embedding: {got}/{len(texts)} 条算出向量（走公司网关）")
+    return out
+
+
 def main() -> int:
     if not acquire_lock():
         return 0
@@ -420,6 +459,20 @@ def main() -> int:
                                     "model": "litellm-gateway/"
                                              + (_ACTIVE_CRED.get("model") or GATEWAY_MODEL)})
         progress.finish()
+
+        # 顺手把去重用的向量也算了（ADR-002 A4）。文本口径必须与 VM 侧
+        # crawler/dedup.py 的 embedding_text() 完全一致——"{title_en}. {desc_en}"
+        # 截断 1000 字符。不一致的话向量算的是另一段文本，语义比对会失真，
+        # 而且不会报错，只会表现为"去重效果莫名变差"。
+        if results:
+            texts = []
+            for r in results:
+                e = r["enriched"]
+                texts.append(f"{e.get('title_en', '')}. "
+                             f"{e.get('description_short_en', '')}"[:1000])
+            for r, vec in zip(results, embed_batch(spec, texts)):
+                if vec:
+                    r["embedding"] = vec
 
         spent = time.time() - t0
         # 单条成本估算按 OpenAI 官方 gpt-5.4 单价（run 12 实测约 $0.0093/条）——

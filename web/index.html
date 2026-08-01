@@ -1103,6 +1103,11 @@ footer{border-top:1px solid var(--rule);padding:26px 0 40px;font-size:12px;color
 #panel-5 .lb-tag.flat{background:var(--lab-n200);color:var(--lab-n600)}
 #panel-5 .lb-tag.rumor{background:var(--lab-a800);color:var(--lab-paper)}
 #panel-5 .lb-tag.disputed{background:var(--lab-a600);color:var(--lab-paper)}
+#panel-5 .lb-tag.trade{background:var(--lab-a100);color:var(--lab-a800);
+  border:1px solid var(--lab-a300);font-weight:700;font-variant-numeric:tabular-nums}
+#panel-5 .lb-tag.trade-idx{background:transparent;color:var(--ink-3);
+  border:1px solid var(--rule);font-weight:500}
+#panel-5 .lb-tag.bonus-trade{background:var(--lab-a100);color:var(--lab-a800)}
 #panel-5 .lb-tag.ver{background:var(--lab-g100);color:var(--lab-g800)}
 /* 2026-07-29：情绪同向/反转加成标签，和 tab02（真实数据展示）保持同一套
    语义色——反转用最深的赤陶+反白，做成"值得多看一眼"的醒目样式（它本来就
@@ -4813,11 +4818,15 @@ var DICT=[
   ["is_rumor","0|1","谣言标记，1 表示可信度校验未通过"],
   ["rumor_reason","string","谣言判定原因，is_rumor=0 时为空串"],
   ["is_verified","0|1","是否经多源交叉确认"],
-  ["__grp__","真实性校验（DB 已落地，API 待暴露）",""],
-  ["verification_status","enum","VERIFIED / PROBABLE / UNVERIFIED / DISPUTED"],
+  ["__grp__","真实性校验",""],
+  ["verification_status","enum","VERIFIED / PROBABLE / UNVERIFIED / DISPUTED（DISPUTED 权威度打 5 折、验证分封顶 0.35，仍进池但卡片标『有争议』）"],
   ["verification_score","float 0–1","校验置信度"],
   ["verification_reason","string","判定依据说明"],
-  ["independent_source_count","int","独立信源计数（同一媒体集团算一个）"]
+  ["independent_source_count","int","独立信源计数（同一媒体集团算一个）"],
+  ["__grp__","交易实体（ADR-002，2026-08-02）",""],
+  ["tradable_entities","array","该事件对应的可交易标的：[{symbol,name,market,venue,tradable,source}]。tradable=true 表示币安用户真买得到——加密看币安现货在架、美股看大盘蓝筹白名单；指数代码（SPX/DJI）会认出来但 tradable=false"],
+  ["tradable_count","int","tradable=true 的个数，排序加分项直接读它"],
+  ["bonus.tradable","float","本条拿到的交易实体加成。单一主标的 +0.06、挂 ≥5 个 ticker 的泛市场综述 +0.02、无标的 0"]
 ];
 
 function jsonHl(t){
@@ -6510,9 +6519,14 @@ var FACTORS = [
    100% 就没别的因子了"——完全不是那么回事。单位是百分比上限，不是权重份额。*/
 var BONUSES = [
   {k:"k_align",    name:"情绪同向加成", sub:"Align",    max:50, color:"var(--lab-f-i)"},
-  {k:"k_reversal", name:"反转信号加成", sub:"Reversal", max:50, color:"var(--lab-f-a)"}
+  {k:"k_reversal", name:"反转信号加成", sub:"Reversal", max:50, color:"var(--lab-f-a)"},
+  /* 交易实体加成（ADR-002 块 B，2026-08-02）。上限刻意只给 20% 而不是 50%：
+     它命中面很广（26% 的事件有可交易标的），系数给大了会把"有没有 ticker"
+     变成事实上的主排序键，盖过重要性本身。挂 ≥5 个 ticker 的泛市场综述走
+     另一档更低的系数，见后端 TRADABLE_BONUS_BROAD。 */
+  {k:"k_tradable", name:"交易实体加成", sub:"Tradable", max:20, color:"var(--lab-f-m)"}
 ];
-var DEFAULT_BONUS = {k_align:25, k_reversal:20};
+var DEFAULT_BONUS = {k_align:25, k_reversal:20, k_tradable:6};
 
 /* 市场重要性（PRD-04，2026-07-29）。第三组可调参数，与前两组量纲都不同：
    基础因子是归一化到 100% 的份额，加分项是百分比上限，这一组是**直接相乘的倍率**。
@@ -6868,7 +6882,14 @@ function currentConfigPayload(){
     var c = bonusSingle.coefs();
     // cap 不在实验室里暴露，沿用当前基线的值，避免把它悄悄重置成默认
     var cap = (activeBaseline && activeBaseline.bonus && activeBaseline.bonus.cap);
+    // k_tradable_broad 不在界面暴露（泛市场综述那一档），沿用基线值：
+    // 界面上每多一个旋钮就多一份"调了不知道啥"的困惑，而这一档的语义
+    // 要连带解释"什么算泛市场"，不适合放在主面板。
+    var broad = (activeBaseline && activeBaseline.bonus
+                 && activeBaseline.bonus.k_tradable_broad);
     cfg.bonus = {k_align: c.k_align, k_reversal: c.k_reversal,
+                 k_tradable: c.k_tradable,
+                 k_tradable_broad: (broad === undefined || broad === null) ? 0.02 : broad,
                  cap: (cap === undefined || cap === null) ? 0.5 : cap};
   }
   var mo = moodOverrideValue();
@@ -6900,7 +6921,7 @@ function diffLines(next){
     if (a === undefined || b === undefined) return;
     if (Math.abs(a - b) >= 0.005) lines.push("市场·" + MK[k] + " ×" + b.toFixed(2) + " → ×" + a.toFixed(2));
   });
-  [["k_align","情绪同向"],["k_reversal","反转信号"]].forEach(function(p){
+  [["k_align","情绪同向"],["k_reversal","反转信号"],["k_tradable","交易实体"]].forEach(function(p){
     var a = (next.bonus || {})[p[0]], b = (cur.bonus || {})[p[0]];
     if (a === undefined || b === undefined) return;
     if (Math.abs(a - b) >= 0.005) lines.push(p[1] + " +" + Math.round(b*100) + "% → +" + Math.round(a*100) + "%");
@@ -6991,6 +7012,7 @@ function verParamsHTML(p){
       '<div class="vdrow"><span class="vdlabel">加分项</span>' +
         chips([["同向", "+" + Math.round((bo.k_align||0)*100) + "%"],
                ["反转", "+" + Math.round((bo.k_reversal||0)*100) + "%"],
+               ["交易实体", "+" + Math.round((bo.k_tradable||0)*100) + "%"],
                ["封顶", "+" + Math.round((bo.cap||0)*100) + "%"]]) + '</div>' +
       '<div class="vdrow"><span class="vdlabel">市场倍率</span>' +
         chips(Object.keys(MK).map(function(k){
@@ -7114,6 +7136,7 @@ function applyBaselineToPanels(cfg){
   if (bonusSingle && cfg.bonus){
     if (cfg.bonus.k_align !== undefined)    bonusSingle.values.k_align    = Math.round(cfg.bonus.k_align * 100);
     if (cfg.bonus.k_reversal !== undefined) bonusSingle.values.k_reversal = Math.round(cfg.bonus.k_reversal * 100);
+    if (cfg.bonus.k_tradable !== undefined)  bonusSingle.values.k_tradable  = Math.round(cfg.bonus.k_tradable * 100);
     bonusSingle.build();
   }
   if (marketSingle && cfg.market_weights){
@@ -7298,6 +7321,20 @@ function deltaBadge(delta){
   if (delta < 0) return '<span class="lb-tag down">▼ ' + Math.abs(delta) + '</span>';
   return '<span class="lb-tag flat">— 0</span>';
 }
+/* 交易实体标签（ADR-002 块 B）。与主站 tab02 同一口径：可交易的强调、
+   指数这类买不了的弱化，最多 3 个。实验室这边尤其需要它——调 k_tradable
+   滑杆时要能直接看出哪些条目吃到了这个加成。 */
+function labTradeTags(r){
+  var ents = r.tradable_entities || [];
+  if (typeof ents === "string"){ try { ents = JSON.parse(ents); } catch(e){ ents = []; } }
+  if (!ents.length) return "";
+  return " " + ents.slice(0,3).map(function(t){
+    return '<span class="lb-tag ' + (t.tradable ? 'trade' : 'trade-idx') + '" title="' +
+           esc(t.name || "") + (t.tradable ? '（可交易）' : '（指数，不可直接交易）') + '">' +
+           esc(t.symbol) + (t.venue === "binance_spot" ? "·币安" : "") + '</span>';
+  }).join("") + (ents.length > 3 ? '<span class="more">+' + (ents.length-3) + '</span>' : '');
+}
+
 function factorLine(factors){
   return FACTORS.filter(function(f){ return f.k !== "Rel" || factors.Rel !== undefined; })
     .map(function(f){ return f.k + " " + (factors[f.k]!==undefined? factors[f.k].toFixed(2):"–"); }).join("  ");
@@ -7479,7 +7516,7 @@ function runReweight(){
           '<div class="rk">#' + r.rank + '</div>' +
           '<div>' + tierBadge(r.event_tier) + '</div>' +
           '<div class="ti">' +
-            '<div class="tzh">' + esc(r.title_zh || r.title_en) + '</div>' +
+            '<div class="tzh">' + esc(r.title_zh || r.title_en) + labTradeTags(r) + '</div>' +
             // 公式总分（七因子加权和+CNBC背书，未乘市场/新鲜度/情绪倍率）加粗
             // 放在因子明细前——用户要一眼看到"公式打出来多少分"，右侧大数字是
             // 乘完全部倍率的最终分，两者口径不同，都得在。
@@ -7491,6 +7528,11 @@ function runReweight(){
                 ? '  ·  <span class="lb-tag bonus-reversal">⚡反转 +' + (r.bonus.reversal*100).toFixed(1) + '%</span>'
                 : ((r.bonus || {}).sentiment_align || 0) > 0
                 ? '  ·  <span class="lb-tag bonus-align">☾同向 +' + (r.bonus.sentiment_align*100).toFixed(1) + '%</span>'
+                : '') +
+              // 交易实体加成单独具名显示，理由与同向/反转那两个一样：调滑杆的人
+              // 必须能一眼看出"这条为什么被顶上来"，笼统的总加成看不出归因。
+              (((r.bonus || {}).tradable || 0) > 0
+                ? '  ·  <span class="lb-tag bonus-trade">◎实体 +' + (r.bonus.tradable*100).toFixed(1) + '%</span>'
                 : '') +
             '</div>' +
             ((r.is_rumor || r.verification_status === "VERIFIED") ?

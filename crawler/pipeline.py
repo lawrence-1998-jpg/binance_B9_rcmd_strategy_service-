@@ -791,6 +791,9 @@ def enrich_one(item: dict, tracker=None, cached: dict | None = None) -> dict | N
             # 两条路径（缓存命中 / OpenAI）都必须带上，漏一条就有一半事件没标的物。
             "matched_symbols": item.get("matched_symbols", ""),
             "_enriched_by": "claude-local",   # 观测用；write_events 按列写库，多余键自然忽略
+            # Mac 经公司网关随 enrich 一起算好的向量（ADR-002 A4）。
+            # 有它就不用 VM 侧再花个人 key 去算 embedding。
+            "_embedding": cached.get("_embedding"),
         })
         return enriched
 
@@ -1177,9 +1180,12 @@ def run_pipeline() -> dict:
         #    （检修报告已确认"同事件刷屏"是活跃 P0），所以 A4 让 Mac 随 enrich
         #    把向量一起算好回传——那之后这里就不再依赖个人 key 了。
         attach_fingerprints(enriched)
+        # 注意这里**不要**提前警告"退化为规则去重"——绝大多数条目的向量已经由
+        # Mac 经公司网关随 enrich 算好（ADR-002 A4），拿不到个人 key 客户端不等于
+        # 没有向量。真正缺向量时由 _embeddings_with_cache 精确报出缺多少条。
+        # 2026-08-02 首版就是在这里无条件 warning，紧接着下一行却打印
+        # "34/34 复用缓存向量"，日志自相矛盾——这种日志将来只会误导排查。
         _agg_client = llm_gate.acquire("aggregate_embedding")
-        if _agg_client is None:
-            logger.warning("成本闸：语义聚合无可用 embedding 通道，本轮退化为规则去重")
         events = aggregate_events(enriched, _agg_client, tracker=tracker)
         stats["events"] = len(events)
         lap("dedup_aggregate")

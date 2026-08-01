@@ -186,6 +186,46 @@ def embed_texts(texts: list[str], client, tracker=None) -> np.ndarray:
     return matrix / np.maximum(norms, 1e-9)
 
 
+def _embeddings_with_cache(items: list[dict], client, tracker=None) -> np.ndarray:
+    """组装向量矩阵：自带的直接用，缺的批量补算。
+
+    2026-08-02（ADR-002 A4）加。此前每轮都把全部条目重新 embed 一遍，走的是
+    VM 侧个人 key；现在 Mac 侧算 enrich 时顺手把向量一起算了（公司额度），
+    这里只需要拼装。缺失的部分若拿不到 client（成本闸关闭）就留零向量，
+    行为与从前的"整批失败"一致——不误归簇，只是不贡献语义信号。
+    """
+    n = len(items)
+    matrix = np.zeros((n, EMBED_DIM), dtype=np.float32)
+    missing_idx, missing_txt = [], []
+    reused = 0
+    for i, item in enumerate(items):
+        vec = item.get("_embedding")
+        if vec is not None and getattr(vec, "size", 0) == EMBED_DIM:
+            matrix[i] = vec
+            reused += 1
+        else:
+            missing_idx.append(i)
+            missing_txt.append(embedding_text(item))
+
+    if missing_txt:
+        if client is None:
+            # 只有"确实缺向量、又确实没有通道"时才是真降级，这时才该警告。
+            logger.warning(
+                f"语义去重降级：{len(missing_txt)}/{n} 条无向量且无可用 embedding "
+                f"通道，这部分只靠 DC-1/DC-2 规则去重（同事件可能重复出现）。"
+                f"通常意味着这批条目没经过 Mac 桥——检查桥是否在线。")
+        fresh = embed_texts(missing_txt, client, tracker)
+        for slot, i in enumerate(missing_idx):
+            if slot < fresh.shape[0]:
+                matrix[i] = fresh[slot]
+
+    if reused:
+        logger.info(f"Embedding: {reused}/{n} 复用缓存向量（公司额度算好的），"
+                    f"{len(missing_idx)} 条需现算")
+    # 复用的向量入库前已归一化，现算的 embed_texts 也归一化过，这里不重复归一
+    return matrix
+
+
 def embedding_text(item: dict) -> str:
     """构造送去做 embedding 的文本。
 
@@ -350,7 +390,10 @@ def aggregate_events(items: list[dict], client, tracker=None) -> list[dict]:
     if not items:
         return []
 
-    embeddings = embed_texts([embedding_text(i) for i in items], client, tracker)
+    # 优先用条目自带的向量（Mac 经公司网关随 enrich 算好的，ADR-002 A4）；
+    # 只有缺的才需要现算。全部命中时 client 为 None 也无所谓——这正是
+    # "成本闸关闭但语义去重照常工作"的关键：通道换了，语义没换（同模型同维度）。
+    embeddings = _embeddings_with_cache(items, client, tracker)
     clusters = cluster_items(items, embeddings)
 
     events = []

@@ -572,6 +572,11 @@ CACHE_REQUIRE_PROMPT_MATCH = (
 def load_enrich_cache(conn, url_hashes: list[str], prompt_hash: str) -> dict:
     """按 url_hash 批量取预处理结果，返回 {url_hash: enriched_dict}。
 
+    2026-08-02（ADR-002 A4）：结果里会带一个 `_embedding` 键（256 维 float32
+    blob 解出的向量），是 Mac 经公司网关随 enrich 一起算好的。没带就是 None，
+    下游照旧现算或退化——这个字段以下划线开头，write_events 按列写库时会
+    自然忽略，不会污染事件表。
+
     是否要求 prompt_hash 一致由 CACHE_REQUIRE_PROMPT_MATCH 控制，默认不要求，
     理由见该常量的注释。任何异常都吞掉返回 {}——缓存是纯加速层，绝不允许它的
     故障影响主流程。
@@ -587,23 +592,31 @@ def load_enrich_cache(conn, url_hashes: list[str], prompt_hash: str) -> dict:
             placeholders = ",".join(["%s"] * len(chunk))
             if CACHE_REQUIRE_PROMPT_MATCH:
                 cursor.execute(
-                    f"""SELECT url_hash, enriched FROM llm_enrich_cache
+                    f"""SELECT url_hash, enriched, embedding FROM llm_enrich_cache
                         WHERE prompt_hash = %s AND url_hash IN ({placeholders})""",
                     (prompt_hash, *chunk),
                 )
             else:
                 # 同一 url 可能有多版缓存，取最新的一条
                 cursor.execute(
-                    f"""SELECT url_hash, enriched FROM llm_enrich_cache
+                    f"""SELECT url_hash, enriched, embedding FROM llm_enrich_cache
                         WHERE url_hash IN ({placeholders})
                         ORDER BY created_at ASC""",
                     tuple(chunk),
                 )
-            for url_hash, enriched in cursor.fetchall():
+            for url_hash, enriched, embedding in cursor.fetchall():
                 try:
-                    out[url_hash] = json.loads(enriched)
+                    item = json.loads(enriched)
                 except (TypeError, ValueError):
                     continue  # 单行坏数据只影响它自己，落回 OpenAI
+                # 向量坏了不该连累结构化结果——blob_to_embedding 长度不符会
+                # 返回 None，那条就只是没有向量，enrich 结果照常可用。
+                try:
+                    from .dedup import blob_to_embedding
+                    item["_embedding"] = blob_to_embedding(embedding)
+                except Exception:
+                    item["_embedding"] = None
+                out[url_hash] = item
         cursor.close()
     except Exception as e:
         logger.warning(f"enrich cache load failed (falling back to OpenAI for all): {e}")

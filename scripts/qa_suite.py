@@ -629,10 +629,25 @@ def qa_market_expansion():
     from crawler import market_mood as _mm  # noqa: E402
     _sig = set(inspect.signature(_mm.mood_multiplier).parameters)
     _bonus_keys = set(_sc.DEFAULTS["bonus"])
-    _unconsumed = {k for k in _bonus_keys if k not in _sig}
+    _unconsumed = {k for k in _bonus_keys if k not in _sig and k != "cap"}
     check(g3, "策略配置 bonus 段每个键都有消费点（防死配置）",
           not _unconsumed,
           f"这些键只存不读、改了不生效：{sorted(_unconsumed)}")
+
+    # 上面那条只查了函数**签名**有没有这个参数——2026-08-02 实测它不够：
+    # 新增 k_tradable 时签名有、透传有、前端滑杆有，但请求解析层
+    # resolve_bonus_coefs 遍历的是一份**硬编码的 BONUS_KEYS**，新键在入口
+    # 就被丢掉了。表现是滑杆能拖、参数能传、后端也"支持"，实测把系数调到
+    # 0 和 0.2 排序完全一样。所以这里补一条**行为**断言：把每个键塞进去，
+    # 看解析结果里还在不在。签名检查防不住这种"半路被过滤"。
+    sys.path.insert(0, str(_ROOT / "api"))
+    import lab_tools as _lt  # noqa: E402
+    _probe = {k: 0.123 for k in _bonus_keys}
+    _resolved = _lt.resolve_bonus_coefs(_probe)
+    _dropped = {k for k in _bonus_keys if k != "cap" and k not in _resolved}
+    check(g3, "bonus 系数能真正穿过请求解析层（不被硬编码名单过滤）",
+          not _dropped,
+          f"这些键在 resolve_bonus_coefs 就被丢了，滑杆调了不生效：{sorted(_dropped)}")
 
     # 3) 投影缺列（本项目已栽 4 次）：新列必须同时出现在生产与实验室两处投影，
     #    漏一处就会出现"实验室能看到、线上是空"或反过来的分叉。

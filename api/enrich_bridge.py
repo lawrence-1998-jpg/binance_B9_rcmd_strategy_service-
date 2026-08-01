@@ -31,6 +31,7 @@ Enrich Bridge —— 本地 Claude 预处理的任务分发与结果回收端点
 import json
 import logging
 import os
+import struct
 import sys
 from datetime import datetime
 from functools import wraps
@@ -49,6 +50,9 @@ from crawler.pipeline import (  # noqa: E402
 # "pipeline 已经不要了、但桥还在派"或反过来"桥不派了、pipeline 却还在等"的
 # 死角，而且不报错。这正是本项目反复踩的"同一事实两处手写"。
 from crawler.staging import STAGING_MAX_AGE_DAYS  # noqa: E402
+# 向量维度取 dedup 的常量，不在这里重写一个数字——两处不一致会让存进来的
+# 向量长度对不上，blob_to_embedding 一律判 None，静默退化成"从来没有向量"。
+from crawler.dedup import EMBED_DIM, EMBED_MODEL  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
@@ -97,6 +101,10 @@ def enrich_prompt():
         "schema": NEWS_SCHEMA["json_schema"]["schema"],
         "required_keys": sorted(_REQUIRED_ENRICH_KEYS),
         "lite_types": sorted(LLM_LITE_TYPES),
+        # 向量口径也由 VM 下发，worker 端零硬编码（与 prompt 同一原则）：
+        # 换模型/换维度只改 VM，worker 下次唤醒自动跟上。
+        "embedding_model": EMBED_MODEL,
+        "embedding_dim": EMBED_DIM,
         "input_template_example": build_enrich_input({
             "source": "<source>", "title": "<title>", "summary": "<summary>",
             "url": "<url>", "published_at": "<published_at>",
@@ -185,18 +193,30 @@ def enrich_submit():
                     or not _REQUIRED_ENRICH_KEYS.issubset(enriched.keys())):
                 rejected.append(url_hash[:16] if isinstance(url_hash, str) else "?")
                 continue
+            # 可选向量（ADR-002 A4）：Mac 算 enrich 时顺手用公司网关算好的
+            # 256 维 float32。格式不对就当没有——向量是加速/提质项，
+            # 绝不能因为它有问题而丢掉已经算好的结构化结果。
+            emb_blob = None
+            vec = (r or {}).get("embedding")
+            if isinstance(vec, list) and len(vec) == EMBED_DIM:
+                try:
+                    emb_blob = struct.pack(f"<{EMBED_DIM}f", *(float(x) for x in vec))
+                except (TypeError, ValueError, struct.error):
+                    emb_blob = None
             cursor.execute(
-                """INSERT INTO llm_enrich_cache (url_hash, prompt_hash, enriched, model)
-                   VALUES (%s, %s, %s, %s)
+                """INSERT INTO llm_enrich_cache
+                     (url_hash, prompt_hash, enriched, model, embedding)
+                   VALUES (%s, %s, %s, %s, %s)
                    ON DUPLICATE KEY UPDATE
                      prompt_hash = VALUES(prompt_hash),
                      enriched    = VALUES(enriched),
                      model       = VALUES(model),
+                     embedding   = VALUES(embedding),
                      created_at  = CURRENT_TIMESTAMP,
                      consumed_at = NULL""",
                 (url_hash, PROMPT_VERSION_HASH,
                  json.dumps(enriched, ensure_ascii=False),
-                 (r.get("model") or "claude-local")[:64]),
+                 (r.get("model") or "claude-local")[:64], emb_blob),
             )
             accepted += 1
         conn.commit()

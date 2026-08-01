@@ -192,10 +192,17 @@ DEFAULT_RAW_WEIGHTS = {"M": 0.26, "B": 0.16, "T": 0.16, "I": 0.14,
                        "H": 0.10, "A": 0.10, "Q": 0.08, "Rel": 0.0}
 
 # 加分项（与基础因子分开展示、分开调节）
-BONUS_KEYS = ["k_align", "k_reversal"]
-BONUS_NAME = {"k_align": "情绪同向加成", "k_reversal": "反转信号加成"}
-DEFAULT_BONUS = {"k_align": market_mood.MOOD_ALIGN_BOOST,
-                 "k_reversal": market_mood.MOOD_REVERSAL_BOOST}
+# 加分项键名**从 strategy_config.DEFAULTS 取**，不在这里再手写一份名单。
+# 2026-08-02 教训：新增 k_tradable 时，配置表、校验器、mood_multiplier 签名、
+# 前端滑杆、rank_pool 透传五处都改了，唯独这里的硬编码 BONUS_KEYS 没改——
+# resolve_bonus_coefs 只遍历它，新键在入口就被过滤掉了。表现是滑杆能拖、
+# 请求带着参数、后端也"支持"，但实测把系数调到 0 和 0.20 排序完全一样。
+# 又一次"名单两处手写必然漂移"，这次直接消灭第二份。
+BONUS_KEYS = [k for k in strategy_config.DEFAULTS["bonus"] if k != "cap"]
+BONUS_NAME = {"k_align": "情绪同向加成", "k_reversal": "反转信号加成",
+              "k_tradable": "交易实体加成", "k_tradable_broad": "交易实体加成(泛市场)"}
+DEFAULT_BONUS = {k: v for k, v in strategy_config.DEFAULTS["bonus"].items()
+                 if k != "cap"}
 BONUS_NOTE = (
     "加分项不参与权重归一化，作为外层倍率 (1 + 同向 + 反转) 应用在基础分上，合计封顶 +"
     f"{int(market_mood.BONUS_TOTAL_CAP * 100)}%。"
@@ -370,6 +377,11 @@ def event_card(e: dict, factors: dict | None = None, score: float | None = None,
         "sentiment_score": e.get("sentiment_score"),
         "sectors": e.get("sectors"),
         "coins": e.get("coins"),
+        # 交易实体（ADR-002 块 B）。2026-08-02 实测漏过一次：SQL 取了、加分算了、
+        # 前端也写了渲染，唯独这里的**响应字段清单**没加，表现是"加成标签有、
+        # 实体标签空"。取数、计算、序列化、渲染是四个独立环节，加字段要四处都过。
+        "tradable_entities": e.get("tradable_entities"),
+        "tradable_count": e.get("tradable_count"),
         "source_names": e.get("source_names"),
         # 2026-07-29：补原文信源链接。此前卡片只有 source_names（纯名字，没有
         # url），点开展开区没法直接跳到原文核实——Lawrence 明确要"点开要有
