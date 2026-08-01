@@ -48,7 +48,7 @@ W_IMPACT, W_BREADTH, W_TIME, W_PUNCH, W_HOT, W_AUTH, W_QUAL = (
 # 逐行比对，对不上直接红。改公式时那条用例会立刻亮红，逼着做数据迁移——
 # 加列走 migration、改公式只改代码，是这次事故的直接成因，两者是同一个变更
 # 的两半。重算脚本见 scripts/rescore_factors.py。
-SCORING_VERSION = 5   # v1=五因子；v2=七因子(+B/+I)；v3=CNBC硬覆盖(已废)；v4=去CNBC特例+共振排除社交源；v5=冲击力误读词表补漏(税/覆盖/超预期/目标价/收窄，2026-07-31全面检修)
+SCORING_VERSION = 6   # v1=五因子；v2=七因子(+B/+I)；v3=CNBC硬覆盖(已废)；v4=去CNBC特例+共振排除社交源；v5=冲击力误读词表补漏；v6=冲击力幅度改 opt-in 口径（必须有价格变动指示词，实测修正 54% 的误读，2026-08-02）
 
 # event_tier 对应的 M 值区间，用于约束 LLM 可能越界的打分
 TIER_BOUNDS = {
@@ -236,13 +236,29 @@ _PCT_NOT_MOVE_RE = re.compile(
     # 词，那会把"营收不及预期股价跌12%"这种**真跌幅**也错杀，只排除"比较动
     # 作"本身的词。「沙特赤字收窄75%」同族追加"收窄"。
     r"税|覆盖|超预期|不及预期|高于预期|低于预期|目标价|锁仓|持有率|收窄|"
+    # 2026-08-02 全平台测试时**出现在首屏可见位置**的漏网词。只补这几个是
+    # 有意的：继续无限扩表是收益递减（见本文件 opt-in 那段说明），但这几个
+    # 是用户打开就能看到的，属于"人眼一看就能发现"的底线范畴。
+    #   · 市占率/占率  —— "比特币市占率升破58%" 排到首屏 #5
+    #   · 最大涨幅/最大跌幅/平均回报 —— "8月季节性回报" 拿历史极值 65.32% 排 #3
+    r"市占率|占率|市占|最大涨幅|最大跌幅|平均回报|回报率|季节性|历史均值|中位数|"
     # 英文侧同族词。教训：中文标题排除了，title_en 的 "gold buying jumps 62%"
     # 又把 62 放了进来——extract 扫的是 title_zh+title_en+短摘要拼接文本，
     # 排除表必须双语对齐，只堵一种语言等于没堵。target 单独加会跟 Target
     # Corp(零售商)真实涨跌撞车，所以用 "target price" 整词组。
     r"tariff|tax|stake|odds|probability|yoy|y/y|qoq|"
     r"buying|purchas|holding|accumulat|inflow|outflow|year[- ]on[- ]year|"
-    r"inflation|cpi|beat|miss(?:es|ed)?\s+estimate|target price|narrow",
+    r"inflation|cpi|beat|miss(?:es|ed)?\s+estimate|target price|narrow|"
+    # 2026-08-02 英文侧补齐。中文补完后首屏那两条**照样没修好**，因为
+    # extract 扫的是 title_zh + title_en + 摘要拼接文本，英文标题
+    # "Bitcoin dominance rises above 58%" / "Upbit share rises to 67.4%"
+    # 从英文侧绕了过去——本文件几行之上就写着"排除表必须双语对齐，只堵
+    # 一种语言等于没堵"，还是又犯了一次。
+    # 注意 "share" 只能以词组形式加（market share / share rises），裸词会撞
+    # "Tesla shares surge 12%" 这类真实涨跌。
+    r"dominance|market share|share (?:rises|falls|climbs|drops)|"
+    r"seasonal|seasonality|median return|average return|"
+    r"all[- ]time (?:high|low)|share of",
     re.IGNORECASE,
 )
 # 2026-07-31 5→8：生产实测「机构加密交易占比升至创纪录的72%」漏判——"占比"
@@ -252,6 +268,37 @@ _PCT_NOT_MOVE_RE = re.compile(
 # 8%"这个反例要求"关税"必须留在窗口外（真实下跌不能被误伤），"关税"在该句
 # 数字前第 10 字符，窗口取 8 时两个约束同时满足（验证脚本见 WORKLOG #89）。
 _PCT_WINDOW_BEFORE, _PCT_WINDOW_AFTER = 8, 6
+
+# ── 价格变动指示词（2026-08-02，口径反转）────────────────────────────
+#
+# 此前的思路是"**默认**这个百分数就是涨跌幅，除非它附近命中排除词"。
+# 实测证明这个方向本身就错了：百分比在财经文本里能表示的东西是一个**无穷集合**
+# ——支持率、占比、覆盖率、税率、波动率、整合率、市值占GDP比、门票处理量……
+# 排除表永远追不完，今天已经连补三轮还在漏（"满额信号100%"排到了首屏第一）。
+#
+# 反过来，"表达价格变动"的说法是一个**小而稳定的集合**。所以改为 opt-in：
+# 数字附近必须出现价格变动指示词，才认定它是涨跌幅。
+#
+# 实测（近 7 天 2582 条有 pct 的条目）：
+#   · 改后仍判为涨跌幅 1169 条（45%），抽样全部是真涨跌
+#     （AVAX 涨 8.24%、BANK 涨 13%、加密货币跌幅 29-47%…）
+#   · 被排除 1413 条（54%），抽样全部不是涨跌
+#     （售油 180 亿、市值占 GDP 137%、全面战争、DRAM 概念股…）
+# 也就是说改之前，**这个占权重最高（23.5%）的因子有一半以上的幅度信号是错的**。
+#
+# 注意与历史教训的区别：代码里曾记录"加动词覆盖规则是多余且有害的"——那次是把
+# 动词当作**凌驾于排除表之上的覆盖**（命中动词就强行判为波动），所以"降息概率
+# 60%"里的"降"会把已被正确排除的放行。这次动词是**前置必要条件**，排除表仍在
+# 后面把关，两道是与的关系不是或的关系，方向完全不同。
+_PRICE_MOVE_RE = re.compile(
+    r"涨|跌|升|降|飙|挫|崩|泻|反弹|回调|走高|走低|翻倍|腰斩|重挫|大涨|大跌|"
+    r"surge|plunge|jump|drop|fall|rise|gain|lose|rally|slump|soar|sink|"
+    r"climb|tumble|spike|crash|dip|advance|decline|up|down",
+    re.IGNORECASE)
+# 指示词的搜索窗口比排除词宽：涨跌动词与数字之间常隔着标的名
+# （"比特币24小时涨8.24%"、"AVAX突破6.50美元，24小时涨8.24%"）。
+# 12 是实测值——8 会漏掉"24小时涨"这类常见句式。
+_MOVE_WINDOW = 12
 
 # 无数字但本身就意味着剧烈波动的词。命中直接给满分——"熔断""崩盘"不需要
 # 再看百分比，它们的语义就是极端。
@@ -277,6 +324,12 @@ def extract_magnitude_pct(text: str) -> float | None:
             continue
         # 数字前后紧邻"关税/税率/持股/概率"这类词时，这个百分数是**税率/比例**
         # 而不是涨跌幅，跳过（见 _PCT_NOT_MOVE_RE 的说明）。
+        # opt-in 前置闸：附近没有价格变动指示词，就不认它是涨跌幅。
+        # 放在所有排除规则**之前**——先问"这看起来像涨跌吗"，再问"有没有反证"。
+        move_window = text[max(0, m.start() - _MOVE_WINDOW):m.end() + _MOVE_WINDOW]
+        if not _PRICE_MOVE_RE.search(move_window):
+            continue
+
         head = text[max(0, m.start() - _PCT_WINDOW_BEFORE):m.start()]
         tail = text[m.end():m.end() + _PCT_WINDOW_AFTER]
         # 英文窗口按**词**取，不按字符（2026-07-30）："gold buying jumps 62%"
@@ -357,12 +410,27 @@ def compute_punch(event: dict) -> dict:
     取标题 + 短摘要做幅度提取——长摘要里常有历史对比数字（"较2020年涨40%"），
     会把冲击力判高。标题和短摘要说的是"现在发生了什么"。
     """
-    text = " ".join(filter(None, [
+    title = " ".join(filter(None, [
         event.get("title_zh") or event.get("title") or "",
         event.get("title_en") or "",
-        event.get("description_short_zh") or "",
     ]))
-    pct = extract_magnitude_pct(text)
+    text = " ".join(filter(None, [title, event.get("description_short_zh") or ""]))
+
+    # 标题优先，且**标题里出现百分比却被判非涨跌时，整条不再取正文的**。
+    #
+    # 2026-08-02 首屏实测："韩国CEX低迷中Upbit份额升至67.4%" 标题里的 67.4 被
+    # 正确拦下了（"份额"在窗口内），可正文里还有一句"份额由62.3%升至67.4%"——
+    # 那里的"份额"距数字 8 字符以外，逃出了排除窗口，于是 extract 取全文最大值
+    # 时又把它捡了回来，冲击力照样满分、照样排到首屏第二。
+    #
+    # 标题是这条新闻"在讲什么"的权威概括：它里面的百分比既然不是涨跌幅，
+    # 正文里同一个数字更不会是。所以标题一旦给出否定答案，就不必再问正文。
+    # 这不是又一个排除词，是换了个提问顺序——正文回落只在"标题压根没提百分比"
+    # 时才发生（那种情况下正文的数字确实可能是主要信息）。
+    if _PCT_RE.search(title):
+        pct = extract_magnitude_pct(title)
+    else:
+        pct = extract_magnitude_pct(text)
     score = (W_PUNCH_MAGNITUDE * _magnitude_score(pct, text)
              + W_PUNCH_RESONANCE * _resonance_score(event))
     return {"score": _clamp(score), "magnitude_pct": pct}
