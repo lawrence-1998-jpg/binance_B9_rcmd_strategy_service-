@@ -1,5 +1,43 @@
 # 原始需求留痕（按时间倒序）
 
+## 2026-08-03（第十三轮：给算法工程师写排序策略 PRD）
+
+`/product-management:write-spec`，附三张截图（Confluence 空表格「一、原子能力（积木）」5 列：需求点/问题/策略/skill·prompt/备注；策略实验室的加分项滑杆；市场重要性倍率滑杆）。语音转写原文：
+
+> for write prd for my algorithm engineer. I'm going to write a PRD for my algorithm engineer to add the strategy feature, the ranking to him. So please to fill the table I provided... use the form I provided, and what to go is to add, firstly, the brass punch factor, which is not defined as the first time. And, also, the mood, the entity, boost, and the mix strategy, they are different points to add. And the last is the market's importance to in... intuition. In So please help me to field the PIV as you can see in the platform. This has problem to show the strategy, and also please help me to summarize the key rule and key standard in the strategy. And, also, use a skill prompt file to help algorithm engineer to understand what they I do with you. And mark some important information in last term, and, also, please go with me a word file to help me so that I can feel it's into the Confluence website. And the skill and prompt, please provide me in the MD MD form so the engineer can see it easily.
+
+解读：① 用截图里那张 5 列表的原格式填；② 要填的原子能力＝冲击力（第一版没定义清）/ 大盘情绪 / 交易实体加成 / 混排策略 / 市场重要性；③ 汇总关键规则与判定标准；④ 每块能力配一份 skill·prompt，**MD 格式**给工程师；⑤ 备注列标重点信息；⑥ **另出一份 Word**，用于粘进 Confluence。
+
+## 2026-08-03（第十二轮：纠正 05 服务链路的语义）
+
+图上批注：一条红弧从「数据出库」直接跨到「服务端调用」标 `id + meta`；「数据服务提供」原描述被划掉。配文字：
+
+> change description that actually the algorithm data sourcing can provide a direct API to the server, but it's only include the ID and the meta information. And the scouting, the data engineer team will provide more comprehensive data to connect with the ID to join to provide more information for the server team. Please help me to optimize the graph
+
+## 2026-08-02（第十一轮：流程图重画 + 视觉优化）
+
+> 这个图要重新画一下，变成线上真实的版本。
+> 数据源：（数据工程 Scout 团队）1. 站外RSS 2. Twitter API 3. Square 币安广场API 4. 新闻媒体API（dxfeed、massive）5. 指数数据一手API（状态：建设中，ETA不确定）
+> 爬虫只针对RSS那部分
+> 中间加一个 数据流聚合 接口统一的步骤 （数据工程 Scout 团队）
+> 聚类&理解这里加一个内容理解的环节，打上各类标签。并备注结合RAG。（算法：hang shang）
+> 排序分这里 增加子步骤：基础排序skill（因子打分） + 业务调控排序skill + 混排skill（打散/配额等）（算法：hang shang）
+> 然后增加一个逻辑，这个看看怎么画，是 召回池退热。S/A级事件、高点击次数事件 生命周期扩展到7天，其余新闻/事件 为2天。
+> 服务这里 改成 数据出库（备注：不同资源位instruction 微调）（算法：hang shang） --> 数据服务提供（数据工程 Scout 团队） --> 服务端调用（服务端完成内容拼接、改写、适配等二次编辑操作） --> 客服端展示 --> 曝光/点击事件流回传到聚类/理解模块 作为 后验标签
+> 名字都改成 新闻/事件 服务，这里不是单做新闻。
+> 先画好claude里和我确认，再改网站
+
+补充（同轮，确认稿反馈）：
+
+> 有两个服务的提供方式 一个是带排序的 另一个是 事件流直接出。
+> 1. 去重两边都做，02 是 url 轻去重，03 是重去重　2. 不用独立框了　3. 对　4. 没问题
+> 按以上去改线上那个图吧。下面的模型啥的保留，不要动那个图的核心视觉，现在的我还挺喜欢
+
+补充（同轮，视觉打磨）：
+
+> 这块改一下，太丑了。还是打横来展现吧。数据服务提供那里打上"数据工程scout"的tag，还有，现在分工的tag太难看了，弄好看一点。然后把那个 ≈0秒都去掉。
+> 排序分这里要强化一下，现在太弱了。还有召回池退热这里，也强化一下表达。整体优化一下。
+
 ## 2026-08-02（第十轮：架构升级——成本硬闸 + 交易实体）
 
 > 帮我做一个架构升级：

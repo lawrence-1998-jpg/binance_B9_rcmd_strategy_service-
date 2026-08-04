@@ -234,10 +234,17 @@ def fetch_staged_items(conn, max_age_days: int | None = None) -> list[dict]:
              -- QA 红线因此重新亮红。关水龙头不等于清管道，两头都要堵。
              AND source NOT IN ({disabled_ph})
            -- 优先级在前、时间在后：权威大盘媒体插队（PRD-03 R1）。
-           -- 低优先内容不会永久饥饿——同优先级内仍按时间先进先出，且每轮
-           -- 消费掉高优先的之后就会轮到它们；饥饿风险由监控看板的
-           -- "最老未消费条目年龄"指标盯着。
-           ORDER BY priority ASC, fetched_at ASC
+           --
+           -- 2026-08-04 同优先级内改成"新的先出"（DESC）。原来是 FIFO，停摆 3 天
+           -- 攒到 1.1 万条后暴露了问题：恢复时先啃两天前的稿子，首屏全是旧闻，
+           -- 而大盘情绪取 24h 窗口一直算不出来——队列在追平，产品还是坏的。
+           -- 新闻价值随时间衰减，排队久不该获得优先权。
+           --
+           -- ⚠️ 这个 ORDER BY 必须与 api/enrich_bridge.py 的派活 SQL 逐字一致：
+           -- 派活侧（Mac 算什么）与消费侧（pipeline 取什么）一旦错位，pipeline 取到的
+           -- 800 条正好是桥没算过的，llm_cache_hits 会直接掉到 0，表现为"worker 明明
+           -- 在跑、事件却一条不涨"。QA 有断言钉住两处一致。
+           ORDER BY priority ASC, fetched_at DESC
            LIMIT %s""",
         (max_age_days, *DISABLED_SOURCES, MAX_ITEMS_PER_RUN),
     )

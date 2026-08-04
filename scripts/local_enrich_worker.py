@@ -56,7 +56,11 @@ CONCURRENCY = int(os.environ.get("B9_CONCURRENCY", "6"))
 # LLM_MODEL 注释）——网关上的 claude-opus-4-8 经 Bedrock 通道不支持这个模式，
 # 换模型前必须先拿真实 schema 测过。
 GATEWAY_BASE = os.environ.get("B9_GATEWAY_BASE", "https://litellm.devfdg.net/v1")
-GATEWAY_KEY = os.environ.get("B9_GATEWAY_KEY", "***REMOVED***")
+# 2026-08-04：这里原先把一把**真实的公司 key 硬编码成默认值**了。凭据只允许
+# 存在于 ~/.b9/credentials.json（600 权限，不进仓库）或环境变量里；代码里留默认值
+# 等于把 key 提交进版本库。留空即可——取不到凭据时 _load_credential() 会照常
+# 回落到 credentials.json，取不到就停下等，不会回落个人账号。
+GATEWAY_KEY = os.environ.get("B9_GATEWAY_KEY", "")
 GATEWAY_MODEL = os.environ.get("B9_GATEWAY_MODEL", "gpt-5.4")
 GATEWAY_TIMEOUT_S = 90
 # 2026-07-28 实测踩到的硬限：这把 key 被网关限 30 req/min（429 body 里的
@@ -108,9 +112,10 @@ def load_credential() -> dict:
             exp = cred.get("expires_at")
             if exp and datetime.date.fromisoformat(exp) < datetime.date.today():
                 log.warning(
-                    f"公司 key「{name}」登记的到期日 {exp} 已过 —— 仍会照常尝试，"
-                    f"真失效的话网关会返回 401、条目留在队列里等新 key。"
-                    f"换 key：python3 scripts/b9key.py add --key sk-新key "
+                    f"公司 key「{name}」登记的**额度刷新日** {exp} 已过 —— 这不是"
+                    f"key 失效，仍会照常尝试。真没额度了网关会返回 402/429、真废了"
+                    f"返回 401，两种都会让条目留在队列里等新 key。"
+                    f"续额度：python3 scripts/b9key.py add --key sk-新key "
                     f"--expires YYYY-MM-DD")
             return {"key": cred["key"],
                     "base_url": cred.get("base_url", GATEWAY_BASE),
@@ -450,29 +455,67 @@ def main() -> int:
             )
             return it, enriched
 
+        # 2026-08-04：改成**边算边交**。原来是整批 800 条全部算完才提交，有两个后果，
+        # 停摆当天都撞上了：
+        #   1) VM 侧 pipeline 每小时整点消费一次缓存，而一批 800 条要跑 ~50 分钟、
+        #      结束才提交 —— 相位一错就整点扑空（19:00 那轮 llm_cache_hits=0 就是它）。
+        #   2) 进程中途挂掉 = 这批已经花掉的钱全丢（800 条约 $7.4），下次唤醒重算重花。
+        # 每攒够 FLUSH_EVERY 条就交一次：整点大概率能捞到东西，中途挂掉也只亏最后不到
+        # 一个 chunk。提交本身是幂等 upsert（按 url_hash + prompt_hash），多交无害。
+        FLUSH_EVERY = 40
+        submitted = 0
+        pending_flush: list = []
+
+        def _attach_embeddings(spec_: dict, batch: list) -> None:
+            """顺手把去重用的向量也算了（ADR-002 A4）。文本口径必须与 VM 侧
+            crawler/dedup.py 的 embedding_text() 完全一致——"{title_en}. {desc_en}"
+            截断 1000 字符。不一致的话向量算的是另一段文本，语义比对会失真，
+            而且不会报错，只会表现为"去重效果莫名变差"。
+            算不出来不阻塞提交：VM 侧对没有 embedding 的条目会自己补算。"""
+            if not batch:
+                return
+            texts = [f"{r['enriched'].get('title_en', '')}. "
+                     f"{r['enriched'].get('description_short_en', '')}"[:1000]
+                     for r in batch]
+            try:
+                for r, vec in zip(batch, embed_batch(spec_, texts)):
+                    if vec:
+                        r["embedding"] = vec
+            except Exception as e:
+                log.warning(f"embedding 这批算失败（{type(e).__name__}），"
+                            f"照常提交、由 VM 侧补算：{str(e)[:80]}")
+
+        def _flush(force: bool = False) -> None:
+            nonlocal submitted, pending_flush
+            if len(pending_flush) < (1 if force else FLUSH_EVERY):
+                return
+            batch, pending_flush = pending_flush, []
+            _attach_embeddings(spec, batch)
+            for i in range(0, len(batch), 20):
+                chunk = batch[i:i + 20]
+                try:
+                    resp = api("/api/enrich/submit",
+                               {"prompt_hash": spec["prompt_hash"], "results": chunk})
+                    submitted += resp.get("accepted", 0)
+                    if resp.get("rejected"):
+                        log.warning(f"server rejected {len(resp['rejected'])} entries")
+                except Exception as e:          # 交不上去不能让整批算白算
+                    log.warning(f"submit 失败（{type(e).__name__}），这 {len(chunk)} 条"
+                                f"下次唤醒会重算：{str(e)[:80]}")
+
         with cf.ThreadPoolExecutor(max_workers=CONCURRENCY) as pool:
             for fut in cf.as_completed([pool.submit(run_one, it) for it in items]):
                 item, enriched = fut.result()
                 if enriched is not None:
-                    results.append({"url_hash": item["url_hash"],
-                                    "enriched": enriched,
-                                    "model": "litellm-gateway/"
-                                             + (_ACTIVE_CRED.get("model") or GATEWAY_MODEL)})
+                    rec = {"url_hash": item["url_hash"],
+                           "enriched": enriched,
+                           "model": "litellm-gateway/"
+                                    + (_ACTIVE_CRED.get("model") or GATEWAY_MODEL)}
+                    results.append(rec)
+                    pending_flush.append(rec)
+                    _flush()
         progress.finish()
-
-        # 顺手把去重用的向量也算了（ADR-002 A4）。文本口径必须与 VM 侧
-        # crawler/dedup.py 的 embedding_text() 完全一致——"{title_en}. {desc_en}"
-        # 截断 1000 字符。不一致的话向量算的是另一段文本，语义比对会失真，
-        # 而且不会报错，只会表现为"去重效果莫名变差"。
-        if results:
-            texts = []
-            for r in results:
-                e = r["enriched"]
-                texts.append(f"{e.get('title_en', '')}. "
-                             f"{e.get('description_short_en', '')}"[:1000])
-            for r, vec in zip(results, embed_batch(spec, texts)):
-                if vec:
-                    r["embedding"] = vec
+        _flush(force=True)
 
         spent = time.time() - t0
         # 单条成本估算按 OpenAI 官方 gpt-5.4 单价（run 12 实测约 $0.0093/条）——
@@ -481,14 +524,6 @@ def main() -> int:
         log.info(f"enriched {len(results)}/{len(items)} in {spent:.0f}s "
                  f"（单条均 {spent / max(1, len(items)):.1f}s，"
                  f"约合 ${len(results) * 0.0093:.2f}，走网关额度而非 VM 直连账号）")
-        submitted = 0
-        for i in range(0, len(results), 20):
-            chunk = results[i:i + 20]
-            resp = api("/api/enrich/submit",
-                       {"prompt_hash": spec["prompt_hash"], "results": chunk})
-            submitted += resp.get("accepted", 0)
-            if resp.get("rejected"):
-                log.warning(f"server rejected {len(resp['rejected'])} entries")
         log.info(f"submitted {submitted} cache entries — done")
         return 0
     except urllib.error.URLError as e:

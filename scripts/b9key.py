@@ -70,10 +70,18 @@ def _save(data: dict) -> None:
 
 
 def active_credential() -> dict | None:
-    """给 worker 用：返回当前生效的凭据（含 key）。过期的一律不返回。
+    """给 worker 用：返回当前生效的凭据（含 key）。
 
-    worker 拿不到就应该停下来等，而不是回落到别的付费通道——
-    "断供时宁可不跑也不花个人账号的钱"是本次架构升级的核心约束。
+    2026-08-04 修正一个把生产拖停过的语义错误：`expires_at` 记的其实是**公司额度
+    每 7 天刷新一次**的那个日期（Lawrence 原话："公司key会稳定的，只是每7天
+    refesh一次budget"），**不是 key 失效日**。原实现却把它当硬过期，日期一过就
+    `return None` 拒发——那天 `company-current` 实测 HTTP 200 完全可用，这个函数
+    却已经在拒绝它了，同时还在日志里喊"到期后入库会停摆"，把排障往错误方向带。
+
+    改为：**日期只提醒，不拦人**。凭据能不能用交给真实调用裁决——网关返回 401
+    就是 key 废了、402/429 就是额度用完了，两种都会让 worker 停下来把条目留在
+    队列里。而"断供时绝不回落个人账号"这条硬约束由 VM 侧的 llm_gate 保证，
+    从来不靠这里的日期判断，所以放宽这里不会松掉成本闸。
     """
     data = _load()
     name = data.get("active")
@@ -82,10 +90,16 @@ def active_credential() -> dict | None:
     cred = (data.get("keys") or {}).get(name)
     if not cred:
         return None
+    return dict(cred, name=name, budget_stale=_budget_stale(cred))
+
+
+def _budget_stale(cred: dict) -> bool:
+    """登记的额度刷新日是否已过（仅供提示，不作为发放与否的依据）。"""
     exp = cred.get("expires_at")
-    if exp and date.fromisoformat(exp) < date.today():
-        return None
-    return dict(cred, name=name)
+    try:
+        return bool(exp) and date.fromisoformat(exp) < date.today()
+    except (TypeError, ValueError):
+        return False
 
 
 # ── 网关连通性校验 ───────────────────────────────────────────────────
@@ -166,16 +180,18 @@ def cmd_list(args) -> int:
     if not keys:
         print("还没有任何 key。用 b9key.py add --key sk-xxx --expires YYYY-MM-DD 添加。")
         return 0
-    print(f"{'当前':^4} {'名称':<24} {'状态':<10} {'到期':<12} {'剩余'}")
-    print("-" * 68)
+    # 列名写"额度刷新"而不是"到期"：这个日期是公司额度每 7 天重置的日子，
+    # key 本身不会因为它失效。写成"已过期"会让人误判成 key 废了（真发生过）。
+    print(f"{'当前':^4} {'名称':<24} {'状态':<10} {'额度刷新':<12} {'剩余'}")
+    print("-" * 72)
     for name, c in sorted(keys.items()):
         cur = "→" if name == data.get("active") else ""
         exp = c.get("expires_at") or "-"
         if c.get("expires_at"):
             left = (date.fromisoformat(c["expires_at"]) - date.today()).days
-            left_s = f"{left} 天" if left >= 0 else f"已过期 {-left} 天"
+            left_s = f"{left} 天" if left >= 0 else f"已过刷新日 {-left} 天（key 仍可用，额度可能已见底）"
             if 0 <= left <= WARN_DAYS:
-                left_s += "  ⚠️ 该换了"
+                left_s += "  ⚠️ 该找同事续额度了"
         else:
             left_s = "-"
         print(f"{cur:^4} {name:<24} {c.get('status','?'):<10} {exp:<12} {left_s}")
@@ -185,16 +201,18 @@ def cmd_list(args) -> int:
 def cmd_test(args) -> int:
     cred = active_credential()
     if not cred:
-        data = _load()
-        if data.get("active"):
-            print(f"✗ 当前 key「{data['active']}」已过期，worker 会停止处理并把条目留在队列里。")
-            print("  这是设计内行为（断供不花个人账号的钱）。给新 key 后会自动回补。")
-        else:
-            print("✗ 没有设置当前 key。")
+        print("✗ 没有设置当前 key。")
         return 1
+    # 只有真实调用能裁决 key 能不能用；日期过了也照打，别提前替它下结论
     ok, detail = probe(cred["key"], cred.get("base_url", DEFAULT_BASE),
                        cred.get("model", DEFAULT_MODEL))
+    if cred.get("budget_stale"):
+        print(f"⚠️ 「{cred['name']}」登记的额度刷新日已过（{cred.get('expires_at')}）。"
+              f"这不代表 key 失效——下面是刚打的真实调用结果：")
     print(("✓ " if ok else "✗ ") + f"{cred['name']}：{detail}")
+    if not ok:
+        print("  worker 会停下把条目留在队列里，不会回落个人账号（成本闸在 VM 侧独立生效）。")
+        print("  给新 key 后自动回补：python3 scripts/b9key.py add --key sk-新key --expires YYYY-MM-DD")
     _sync_meta(quiet=True, ok=ok, error=None if ok else detail)
     return 0 if ok else 1
 

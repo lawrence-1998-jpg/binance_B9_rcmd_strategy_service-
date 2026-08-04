@@ -348,9 +348,43 @@ def pipeline_monitor():
     coverage["breadth_pct"] = round(coverage["breadth_tagged"] / total_ev, 4)
     coverage["punch_pct"] = round(coverage["punch_scored"] / total_ev, 4)
 
+    # ── 端到端产出健康度（2026-08-04 停摆 3 天后新增）─────────────────
+    #
+    # 那次事故最贵的不是修复，是**没人知道它坏了**：Mac 侧 enrich worker 从未
+    # 成功启动过，VM 每轮如实记 `personal_key_disabled` 并且行为完全正确
+    # （fail-closed，个人 key 分文未花），日志全程零 ERROR。组件级健康检查
+    # 全绿，产品却已经三天没出新内容。
+    #
+    # 所以这里判的不是"组件活着吗"，而是**"最近还有没有真的产出事件"**——
+    # 这是唯一一个上游任何一环断掉都会立刻塌下来的指标。
+    # 流水线是半小时一轮，3 小时无产出 = 连丢 6 轮，一定出事了。
+    last_ev_h = one("SELECT ROUND(TIMESTAMPDIFF(MINUTE, MAX(created_at), NOW())/60, 1) "
+                    "FROM news_events")
+    stalled_h = float(last_ev_h or 999)
+    if stalled_h >= 3:
+        verdict, reason = "down", (
+            f"已 {stalled_h} 小时没有新事件落库。上游任一环断了都会这样，"
+            f"按可能性依次查：① Mac 侧 enrich worker（launchctl list 看退出码，"
+            f"非 0 即失败）② 公司网关额度/凭据 ③ VM 流水线 cron。"
+            f"注意成本闸把条目「按设计延后」时日志是 INFO、看起来完全正常。")
+    elif stalled_h >= 1.5:
+        verdict, reason = "warn", f"已 {stalled_h} 小时没有新事件落库（正常应 ≤0.5 小时一轮）"
+    else:
+        verdict, reason = "ok", ""
+    health = {
+        "verdict": verdict,
+        "reason": reason,
+        "hours_since_last_event": stalled_h,
+        "backlog": staging.get("unconsumed"),
+        # 积压持续上涨而事件不涨，是"下游死了"最典型的组合
+        "backlog_growing_while_idle": bool(
+            verdict != "ok" and (staging.get("unconsumed") or 0) > 2000),
+    }
+
     cur.close()
     return jsonify({"staging": staging, "throughput": throughput,
                     "stored": stored, "factor_coverage": coverage,
+                    "health": health,
                     "generated_at": now_local().isoformat()})
 
 

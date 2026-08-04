@@ -154,7 +154,15 @@ def enrich_pending():
                   AND c.url_hash IS NULL
              -- 优先级在前：断供恢复后要先把权威大盘内容补回来，而不是
              -- 按时间顺序先啃几千条长尾。与 staging.fetch_staged_items 同口径。
-             ORDER BY s.priority ASC, s.fetched_at ASC
+             --
+             -- 2026-08-04 把同优先级内的次序从 ASC 改成 DESC（新的先算）。
+             -- 停摆 3 天攒了 1.1 万条后发现：旧写法是同优先级 FIFO，会先啃完
+             -- 周六的稿子才轮到今天的，恢复当天首屏全是两天前的新闻，而"大盘情绪"
+             -- 取的是 24h 窗口，一直是空的——**队列追平了，产品却还是坏的**。
+             -- 新闻的价值随时间衰减，等得久不代表更该先做，恰恰相反。
+             -- 长尾旧条目不会饿死：staging 有 30 天窗口，追平后自然会轮到；
+             -- 真过期的由 STAGING_MAX_AGE_DAYS 兜底清理。
+             ORDER BY s.priority ASC, s.fetched_at DESC
                 LIMIT %s""",
             (PROMPT_VERSION_HASH, STAGING_MAX_AGE_DAYS, limit),
         )

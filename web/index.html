@@ -1117,6 +1117,31 @@ footer{border-top:1px solid var(--rule);padding:26px 0 40px;font-size:12px;color
   margin:6px 0;cursor:pointer}
 #panel-5 .lb-mix-num{width:48px;padding:2px 6px;border:1px solid var(--rule);
   border-radius:6px;text-align:center;font-variant-numeric:tabular-nums}
+/* 混排应用按钮（2026-08-05）。默认是低调的次级按钮；一旦有未应用的改动就
+   `is-dirty` 变实心赤陶，把"你还没点我"这件事说清楚——原来改完毫无反馈，
+   用户只能靠去拖别的滑杆来确认到底生没生效。 */
+/* 这几条刻意写**字面色值**而不是 var()：实测按钮上 `background:var(--gold)`
+   解析不出预期色（lab 区的变量作用域被覆盖过一层），而变量解析失败是**静默**的
+   ——CSS 不报错，只是按钮永远不变色。既然只有三个固定态，直接写死更可靠。
+   flex:none + white-space:nowrap 是必需的：这块是 flex 容器，右侧提示文案会
+   把按钮挤成 42×78 的竖条（实测），"应用混排"四个字被压成一列。 */
+#panel-5 .lb-mix-apply{display:flex;align-items:center;gap:10px;margin-top:10px;flex-wrap:wrap}
+/* appearance:none 是必需的：不加的话浏览器的原生按钮外观会吃掉作者设的
+   background——实测连注入 `!important` 的同选择器规则都改不动底色，而同一套
+   class 写法在旁边的 <span> 上完全正常。这类"CSS 写了但看不出效果"没有任何
+   报错，只能靠量 computed style 才发现。 */
+#panel-5 .lb-mix-btn{flex:none;white-space:nowrap;-webkit-appearance:none;appearance:none;
+  padding:5px 14px;border-radius:8px;font-size:12px;font-weight:600;line-height:1.5;
+  border:1px solid #DCD3C4;background:#F9F4ED;color:#474238;cursor:pointer;
+  transition:background .15s,color .15s,border-color .15s}
+#panel-5 .lb-mix-btn:hover{border-color:#C67139;color:#8C491A}
+/* dirty 态同时改底色、边框、字色：底色万一被环境吃掉，边框+字色仍能把
+   "还没应用"这件事说清楚，不至于整个反馈消失。 */
+#panel-5 .lb-mix-btn.is-dirty{background:#C67139;border-color:#C67139;color:#FFFFFF}
+#panel-5 .lb-mix-btn:disabled{opacity:.55;cursor:default}
+#panel-5 .lb-mix-hint{font-size:11.5px;color:#82796A}
+#panel-5 .lb-mix-hint.is-dirty{color:#8C491A;font-weight:600}
+#panel-5 .lb-mix-hint.is-done{color:#3F5A46}
 #panel-5 .lb-tag.ver{background:var(--lab-g100);color:var(--lab-g800)}
 /* 2026-07-29：情绪同向/反转加成标签，和 tab02（真实数据展示）保持同一套
    语义色——反转用最深的赤陶+反白，做成"值得多看一眼"的醒目样式（它本来就
@@ -1805,7 +1830,7 @@ footer{border-top:1px solid var(--rule);padding:26px 0 40px;font-size:12px;color
       <h2>服务生成流程</h2>
       <p class="sub">
         左侧为数据源及其接入方式（区分「走第三方 API」与「走 RSS / HTML / 搜索等非 API 逻辑」）；
-        中段为抓取与理解；右侧分两条输出分支 —— 分支 1 不打分直出结构化事件，分支 2 追加七因子排序分。
+        中段为聚合与理解；右侧分两条服务提供方式 —— 分支 1 不打分直出结构化事件流，分支 2 追加排序分后出。
         底部虚线标出两个 AI 模型在各阶段的分工与协同。
       </p>
       <p class="sub" style="margin-top:8px" id="flowTimeSummary">
@@ -1816,7 +1841,7 @@ footer{border-top:1px solid var(--rule);padding:26px 0 40px;font-size:12px;color
 
     <div class="diagram">
       <div class="diagram-scroll">
-        <svg viewBox="0 0 1300 690" role="img" aria-label="服务生成流程图">
+        <svg viewBox="0 0 1300 860" role="img" aria-label="服务生成流程图">
           <defs>
             <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
               <path d="M0,1 L9,5 L0,9 z" fill="var(--n500)"/>
@@ -1848,6 +1873,25 @@ footer{border-top:1px solid var(--rule);padding:26px 0 40px;font-size:12px;color
             .sn{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;font-size:12px;fill:var(--n900);font-weight:600}
             .ss{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;font-size:10px;fill:var(--n600)}
             .mchip{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:8.5px;font-weight:700;letter-spacing:.03em}
+            /* 2026-08-02 团队归属标签重做。旧版用 mono + 描边小方片，跟旁边的
+               "接入方式"技术胶囊长得一样，看图的人分不出哪个是分工哪个是手段。
+               新版：无描边纯色底 + 前置圆点 + 中文正文字体，与技术胶囊拉开层级；
+               颜色即团队（赤陶=Scout 数据工程，鼠尾草=算法，中性=服务端/客户端）。 */
+            .team{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;
+                  font-size:9.5px;font-weight:700;letter-spacing:.01em}
+            /* 退热规则行：左侧条件、右侧生命周期，右侧用等宽让 7 天 / 2 天对齐可比 */
+            .rulec{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;font-size:9.5px;font-weight:600}
+            .rulev{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:10px;font-weight:700}
+            /* 排序分三段 skill 的右侧产出标注 */
+            .skout{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:8.5px;font-weight:700;
+                   fill:var(--n500);letter-spacing:.02em}
+            /* 分区行首标题（05 服务链路 / 06 AI 模型协同）。
+               2026-08-02 补：`.lbl` 在页面 CSS 里只有 `.note .lbl` 这类后代选择器，
+               SVG 里裸用一直没命中任何规则，"06 · AI 模型协同"实际是以纯黑 14.5px
+               默认字渲染的——跟全图的排版语言对不上。定义在 SVG 自己的 style 里，
+               顺带把这个存量问题一起修了。 */
+            .lbl{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;font-size:11.5px;
+                 fill:var(--n600);font-weight:700;letter-spacing:.05em}
             .nt{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;font-size:14px;fill:var(--n900);font-weight:650;letter-spacing:-.01em}
             .nd{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;font-size:10.5px;fill:var(--n600)}
             .nb{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:9px;fill:var(--a800);font-weight:700;letter-spacing:.05em}
@@ -1861,250 +1905,369 @@ footer{border-top:1px solid var(--rule);padding:26px 0 40px;font-size:12px;color
             .tmH{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:8.5px;fill:var(--a700);font-weight:700;letter-spacing:.04em}
           </style>
 
-          <!-- ─── 流程轴：01→05 深色步骤胶囊，各阶段耗时收在胶囊右侧 ───
-               设计稿要求把散落在各节点的微观耗时标注全部撤掉，只在这条轴上给
-               每一步一个汇总数字，这样"时间花在哪"一眼可见而不是满图找小字。
-               耗时由 JS 从 /api/runs 的 stage_timings 实时填入，静态值只是兜底。 -->
+          <!-- ─── 流程轴：01→05 深色步骤胶囊 ───
+               2026-08-02 撤掉轴上的耗时数字。改成从缓存出库后各阶段实测都落在
+               "≈ 0 秒"，一排 0 秒既没有信息量又显得链路是空的；真实耗时改由图下
+               那段说明文字承载（它有完整口径，不会被压缩成一个误导性的 0）。
+               胶囊 x 位置与下方各列对齐，让轴既是图例也是列标题。 -->
           <g id="flowAxis">
             <rect x="24"   y="10" width="214" height="28" rx="14" fill="var(--n900)"/>
             <text class="stepno"  x="37"   y="28.5">01</text>
             <text class="stepttl" x="58"   y="28.5">数据源与接入方式</text>
-            <text class="steptm"  x="225"  y="28.5" text-anchor="end">8 类信源</text>
+            <text class="steptm"  x="225"  y="28.5" text-anchor="end">5 类信源</text>
 
-            <line x1="246" y1="24" x2="378" y2="24" stroke="var(--n400)" stroke-width="1.5"
+            <line x1="246" y1="24" x2="374" y2="24" stroke="var(--n400)" stroke-width="1.5"
                   stroke-dasharray="3 4" marker-end="url(#ah)"/>
 
-            <rect x="392"  y="10" width="152" height="28" rx="14" fill="var(--n900)"/>
-            <text class="stepno"  x="405"  y="28.5">02</text>
-            <text class="stepttl" x="426"  y="28.5">抓取</text>
-            <text class="steptm"  x="531"  y="28.5" text-anchor="end" id="flowTm2">≈ 28 秒</text>
+            <rect x="382"  y="10" width="150" height="28" rx="14" fill="var(--n900)"/>
+            <text class="stepno"  x="395"  y="28.5">02</text>
+            <text class="stepttl" x="416"  y="28.5">数据流聚合</text>
 
-            <line x1="552" y1="24" x2="566" y2="24" stroke="var(--n400)" stroke-width="1.5"
+            <line x1="540" y1="24" x2="564" y2="24" stroke="var(--n400)" stroke-width="1.5"
                   marker-end="url(#ah)"/>
 
-            <rect x="572"  y="10" width="252" height="28" rx="14" fill="var(--n900)"/>
+            <rect x="572"  y="10" width="150" height="28" rx="14" fill="var(--n900)"/>
             <text class="stepno"  x="585"  y="28.5">03</text>
             <text class="stepttl" x="606"  y="28.5">聚类 &amp; 理解</text>
-            <text class="steptm hot" x="811" y="28.5" text-anchor="end" id="flowTm3">≈ 12 分 03 秒 · 92%</text>
 
-            <line x1="832" y1="24" x2="886" y2="24" stroke="var(--n400)" stroke-width="1.5"
+            <line x1="730" y1="24" x2="892" y2="24" stroke="var(--n400)" stroke-width="1.5"
                   stroke-dasharray="3 4" marker-end="url(#ah)"/>
 
-            <rect x="900"  y="10" width="176" height="28" rx="14" fill="var(--n900)"/>
+            <rect x="900"  y="10" width="150" height="28" rx="14" fill="var(--n900)"/>
             <text class="stepno"  x="913"  y="28.5">04</text>
-            <text class="stepttl" x="934"  y="28.5">输出分支</text>
-            <text class="steptm"  x="1063" y="28.5" text-anchor="end" id="flowTm4">≈ 34 秒</text>
+            <text class="stepttl" x="934"  y="28.5">排序与分支</text>
 
-            <line x1="1084" y1="24" x2="1136" y2="24" stroke="var(--n400)" stroke-width="1.5"
-                  stroke-dasharray="3 4" marker-end="url(#ah)"/>
+            <line x1="1058" y1="24" x2="1132" y2="24" stroke="var(--n400)" stroke-width="1.5"
+                  marker-end="url(#ah)"/>
 
-            <rect x="1150" y="10" width="126" height="28" rx="14" fill="var(--n900)"/>
-            <text class="stepno"  x="1163" y="28.5">05</text>
-            <text class="stepttl" x="1184" y="28.5">服务</text>
-            <text class="steptm"  x="1263" y="28.5" text-anchor="end">实时</text>
+            <rect x="1140" y="10" width="136" height="28" rx="14" fill="var(--n900)"/>
+            <text class="stepno"  x="1153" y="28.5">05</text>
+            <text class="stepttl" x="1174" y="28.5">服务链路</text>
           </g>
 
-          <!-- ─── 数据源 8 行 ─── -->
+          <!-- ─── 数据源 5 类 ───
+               2026-08-02 按线上真实接入方式重画：由 8 类合并为 5 类，全部归数据工程
+               Scout 团队。爬虫只服务 RSS 那一路，其余四路都是 API 直连，所以不再给
+               爬虫单独立框——接入方式直接标在每一行右侧，一眼看清哪条要爬、哪条直连。 -->
           <g id="sources">
-            <!-- 1 英文 RSS -->
             <rect x="24" y="46" width="300" height="46" rx="9" fill="var(--n100)" stroke="var(--n300)"/>
             <rect x="24" y="46" width="3.5" height="46" rx="2" fill="var(--gold)"/>
-            <text class="sn" x="40" y="66">英文媒体 RSS</text>
-            <text class="ss" x="40" y="81">CoinDesk · TheBlock · Cointelegraph · Decrypt +2</text>
-            <rect x="246" y="55" width="66" height="17" rx="5" fill="var(--a100)" stroke="var(--a300)"/>
-            <text class="mchip" x="279" y="67" text-anchor="middle" fill="var(--a800)">RSS 直连</text>
+            <text class="sn" x="40" y="66">站外 RSS</text>
+            <text class="ss" x="40" y="81">英文 / 中文媒体 · 自建 RSSHub</text>
+            <rect x="252" y="55" width="60" height="17" rx="5" fill="var(--a100)" stroke="var(--a300)"/>
+            <text class="mchip" x="282" y="67" text-anchor="middle" fill="var(--a800)">爬虫抓取</text>
 
-            <!-- 2 中文 RSSHub -->
             <rect x="24" y="100" width="300" height="46" rx="9" fill="var(--n100)" stroke="var(--n300)"/>
             <rect x="24" y="100" width="3.5" height="46" rx="2" fill="var(--gold)"/>
-            <text class="sn" x="40" y="120">中文媒体</text>
-            <text class="ss" x="40" y="135">吴说 · BlockBeats · 金色 · Followin · TechFlow</text>
-            <rect x="234" y="109" width="78" height="17" rx="5" fill="var(--a100)" stroke="var(--a300)"/>
-            <text class="mchip" x="273" y="121" text-anchor="middle" fill="var(--a800)">自建 RSSHub</text>
+            <text class="sn" x="40" y="120">Twitter API</text>
+            <text class="ss" x="40" y="135">KOL 时间线 · 全网搜索</text>
+            <rect x="252" y="109" width="60" height="17" rx="5" fill="var(--n200)" stroke="var(--n300)"/>
+            <text class="mchip" x="282" y="121" text-anchor="middle" fill="var(--n700)">API 直连</text>
 
-            <!-- 3 HTML -->
             <rect x="24" y="154" width="300" height="46" rx="9" fill="var(--n100)" stroke="var(--n300)"/>
-            <rect x="24" y="154" width="3.5" height="46" rx="2" fill="var(--n700)"/>
-            <text class="sn" x="40" y="174">页面直接解析</text>
-            <text class="ss" x="40" y="189">ChainCatcher（NUXT SSR）· PANews 快讯页</text>
-            <rect x="240" y="163" width="72" height="17" rx="5" fill="var(--n200)" stroke="var(--n300)"/>
-            <text class="mchip" x="276" y="175" text-anchor="middle" fill="var(--n700)">HTML 解析</text>
+            <rect x="24" y="154" width="3.5" height="46" rx="2" fill="var(--gold)"/>
+            <text class="sn" x="40" y="174">Square 币安广场 API</text>
+            <text class="ss" x="40" y="189">站内内容生态</text>
+            <rect x="252" y="163" width="60" height="17" rx="5" fill="var(--n200)" stroke="var(--n300)"/>
+            <text class="mchip" x="282" y="175" text-anchor="middle" fill="var(--n700)">API 直连</text>
 
-            <!-- 4 X KOL -->
             <rect x="24" y="208" width="300" height="46" rx="9" fill="var(--n100)" stroke="var(--n300)"/>
-            <rect x="24" y="208" width="3.5" height="46" rx="2" fill="var(--g700)"/>
-            <text class="sn" x="40" y="228">X KOL 时间线</text>
-            <text class="ss" x="40" y="243">32 个账号 · 链上/安全/监管/官方/宏观</text>
-            <rect x="256" y="217" width="56" height="17" rx="5" fill="var(--g100)" stroke="var(--g300)"/>
-            <text class="mchip" x="284" y="229" text-anchor="middle" fill="var(--g700)">X API</text>
+            <rect x="24" y="208" width="3.5" height="46" rx="2" fill="var(--gold)"/>
+            <text class="sn" x="40" y="228">新闻媒体 API</text>
+            <text class="ss" x="40" y="243">机构新闻源 · 实时推送</text>
+            <rect x="222" y="217" width="90" height="17" rx="5" fill="var(--n200)" stroke="var(--n300)"/>
+            <text class="mchip" x="267" y="229" text-anchor="middle" fill="var(--n700)">dxfeed · massive</text>
 
-            <!-- 5 X search -->
-            <rect x="24" y="262" width="300" height="46" rx="9" fill="var(--n100)" stroke="var(--n300)"/>
-            <rect x="24" y="262" width="3.5" height="46" rx="2" fill="var(--g700)"/>
-            <text class="sn" x="40" y="282">X 全网搜索</text>
-            <text class="ss" x="40" y="297">21 组两段式查询 · search/recent 端点</text>
-            <rect x="256" y="271" width="56" height="17" rx="5" fill="var(--g100)" stroke="var(--g300)"/>
-            <text class="mchip" x="284" y="283" text-anchor="middle" fill="var(--g700)">X API</text>
+            <!-- 第 5 类尚未上线：整行用虚线边框 + 弱化文字，与已上线的四类区分开，
+                 避免看图的人以为指数数据已经在跑了。 -->
+            <rect x="24" y="262" width="300" height="46" rx="9" fill="var(--n100)" stroke="var(--n300)"
+                  stroke-dasharray="4 3"/>
+            <rect x="24" y="262" width="3.5" height="46" rx="2" fill="var(--n400)"/>
+            <text class="sn" x="40" y="282" fill="var(--n600)">指数数据一手 API</text>
+            <text class="ss" x="40" y="297">建设中 · ETA 未定</text>
+            <rect x="252" y="271" width="60" height="17" rx="5" fill="var(--n200)" stroke="var(--n400)"
+                  stroke-dasharray="3 2"/>
+            <text class="mchip" x="282" y="283" text-anchor="middle" fill="var(--n600)">建设中</text>
 
-            <!-- 6 搜索引擎 -->
-            <rect x="24" y="316" width="300" height="46" rx="9" fill="var(--n100)" stroke="var(--n300)"/>
-            <rect x="24" y="316" width="3.5" height="46" rx="2" fill="var(--g700)"/>
-            <text class="sn" x="40" y="336">搜索引擎召回</text>
-            <text class="ss" x="40" y="351">Google News RSS（when:1d）· 币安广场</text>
-            <rect x="242" y="325" width="70" height="17" rx="5" fill="var(--g100)" stroke="var(--g300)"/>
-            <text class="mchip" x="277" y="337" text-anchor="middle" fill="var(--g700)">搜索 · ddgs</text>
-
-            <!-- 7 行情 -->
-            <rect x="24" y="370" width="300" height="46" rx="9" fill="var(--n100)" stroke="var(--n300)"/>
-            <rect x="24" y="370" width="3.5" height="46" rx="2" fill="var(--g700)"/>
-            <text class="sn" x="40" y="390">行情异动信号</text>
-            <text class="ss" x="40" y="405">data-api.binance.vision · OKX · 零 LLM 成本</text>
-            <rect x="248" y="379" width="64" height="17" rx="5" fill="var(--g100)" stroke="var(--g300)"/>
-            <text class="mchip" x="280" y="391" text-anchor="middle" fill="var(--g700)">行情 API</text>
-
-            <!-- 8 日历 -->
-            <rect x="24" y="424" width="300" height="46" rx="9" fill="var(--n100)" stroke="var(--n300)"/>
-            <rect x="24" y="424" width="3.5" height="46" rx="2" fill="var(--g700)"/>
-            <text class="sn" x="40" y="444">催化剂日历</text>
-            <text class="ss" x="40" y="459">CoinMarketCal · 硬分叉 / 主网 / 解锁</text>
-            <rect x="240" y="433" width="72" height="17" rx="5" fill="var(--g100)" stroke="var(--g300)"/>
-            <text class="mchip" x="276" y="445" text-anchor="middle" fill="var(--g700)">第三方 API</text>
+            <rect x="24" y="320" width="104" height="19" rx="9.5" fill="var(--a100)"/>
+            <circle cx="36" cy="329.5" r="2.6" fill="var(--a700)"/>
+            <text class="team" x="45" y="333" fill="var(--a800)">数据工程 Scout</text>
           </g>
 
           <!-- ─── 汇聚线 ─── -->
           <g fill="none" stroke="var(--n300)" stroke-width="1.4">
-            <path d="M324 69  C352 69, 352 258, 380 258"/>
-            <path d="M324 123 C352 123, 352 258, 380 258"/>
-            <path d="M324 177 C352 177, 352 258, 380 258"/>
-            <path d="M324 231 C352 231, 352 258, 380 258"/>
-            <path d="M324 285 C352 285, 352 258, 380 258"/>
-            <path d="M324 339 C352 339, 352 258, 380 258"/>
-            <path d="M324 393 C352 393, 352 258, 380 258"/>
-            <path d="M324 447 C352 447, 352 258, 380 258"/>
+            <path d="M324 69  C352 69, 352 178, 380 178"/>
+            <path d="M324 123 C352 123, 352 178, 380 178"/>
+            <path d="M324 177 C352 177, 352 178, 380 178"/>
+            <path d="M324 231 C352 231, 352 178, 380 178"/>
+            <path d="M324 285 C352 285, 352 178, 380 178"/>
           </g>
 
-          <!-- ─── 爬虫 ─── -->
-          <rect x="382" y="208" width="140" height="100" rx="13" fill="url(#gStage)" stroke="var(--n300)" stroke-width="1.4"/>
-          <rect x="382" y="208" width="140" height="4" rx="2" fill="var(--gold)"/>
-          <text class="nt" x="452" y="240" text-anchor="middle">爬虫</text>
-          <text class="nd" x="452" y="258" text-anchor="middle">并发抓取 · 7 天时间窗</text>
-          <text class="nd" x="452" y="273" text-anchor="middle">每 2 天 1 轮 · 08:00</text>
-          <rect x="404" y="282" width="96" height="17" rx="5" fill="var(--a100)" stroke="var(--a300)"/>
-          <text class="nb" x="452" y="294" text-anchor="middle">~1200 条 / 轮</text>
+          <!-- ─── 数据流聚合（Scout）───
+               五路来源格式各不相同，先在这里统一成一份 schema 再往下走；顺手按 url
+               做一次轻去重（重去重在 03 用语义向量做，两层职责不同：这里挡的是同一
+               条 url 被多路重复送进来，那里挡的是同一件事被不同媒体分别报道）。 -->
+          <rect x="382" y="132" width="150" height="96" rx="13" fill="url(#gStage)" stroke="var(--n300)" stroke-width="1.4"/>
+          <rect x="382" y="132" width="150" height="4" rx="2" fill="var(--gold)"/>
+          <text class="nt" x="457" y="162" text-anchor="middle">数据流聚合</text>
+          <text class="nd" x="457" y="180" text-anchor="middle">接口统一 · 字段归一</text>
+          <rect x="404" y="192" width="106" height="17" rx="5" fill="var(--a100)" stroke="var(--a300)"/>
+          <text class="nb" x="457" y="204" text-anchor="middle">URL 轻去重</text>
+          <rect x="405" y="236" width="104" height="19" rx="9.5" fill="var(--a100)"/>
+          <circle cx="417" cy="245.5" r="2.6" fill="var(--a700)"/>
+          <text class="team" x="426" y="249" fill="var(--a800)">数据工程 Scout</text>
 
-          <!-- 爬虫 → 聚类，中间挂粗去重。
-               粗去重挂在爬虫正上方而不是两个框中间：中间只有 50px 空隙（爬虫右边
-               522、聚类左边 572），放不下这个标签，早先版本压在了聚类框上面。 -->
-          <path d="M522 258 L570 258" fill="none" stroke="var(--n500)" stroke-width="1.6" marker-end="url(#ah)"/>
-          <rect x="396" y="166" width="112" height="30" rx="8" fill="var(--n200)" stroke="var(--n300)" stroke-dasharray="3 2.5"/>
-          <text class="subd" x="452" y="179" text-anchor="middle" fill="var(--n800)">粗去重</text>
-          <text class="subd" x="452" y="190" text-anchor="middle">标题归一 · TF-IDF</text>
-          <path d="M452 196 L452 208" fill="none" stroke="var(--n400)" stroke-width="1.2" stroke-dasharray="3 3"/>
+          <path d="M532 178 L570 178" fill="none" stroke="var(--n500)" stroke-width="1.6" marker-end="url(#ah)"/>
 
-          <!-- ─── 聚类 & 理解 ─── -->
-          <rect x="572" y="120" width="290" height="280" rx="15" fill="var(--n100)" stroke="var(--g700)" stroke-width="1.4" opacity=".98"/>
-          <rect x="572" y="120" width="290" height="4" rx="2" fill="var(--g700)"/>
-          <text class="nt" x="717" y="150" text-anchor="middle">聚类 &amp; 理解</text>
-          <text class="nd" x="717" y="167" text-anchor="middle">把原始条目变成唯一、可信、带标签的事件</text>
+          <!-- ─── 聚类 &amp; 理解（算法 hang shang）─── -->
+          <rect x="572" y="96" width="290" height="310" rx="15" fill="var(--n100)" stroke="var(--g700)" stroke-width="1.4" opacity=".98"/>
+          <rect x="572" y="96" width="290" height="4" rx="2" fill="var(--g700)"/>
+          <text class="nt" x="717" y="126" text-anchor="middle">聚类 &amp; 理解</text>
+          <text class="nd" x="717" y="143" text-anchor="middle">把原始条目变成唯一、可信、带标签的事件</text>
 
-          <!-- 子步骤 1 -->
-          <rect x="590" y="180" width="254" height="46" rx="9" fill="var(--n200)" stroke="var(--n300)"/>
-          <text class="sub" x="604" y="199">① LLM 结构化</text>
-          <text class="subd" x="604" y="214">双语标题 / 长短摘要 / 板块 / 币种 / 三元组</text>
-          <circle cx="828" cy="203" r="4.5" fill="var(--g400)"/>
+          <rect x="590" y="156" width="254" height="40" rx="9" fill="var(--n200)" stroke="var(--n300)"/>
+          <text class="sub" x="604" y="172">① LLM 结构化</text>
+          <text class="subd" x="604" y="186">双语标题 / 摘要 / 板块 / 币种 / 三元组</text>
+          <circle cx="828" cy="176" r="4.5" fill="var(--g400)"/>
 
-          <!-- 子步骤 2 -->
-          <rect x="590" y="232" width="254" height="46" rx="9" fill="var(--n200)" stroke="var(--n300)"/>
-          <text class="sub" x="604" y="251">② 语义聚合去重</text>
-          <text class="subd" x="604" y="266">256 维向量 · cosine ≥ 0.82 并簇</text>
-          <circle cx="828" cy="255" r="4.5" fill="var(--g700)"/>
+          <!-- 内容理解是本次新增的一环：结构化解决"这条说了什么"，内容理解解决
+               "这条该挂哪些标签"，后者结合 RAG 检索历史语料辅助判断。 -->
+          <rect x="590" y="201" width="254" height="40" rx="9" fill="var(--n200)" stroke="var(--g400)"/>
+          <text class="sub" x="604" y="217">② 内容理解打标</text>
+          <text class="subd" x="604" y="231">情绪 / 实体 / 标的 / 类型 · 结合 RAG</text>
+          <circle cx="828" cy="221" r="4.5" fill="var(--g400)"/>
 
-          <!-- 子步骤 3 -->
-          <rect x="590" y="284" width="254" height="46" rx="9" fill="var(--n200)" stroke="var(--n300)"/>
-          <text class="sub" x="604" y="303">③ 跨轮归并</text>
-          <text class="subd" x="604" y="318">写库前比对历史指纹，命中则合并信源</text>
+          <rect x="590" y="246" width="254" height="40" rx="9" fill="var(--n200)" stroke="var(--n300)"/>
+          <text class="sub" x="604" y="262">③ 语义聚合去重</text>
+          <text class="subd" x="604" y="276">256 维向量 · cosine ≥ 0.82 并簇</text>
+          <circle cx="828" cy="266" r="4.5" fill="var(--g700)"/>
 
-          <!-- 子步骤 4 -->
-          <rect x="590" y="336" width="254" height="46" rx="9" fill="var(--n200)" stroke="var(--n300)"/>
-          <text class="sub" x="604" y="355">④ 真实性校验</text>
-          <text class="subd" x="604" y="370">独立信源交叉 → VERIFIED / PROBABLE / …</text>
-          <circle cx="828" cy="359" r="4.5" fill="var(--g400)"/>
+          <rect x="590" y="291" width="254" height="40" rx="9" fill="var(--n200)" stroke="var(--n300)"/>
+          <text class="sub" x="604" y="307">④ 跨轮归并</text>
+          <text class="subd" x="604" y="321">写库前比对历史指纹，命中则合并信源</text>
 
-          <!-- ─── 分叉 ─── -->
-          <path d="M862 260 L900 260" fill="none" stroke="var(--n500)" stroke-width="1.6"/>
-          <circle cx="900" cy="260" r="4" fill="var(--n500)"/>
+          <rect x="590" y="336" width="254" height="40" rx="9" fill="var(--n200)" stroke="var(--n300)"/>
+          <text class="sub" x="604" y="352">⑤ 真实性校验</text>
+          <text class="subd" x="604" y="366">独立信源交叉 → VERIFIED / PROBABLE</text>
+          <circle cx="828" cy="356" r="4.5" fill="var(--g400)"/>
 
-          <!-- 分支 1：直出 -->
-          <path d="M900 260 C924 260, 924 150, 948 150 L1128 150"
-                fill="none" stroke="var(--a600)" stroke-width="2" marker-end="url(#ah-g)"/>
-          <rect x="952" y="106" width="168" height="38" rx="9" fill="var(--a100)" stroke="var(--a300)"/>
-          <text class="brl" x="966" y="123" fill="var(--a800)">分支 1 · 结构化事件流</text>
-          <text class="brd" x="966" y="136">不打分直出，下游自行排序</text>
+          <rect x="734" y="381" width="110" height="19" rx="9.5" fill="var(--g100)"/>
+          <circle cx="746" cy="390.5" r="2.6" fill="var(--g700)"/>
+          <text class="team" x="755" y="394" fill="var(--g700)">算法 hang shang</text>
+
+          <!-- ─── 分叉：两种服务提供方式 ─── -->
+          <path d="M862 251 L880 251" fill="none" stroke="var(--n500)" stroke-width="1.6"/>
+          <circle cx="880" cy="251" r="4" fill="var(--n500)"/>
+
+          <!-- 分叉点是一个 T：分支 2 向右直接进排序分，分支 1 沿 x=880 这条窄廊
+               （聚类右边缘 862 与排序分左边缘 900 之间）下行绕开排序分，两者在
+               y=478 汇合。走 T 而不是两条弧，是因为弧的起手段会重叠在一起。 -->
+          <path d="M880 251 L880 470" fill="none" stroke="var(--a600)" stroke-width="2"/>
+          <rect x="700" y="414" width="176" height="42" rx="9" fill="var(--a100)"/>
+          <text class="brl" x="714" y="431" fill="var(--a800)">分支 1 · 结构化事件流</text>
+          <text class="brd" x="714" y="446">不打分直出，下游自行排序</text>
 
           <!-- 分支 2：经排序分 -->
-          <path d="M900 260 C924 260, 924 372, 948 372"
+          <path d="M880 251 L894 251"
                 fill="none" stroke="var(--g700)" stroke-width="2" marker-end="url(#ah-i)"/>
-          <rect x="952" y="330" width="168" height="84" rx="11" fill="var(--n100)" stroke="var(--g700)" stroke-width="1.4"/>
-          <rect x="952" y="330" width="168" height="4" rx="2" fill="var(--g700)"/>
-          <text class="nt" x="1036" y="358" text-anchor="middle">排序分</text>
-          <text class="nd" x="1036" y="375" text-anchor="middle">七因子加权 → 0–1 基础分</text>
-          <text class="nd" x="1036" y="390" text-anchor="middle">映射 S / A / B / C / D 五级</text>
-          <circle cx="1108" cy="352" r="4.5" fill="var(--g400)"/>
-          <path d="M1120 372 C1146 372, 1146 300, 1172 300 L1172 262"
-                fill="none" stroke="var(--g700)" stroke-width="2" marker-end="url(#ah-i)"/>
-          <rect x="988" y="424" width="132" height="17" rx="5" fill="var(--g100)" stroke="var(--g300)"/>
-          <text class="mchip" x="1054" y="436" text-anchor="middle" fill="var(--g700)">分支 2 · 重要性排序流</text>
 
-          <!-- ─── API 服务 ─── -->
-          <rect x="1128" y="118" width="148" height="146" rx="13" fill="url(#gStage)" stroke="var(--n300)" stroke-width="1.4"/>
-          <rect x="1128" y="118" width="148" height="4" rx="2" fill="var(--gold)"/>
-          <text class="nt" x="1202" y="150" text-anchor="middle">API 服务</text>
-          <text class="nd" x="1202" y="168" text-anchor="middle">MySQL + Flask REST</text>
-          <rect x="1146" y="180" width="112" height="17" rx="5" fill="var(--n200)" stroke="var(--n300)"/>
-          <text class="mchip" x="1202" y="192" text-anchor="middle" fill="var(--n800)">GET /api/news</text>
-          <rect x="1146" y="202" width="112" height="17" rx="5" fill="var(--n200)" stroke="var(--n300)"/>
-          <text class="mchip" x="1202" y="214" text-anchor="middle" fill="var(--n800)">GET /api/sources</text>
-          <rect x="1146" y="224" width="112" height="17" rx="5" fill="var(--n200)" stroke="var(--n300)"/>
-          <text class="mchip" x="1202" y="236" text-anchor="middle" fill="var(--n800)">GET /api/runs</text>
-          <text class="brd" x="1202" y="256" text-anchor="middle">Sector / Macro Insight 消费</text>
+          <!-- ─── 排序分（算法 hang shang）───
+               2026-08-02 强化：原来只是三行小字，看不出这里是整条链路唯一决定
+               "谁排前面"的地方。改成三个带序号与左侧色条的子块，每块右侧标出它的
+               产出物，让"打底分 → 业务干预 → 最终序列"这条递进关系自己说话。 -->
+          <rect x="900" y="114" width="376" height="248" rx="15" fill="var(--n100)" stroke="var(--g700)" stroke-width="1.6"/>
+          <rect x="900" y="114" width="376" height="4" rx="2" fill="var(--g700)"/>
+          <text class="nt" x="1088" y="142" text-anchor="middle">排序分</text>
+          <text class="nd" x="1088" y="159" text-anchor="middle">三段 skill 串行，每段职责独立、可单独回归</text>
+
+          <rect x="918" y="170" width="340" height="48" rx="9" fill="var(--n200)" stroke="var(--n300)"/>
+          <rect x="918" y="170" width="3.5" height="48" rx="2" fill="var(--g700)"/>
+          <text class="sub"  x="934"  y="189">① 基础排序 skill</text>
+          <!-- ● 与聚类框里一致：标在"调用模型的那个子步骤"上，不是标在模块角上 -->
+          <circle cx="1026" cy="185.5" r="4.5" fill="var(--g400)"/>
+          <text class="skout" x="1244" y="189" text-anchor="end">→ 0–1 基础分</text>
+          <text class="subd" x="934"  y="206">七因子加权：新鲜度 / 权威 / 情绪 / 冲击力 / 广度…</text>
+
+          <rect x="918" y="224" width="340" height="48" rx="9" fill="var(--n200)" stroke="var(--n300)"/>
+          <rect x="918" y="224" width="3.5" height="48" rx="2" fill="var(--g400)"/>
+          <text class="sub"  x="934"  y="243">② 业务调控排序 skill</text>
+          <text class="skout" x="1244" y="243" text-anchor="end">→ ×倍率 +加分</text>
+          <text class="subd" x="934"  y="260">市场倍率 · 交易实体加成 · 情绪同向 / 反转信号</text>
+
+          <rect x="918" y="278" width="340" height="48" rx="9" fill="var(--n200)" stroke="var(--n300)"/>
+          <rect x="918" y="278" width="3.5" height="48" rx="2" fill="var(--gold)"/>
+          <text class="sub"  x="934"  y="297">③ 混排 skill</text>
+          <text class="skout" x="1244" y="297" text-anchor="end">→ 最终序列</text>
+          <text class="subd" x="934"  y="314">同源打散 · 实体配额 N/10 · Top1 / Top3 置顶</text>
+
+          <rect x="1033" y="332" width="110" height="19" rx="9.5" fill="var(--g100)"/>
+          <circle cx="1045" cy="341.5" r="2.6" fill="var(--g700)"/>
+          <text class="team" x="1054" y="345" fill="var(--g700)">算法 hang shang</text>
+
+          <!-- ─── 召回池退热 ───
+               不是流程里的一步，是"事件能在召回池里待多久"的约束，所以用虚线挂在
+               排序分下方而不是串进主链路：数据不流经它，它只决定谁还留在池子里。
+               2026-08-02 强化：原来一行小字把两条规则挤在一起，看不出这是一张
+               "条件 → 生命周期"的对照表。改成两行规则条，右列生命周期用等宽对齐，
+               7 天那条给赤陶底——一眼能看出哪类事件被延长了。 -->
+          <path d="M1168 362 L1168 372" fill="none" stroke="var(--n400)" stroke-width="1.2" stroke-dasharray="3 3"/>
+          <rect x="1060" y="372" width="216" height="76" rx="11" fill="var(--n100)" stroke="var(--n400)" stroke-dasharray="4 3"/>
+          <text class="sub"  x="1074" y="391">召回池退热</text>
+          <text class="skout" x="1264" y="391" text-anchor="end">生命周期</text>
+
+          <rect x="1074" y="398" width="190" height="22" rx="6" fill="var(--a100)"/>
+          <text class="rulec" x="1084" y="412.5" fill="var(--a800)">S/A 级 · 高点击事件</text>
+          <text class="rulev" x="1254" y="413" text-anchor="end" fill="var(--a800)">7 天</text>
+
+          <rect x="1074" y="424" width="190" height="22" rx="6" fill="var(--n200)"/>
+          <text class="rulec" x="1084" y="438.5" fill="var(--n700)">其余新闻 / 事件</text>
+          <text class="rulev" x="1254" y="439" text-anchor="end" fill="var(--n600)">2 天</text>
+
+          <!-- 分支 2 从排序分底部下行至汇合点；x=950 走在排序分左段与退热框（x≥1000）之间 -->
+          <path d="M950 362 L950 478 L886 478" fill="none" stroke="var(--g700)" stroke-width="2"/>
+          <rect x="886" y="458" width="104" height="19" rx="9.5" fill="var(--g100)"/>
+          <circle cx="898" cy="467.5" r="2.6" fill="var(--g700)"/>
+          <text class="team" x="907" y="471" fill="var(--g700)">分支 2 · 排序流</text>
+
+          <!-- ─── 汇合 → 05 服务链路 ───
+               两条分支在这里合流，再横穿回左侧。合流后用中性深色而不是任一分支色，
+               表示"两种出数方式共用同一条服务链路"。
+               2026-08-03：干线在 x=498 再分一路给"数据服务提供"——它服务的是**全量
+               事件记录**，不是排序结果，所以它和"数据出库"是并列的两个供数方，
+               而不是串在一条链上的上下游。 -->
+          <circle cx="880" cy="478" r="5" fill="var(--n700)"/>
+          <path d="M880 478 L186 478 C174 478, 174 484, 174 504"
+                fill="none" stroke="var(--n700)" stroke-width="2.2" marker-end="url(#ah)"/>
+          <circle cx="498" cy="478" r="4" fill="var(--n700)"/>
+          <path d="M498 478 L498 504" fill="none" stroke="var(--n700)" stroke-width="2.2" marker-end="url(#ah)"/>
+
+          <!-- ─── 05 服务链路 ───
+               2026-08-02 由右侧竖排改为横排。
+               2026-08-03 按 Lawrence 反馈改掉链路语义：原来画成
+               数据出库 → 数据服务提供 → 服务端调用 的**串行链**，是错的。真实情况是
+               **两路并行供数、服务端按 id join**：
+                 · 算法（数据出库）给服务端一个**直连 API，只回 id + 排序 meta**，不含正文
+                 · Scout（数据服务提供）按同一批 id 提供**完整内容字段**
+                 · 服务端拿到两路后按 id 关联，再做拼接 / 改写 / 适配
+               所以"数据出库 → 服务端调用"要有一条独立的直连线（走下方绕过 Scout 那个框），
+               而不是把算法的数据塞进 Scout 的接口里再转发。 -->
+          <!-- 行首标题放在干线**上方** y=452：干线在 x=174 / x=498 各有一条竖直下钻，
+               标题若压在 y≈498 那一行会被这两条线穿过去。 -->
+          <text class="lbl" x="60" y="452">05 · 服务链路　·　两路供数，服务端按 id 关联</text>
+
+          <rect x="44"  y="508" width="260" height="96" rx="12" fill="url(#gStage)" stroke="var(--n300)" stroke-width="1.4"/>
+          <rect x="44"  y="508" width="260" height="4" rx="2" fill="var(--g700)"/>
+          <text class="nt" x="174" y="534" text-anchor="middle">数据出库</text>
+          <text class="brd" x="174" y="551" text-anchor="middle">只出 id + 排序 meta，不含正文</text>
+          <text class="brd" x="174" y="564" text-anchor="middle">不同资源位 instruction 微调</text>
+          <rect x="119" y="572" width="110" height="19" rx="9.5" fill="var(--g100)"/>
+          <circle cx="131" cy="581.5" r="2.6" fill="var(--g700)"/>
+          <text class="team" x="140" y="585" fill="var(--g700)">算法 hang shang</text>
+
+          <rect x="368" y="508" width="260" height="96" rx="12" fill="url(#gStage)" stroke="var(--n300)" stroke-width="1.4"/>
+          <rect x="368" y="508" width="260" height="4" rx="2" fill="var(--gold)"/>
+          <text class="nt" x="498" y="534" text-anchor="middle">数据服务提供</text>
+          <text class="brd" x="498" y="551" text-anchor="middle">按同一批 id 提供完整内容字段</text>
+          <text class="brd" x="498" y="564" text-anchor="middle">正文 / 图片 / 信源 / 扩展属性</text>
+          <rect x="446" y="572" width="104" height="19" rx="9.5" fill="var(--a100)"/>
+          <circle cx="458" cy="581.5" r="2.6" fill="var(--a700)"/>
+          <text class="team" x="467" y="585" fill="var(--a800)">数据工程 Scout</text>
+
+          <!-- Scout 的完整内容 → 服务端。用 Scout 的赤陶色，与算法那条鼠尾草绿的直连线
+               成对：两种颜色 = 两个供数方，服务端把它们按 id 合起来。 -->
+          <path d="M628 552 L684 552" fill="none" stroke="var(--gold)" stroke-width="2" marker-end="url(#ah-g)"/>
+
+          <rect x="692" y="508" width="260" height="96" rx="12" fill="url(#gStage)" stroke="var(--n300)" stroke-width="1.4"/>
+          <rect x="692" y="508" width="260" height="4" rx="2" fill="var(--n700)"/>
+          <text class="nt" x="822" y="534" text-anchor="middle">服务端调用</text>
+          <text class="brd" x="822" y="551" text-anchor="middle">按 id 关联两路数据</text>
+          <text class="brd" x="822" y="564" text-anchor="middle">内容拼接 · 改写 · 适配等二次编辑</text>
+          <rect x="791" y="572" width="62" height="19" rx="9.5" fill="var(--n200)"/>
+          <circle cx="803" cy="581.5" r="2.6" fill="var(--n600)"/>
+          <text class="team" x="812" y="585" fill="var(--n700)">服务端</text>
+
+          <path d="M952 552 L1008 552" fill="none" stroke="var(--n500)" stroke-width="1.6" marker-end="url(#ah)"/>
+
+          <rect x="1016" y="508" width="240" height="96" rx="12" fill="url(#gStage)" stroke="var(--n300)" stroke-width="1.4"/>
+          <rect x="1016" y="508" width="240" height="4" rx="2" fill="var(--n700)"/>
+          <text class="nt" x="1136" y="534" text-anchor="middle">客户端展示</text>
+          <text class="brd" x="1136" y="551" text-anchor="middle">资源位曝光 · 用户点击</text>
+          <text class="brd" x="1136" y="564" text-anchor="middle">曝光 / 点击回流为后验标签</text>
+          <rect x="1105" y="572" width="62" height="19" rx="9.5" fill="var(--n200)"/>
+          <circle cx="1117" cy="581.5" r="2.6" fill="var(--n600)"/>
+          <text class="team" x="1126" y="585" fill="var(--n700)">客户端</text>
+
+          <!-- ─── 算法 → 服务端的直连 API（本次新增的那条关键链路）───
+               从数据出库底部下行、贴着服务链路下沿横穿、再抬进服务端调用底部：
+               绕过 Scout 那个框正是这条线要表达的意思——**这一路不经过 Scout**。
+               用算法团队的鼠尾草绿，与 Scout 那路（中性灰箭头）一眼分得开。 -->
+          <path d="M174 604 L174 636 Q174 644 182 644 L814 644 Q822 644 822 636 L822 612"
+                fill="none" stroke="var(--g700)" stroke-width="2" marker-end="url(#ah-i)"/>
+          <!-- 标签落在 x=386–568：模型虚线的三条竖廊在 x=320 / 660 / 1010，
+               标签必须避开，否则虚线会从胶囊里穿出来。 -->
+          <rect x="386" y="634" width="182" height="20" rx="10" fill="var(--g100)"/>
+          <circle cx="398" cy="644" r="2.6" fill="var(--g700)"/>
+          <text class="team" x="407" y="647.5" fill="var(--g700)">id + meta · 算法直连 API</text>
+
+          <!-- ─── 后验回流 ───
+               曝光/点击回到 03，作为内容理解的后验标签；同时它也是退热规则里
+               "高点击 → 延长到 7 天"的判定依据。画一条线，两处受益。
+               回流走 x=42 这条最左侧空廊上行，正好躲开 y=478 的合流干线与 y=644 的
+               直连线（两者都只覆盖 x≥174），全图因此没有一处实线与实线交叉。 -->
+          <path d="M1136 604 C1136 668, 1130 676, 1110 676 L60 676 C46 676, 42 670, 42 406 C42 396, 48 396, 560 396"
+                fill="none" stroke="var(--g700)" stroke-width="2.2" stroke-dasharray="11 5" marker-end="url(#ah-i)"/>
+          <text class="brd" x="560" y="669" text-anchor="middle" fill="var(--g700)">曝光 / 点击事件流 → 后验标签</text>
 
           <!-- ─── AI 模型协同层 ─── -->
-          <line x1="24" y1="500" x2="1276" y2="500" stroke="var(--n300)" stroke-width="1"/>
-          <text class="lbl" x="24" y="524">06 · AI 模型协同</text>
+          <line x1="24" y1="704" x2="1276" y2="704" stroke="var(--n300)" stroke-width="1"/>
+          <text class="lbl" x="24" y="726">06 · AI 模型协同</text>
 
           <!-- 模型 A -->
-          <rect x="470" y="556" width="234" height="76" rx="12" fill="var(--n100)" stroke="var(--g400)" stroke-width="1.4" stroke-dasharray="5 3"/>
-          <text class="nt" x="587" y="582" text-anchor="middle" fill="var(--g700)">gpt-5.4</text>
-          <text class="nd" x="587" y="599" text-anchor="middle">语言理解 · 抽取 · 判断</text>
-          <text class="nd" x="587" y="616" text-anchor="middle">承担 ① 结构化、④ 校验、七因子评分</text>
+          <rect x="470" y="740" width="234" height="76" rx="12" fill="var(--n100)" stroke="var(--g400)" stroke-width="1.4" stroke-dasharray="5 3"/>
+          <text class="nt" x="587" y="766" text-anchor="middle" fill="var(--g700)">gpt-5.4</text>
+          <text class="nd" x="587" y="783" text-anchor="middle">语言理解 · 抽取 · 判断</text>
+          <text class="nd" x="587" y="800" text-anchor="middle">承担 ① 结构化、⑤ 校验、七因子评分</text>
 
           <!-- 模型 B -->
-          <rect x="752" y="556" width="234" height="76" rx="12" fill="var(--n100)" stroke="var(--g700)" stroke-width="1.4" stroke-dasharray="5 3"/>
-          <text class="nt" x="869" y="582" text-anchor="middle" fill="var(--g700)">text-embedding-3-small</text>
-          <text class="nd" x="869" y="599" text-anchor="middle">256 维语义向量</text>
-          <text class="nd" x="869" y="616" text-anchor="middle">承担 ② 语义聚类，只做相似度不做语言</text>
+          <rect x="752" y="740" width="234" height="76" rx="12" fill="var(--n100)" stroke="var(--g700)" stroke-width="1.4" stroke-dasharray="5 3"/>
+          <text class="nt" x="869" y="766" text-anchor="middle" fill="var(--g700)">text-embedding-3-small</text>
+          <text class="nd" x="869" y="783" text-anchor="middle">256 维语义向量</text>
+          <text class="nd" x="869" y="800" text-anchor="middle">承担 ③ 语义聚合，只做相似度不做语言</text>
 
-          <!-- 虚线：gpt-5.4 → ①④、排序分 -->
+          <!-- 虚线：模型 → 它作用的阶段。
+               2026-08-02 由"一条线指向一个子步骤"改成"一条线指向一个模块"。原来四条
+               长弧要从模型层一路绕到聚类框内部的某个子块，必然穿过服务链路的框；改成
+               指向模块本身之后，三条线都能规规矩矩走服务链路各框之间的空隙上来
+               （x=320 / 660 / 1010 三条竖廊）。"哪个模型承担哪几步"改由模型框自己的
+               文字说明，配合各子步骤右侧的 ● 标记——信息没丢，线干净了。
+               与干线 / 直连线 / 回流线的交叉是结构性的（模型层在下、被作用的阶段在上），
+               虚线细、实线粗，视觉上分得开。 -->
           <g fill="none" stroke="var(--g400)" stroke-width="1.3" stroke-dasharray="4 3">
-            <path d="M540 556 C540 440, 828 400, 828 366" marker-end="url(#ah-d)"/>
-            <path d="M520 556 C440 440, 700 250, 823 205" marker-end="url(#ah-d)"/>
-            <path d="M690 570 C900 552, 1108 470, 1108 359" marker-end="url(#ah-d)"/>
+            <path d="M560 740 C540 706, 320 696, 320 640 L320 508 C320 466, 584 452, 584 410" marker-end="url(#ah-d)"/>
+            <!-- 先从 gpt 框顶部抬到 y≈708 再向右，避免横穿 embedding 框（752–986） -->
+            <path d="M660 740 C660 712, 820 708, 960 708 C1000 708, 1010 690, 1010 640 L1010 500 C1010 440, 930 400, 918 366" marker-end="url(#ah-d)"/>
           </g>
-          <!-- 虚线：embedding → ② -->
+          <!-- 虚线：embedding → 聚类 &amp; 理解 -->
           <g fill="none" stroke="var(--g700)" stroke-width="1.3" stroke-dasharray="4 3">
-            <path d="M860 556 C860 420, 830 330, 830 262" marker-end="url(#ah-d)"/>
+            <path d="M790 740 C790 706, 700 700, 672 692 C664 688, 660 682, 660 640 L660 508 C660 466, 630 440, 622 410" marker-end="url(#ah-d)"/>
           </g>
 
-          <text class="brd" x="470" y="650">实线 = 数据流　　虚线 = 模型作用于该阶段</text>
+          <text class="brd" x="470" y="838">实线 = 数据流　　虚线 = 模型作用于该阶段　　● = 该子步骤调用模型</text>
         </svg>
       </div>
       <p class="diagram-hint">← 横向滑动查看完整流程 →</p>
       <div class="legend">
-        <i><span class="sw" style="background:#EEF0F9;border:1px solid #C9CFE8"></span>走第三方 API（X API / 行情 API / CoinMarketCal）</i>
-        <i><span class="sw" style="background:#FDF6E1;border:1px solid #EBD9A0"></span>走 RSS（官方直连 / 自建 RSSHub）</i>
-        <i><span class="sw" style="background:#EEF0F2;border:1px solid #DCE0E4"></span>走页面 HTML 解析</i>
-        <i><span class="sw" style="background:#E8F5EE;border:1px solid #BFE3D0"></span>走搜索引擎 / ddgs</i>
-        <i><span class="ln"></span>AI 模型作用关系</i>
+        <!-- 色块必须与图里团队 tag 用同一组 token。2026-08-02 发现这里还留着改版前
+             写死的旧色（浅黄 / 浅薄荷 / 冷灰），跟图上的赤陶 / 鼠尾草 / 中性对不上，
+             等于图例在给一张不存在的配色做说明。 -->
+        <i><span class="sw" style="background:var(--a100);border:1px solid var(--a300)"></span>数据工程 Scout 团队（接入 · 聚合 · 数据服务）</i>
+        <i><span class="sw" style="background:var(--g100);border:1px solid var(--g300)"></span>算法 hang shang（理解 · 排序 · 出库）</i>
+        <i><span class="sw" style="background:var(--n200);border:1px solid var(--n300)"></span>服务端 / 客户端（二次编辑 · 展示）</i>
+        <i><span class="sw" style="background:var(--n200);border:1px dashed var(--n400)"></span>建设中，尚未上线</i>
+        <i><span class="ln"></span>AI 模型作用关系 / 后验回流</i>
+        <!-- 05 那一排是"两路供数 + 服务端 join"，线的颜色即供数方，图例要说明 -->
+        <i><span class="sw" style="background:var(--g700);height:3px;border-radius:2px"></span>算法直连：只给 id + 排序 meta</i>
+        <i><span class="sw" style="background:var(--gold);height:3px;border-radius:2px"></span>Scout 供数：按 id 补全完整内容</i>
       </div>
     </div>
   </section>
@@ -2248,6 +2411,13 @@ footer{border-top:1px solid var(--rule);padding:26px 0 40px;font-size:12px;color
        最顶上、筛选器之前——"排序结果尤其是首几刷要有冲击力"，情绪判断本身就该是
        用户进这个 tab 第一眼看到的东西，而不是滚动到表格里才慢慢品出来。 -->
   <div id="moodBanner" style="display:none"></div>
+
+  <!-- 产出停摆横幅（2026-08-04 停摆 3 天后新增）。
+       那次事故里所有组件级检查都是绿的：VM 每轮如实记「按设计延后」、日志零 ERROR，
+       但产品已经三天没出新内容，最后是用户自己看出来的。所以这条横幅判的不是
+       「组件活着吗」而是「最近还有没有真的产出事件」——上游任一环断掉它都会亮。
+       放在情绪横幅上方、整页最顶：坏了必须第一眼看见，而不是翻到 tab07 才发现。 -->
+  <div id="stallBanner" style="display:none"></div>
 
   <!-- 新闻类型 chip 条（2026-07-29）。Lawrence 要的「一套独立的新闻类型标签」，
        做成显眼的一键切换而不是藏在下拉里——下拉框保留并与之双向同步。 -->
@@ -3042,6 +3212,15 @@ footer{border-top:1px solid var(--rule);padding:26px 0 40px;font-size:12px;color
               <input type="checkbox" id="mixPinTop">
               <span>置顶实体（强制 Top1、Top3 为有实体内容）</span>
             </label>
+            <!-- 2026-08-05：补一个显式的应用按钮。原来这三个控件只在 change 时
+                 悄悄触发重排，用户改完没有任何反馈，看上去像"没生效"；而且那条
+                 触发链本身是坏的（见 bindMixControls 注释），实际一次都没跑过。
+                 显式按钮 + "有未应用改动"高亮 + 应用后回显，三者缺一都会让人
+                 怀疑自己有没有点到。 -->
+            <div class="lb-mix-apply">
+              <button type="button" id="mixApplyBtn" class="lb-mix-btn">应用混排</button>
+              <span id="mixApplyHint" class="lb-mix-hint"></span>
+            </div>
             <p class="lb-hint" style="margin:8px 0 0">
               加分项是<b>连续倾向</b>，保证不了"每 10 条必有 N 条"——分数分布一变比例就变。
               混排是<b>结构性配额</b>：只重排、不改分，被提上来的条目会标注原因，
@@ -4123,14 +4302,13 @@ function fillFlowAxis(runs){
   var outS   = g("verification") + g("market_cap") + g("score_and_write");
   var total  = fetchS + llmS + outS;
   var pct    = total > 0 ? Math.round(llmS / total * 100) : 0;
-  var set = function(id, txt){ var e = document.getElementById(id); if (e) e.textContent = txt; };
-  set("flowTm2", fmtDur(fetchS));
-  set("flowTm3", fmtDur(llmS) + " · " + pct + "%");
-  set("flowTm4", fmtDur(outS));
+  /* 2026-08-02：流程轴上的耗时标注已撤（从缓存出库后各阶段实测都是 ≈0 秒，
+     一排 0 既无信息量又显得链路是空的）。耗时改由下面这段文字单独承载，它有
+     完整口径（总计 / 各阶段 / LLM 占比），不会被压缩成一个误导性的 0。 */
   var when = String(run.run_at || "").replace("T", " ").slice(0, 16);
   var sum = $("#flowTimeSummary");
   if (sum){
-    sum.innerHTML = '顶部流程轴上的数字是各阶段的<b>真实耗时</b>，取自最近一轮（<code>' +
+    sum.innerHTML = '各阶段的<b>真实耗时</b>取自最近一轮（<code>' +
       esc(when) + '</code>）的 <code>stage_timings</code>，非估算。<b>单轮总计 ' +
       esc(fmtDur(total).replace("≈ ", "")) + '</b>，其中 <b style="color:var(--a700)">LLM 结构化占 ' +
       pct + '%</b> —— 抓取 ' + esc(fmtDur(fetchS).replace("≈ ", "")) + '，打分入库 ' +
@@ -6858,12 +7036,69 @@ function mixCfgValue(){
     pin_tradable_top: !!(pin && pin.checked)
   };
 }
-function bindMixControls(){
-  ["mixQuotaOn","mixQuotaN","mixPinTop"].forEach(function(id){
-    var el = $("#" + id);
-    if (el) el.addEventListener("change", function(){ if (window.runReweight) runReweight(); });
-  });
+/* 2026-08-05 修一个"从上线起就没生效过"的 bug。
+   原实现是 `if (window.runReweight) runReweight();`——但整段脚本在一个
+   `(function(){ ... })()` 里，`function runReweight(){}` **不会挂到 window**，
+   `window.runReweight` 恒为 undefined，这个守卫恒假。也就是说三个混排控件的
+   change 回调**一次都没执行过**。用户的现象"改完不生效、要去拖一个别的滑杆
+   才有效"完全对得上：滑杆有自己的回调、在同一作用域里直接调 runReweight。
+   教训：跨作用域取函数别用 `window.X` 兜底，同作用域直接引用；真要兜底也得
+   有一条断言/日志证明它取到了，否则失效是完全静默的。 */
+/* 状态**同时写进按钮文案**，不只靠颜色。
+   起因是调试时发现：在强制配色（forced-colors / 高对比度）下，浏览器会接管
+   表单控件的 background/border/color——实测连内联 `!important` 都改不动按钮底色，
+   但 opacity 照常生效，同一手法在旁边的 <span> 上也完全正常。也就是说
+   **只靠变色的状态提示，在这类环境里会整个消失**。
+   文案是任何配色模式下都读得到的，颜色退化为锦上添花。顺带这对高对比度用户
+   也是实打实的可访问性改善，不是为了绕开某个 bug 的权宜之计。 */
+var MIX_LABEL_IDLE  = "应用混排";
+var MIX_LABEL_DIRTY = "应用混排 ●";
+function paintMixBtn(btn, dirty){
+  if (!btn) return;
+  btn.textContent = dirty ? MIX_LABEL_DIRTY : MIX_LABEL_IDLE;
+  btn.classList.toggle("is-dirty", !!dirty);
+  btn.setAttribute("aria-live", "polite");
+  btn.title = dirty ? "配置已改动，点击应用" : "混排配置已是最新";
 }
+function applyMix(){
+  var btn = $("#mixApplyBtn"), hint = $("#mixApplyHint");
+  if (btn){ btn.disabled = true; paintMixBtn(btn, false); }
+  if (hint){ hint.className = "lb-mix-hint"; hint.textContent = "应用中…"; }
+  try { runReweight(); } finally {
+    if (btn) btn.disabled = false;
+    if (hint){
+      var m = mixCfgValue();
+      hint.className = "lb-mix-hint is-done";
+      hint.textContent = (!m.min_tradable_per_10 && !m.pin_tradable_top)
+        ? "已应用：混排关闭"
+        : "已应用：" + (m.min_tradable_per_10 ? ("每 10 条 ≥ " + m.min_tradable_per_10 + " 条实体") : "无配额")
+          + (m.pin_tradable_top ? " · Top1/Top3 置顶实体" : "");
+    }
+  }
+}
+function markMixDirty(){
+  var btn = $("#mixApplyBtn"), hint = $("#mixApplyHint");
+  paintMixBtn(btn, true);
+  if (hint){ hint.className = "lb-mix-hint is-dirty"; hint.textContent = "有未应用的改动"; }
+}
+/* 混排这一组控件全部改用**文档级事件委托**，在脚本解析时一次装好，
+   不依赖 init() 跑到第几步、也不怕 init() 在更早处抛异常。
+   动机很具体：控件的 HTML 一渲染就可交互，而 addEventListener 发生在 init() 里，
+   中间那段窗口控件是"看得见、点不动"的哑件——实测刷新后立刻点确实点不动。
+   这正是本次被投诉的那类"功能不全"，委托是从结构上消灭它，而不是把时序调准一点。
+   bindMixControls 保留为空壳：init() 里还在调它，删掉要动别处，留着更安全。 */
+var MIX_IDS = {mixQuotaOn:1, mixQuotaN:1, mixPinTop:1};
+document.addEventListener("click", function(e){
+  if (e.target && e.target.id === "mixApplyBtn") applyMix();
+});
+document.addEventListener("change", function(e){
+  if (e.target && MIX_IDS[e.target.id]) applyMix();
+});
+document.addEventListener("input", function(e){
+  // 数字框打字还没失焦时只点亮按钮，不反复打请求
+  if (e.target && e.target.id === "mixQuotaN") markMixDirty();
+});
+function bindMixControls(){ /* 绑定已上移为文档级委托，这里不再需要做事 */ }
 
 function moodOverrideValue(){
   var auto = $("#moodAuto");
@@ -7716,10 +7951,38 @@ function runCompare(){
    「面板首次可见」，与原来「打开 /lab 才跑」的成本模型一致。
    ══════════════════════════════════════════════════════════════════════════ */
 var booted = false;
+/* 产出停摆横幅（2026-08-04 事故防复发）。
+   判据是「最近还有没有真的产出事件」，不是「各组件活着吗」——那次三天停摆里
+   组件级检查全绿、日志零 ERROR，唯一塌下来的就是这个端到端指标。
+   刻意不加 require 登录门槛之外的任何条件：坏了就要在首页第一眼看见。 */
+function renderStallBanner(h){
+  var box = document.getElementById("stallBanner");
+  if (!box || !h || h.verdict === "ok"){ if (box) box.style.display = "none"; return; }
+  var down = h.verdict === "down";
+  var bg = down ? "#FBE9E7" : "#FFF4E0", bd = down ? "#E57373" : "#E8B84B",
+      fg = down ? "#B3261E" : "#8A6100";
+  box.style.display = "block";
+  box.innerHTML =
+    '<div style="background:'+bg+';border:1px solid '+bd+';color:'+fg+
+      ';border-radius:12px;padding:12px 16px;margin:0 0 14px;font-size:13px;line-height:1.6">'+
+      '<b>'+(down ? "⚠ 数据产出已停摆" : "· 产出延迟")+'</b>　'+ esc(h.reason || "") +
+      (h.backlog_growing_while_idle
+        ? '<br><span style="opacity:.85">积压 '+esc(String(h.backlog))+
+          ' 条仍在上涨而事件不增——典型的「上游照常抓、下游没在处理」。</span>' : '') +
+    '</div>';
+}
+function checkStall(){
+  apiGet("/api/pipeline-monitor", {})
+    .then(function(d){ renderStallBanner(d && d.health); })
+    .catch(function(){ /* 监控接口本身挂了不该再弹一个错误横幅盖住内容 */ });
+}
+
 function boot(){
   if (booted) return;
   booted = true;
   init();
+  checkStall();
+  setInterval(checkStall, 10 * 60 * 1000);   // 每 10 分钟复查一次
 }
 if (!ROOT.hidden){
   boot();

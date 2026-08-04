@@ -745,6 +745,31 @@ def qa_market_expansion():
           ["magnitude_pct"] == 8.0,
           "存量数据（无 price_move）的冲击力会全部归零")
 
+    # ── 派活侧与消费侧取数次序必须一致（2026-08-04 停摆事故）──────────────
+    #
+    # 桥接的 /api/enrich/pending（Mac 算哪些）与 staging.fetch_staged_items
+    # （pipeline 取哪些）用的是同一批 staging 行。两处 ORDER BY 一旦错位，
+    # pipeline 取到的正好是桥没算过的那 800 条，llm_cache_hits 直接掉 0，
+    # 现象是"worker 明明在跑、事件却一条不涨"——极难从日志看出来，因为
+    # 两边各自的日志都显示"正常"。
+    _root = Path(__file__).resolve().parent.parent
+    _bridge_src = (_root / "api" / "enrich_bridge.py").read_text()
+    _stage_src = (_root / "crawler" / "staging.py").read_text()
+    import re as _re
+    _ord = _re.compile(r"ORDER BY\s+s?\.?priority ASC,\s+s?\.?fetched_at (ASC|DESC)")
+    _b = _ord.search(_bridge_src)
+    _s = _ord.search(_stage_src)
+    check(g3, "派活侧与消费侧的 staging 取数次序一致",
+          bool(_b) and bool(_s) and _b.group(1) == _s.group(1),
+          f"bridge={_b.group(1) if _b else '未匹配到'} / "
+          f"staging={_s.group(1) if _s else '未匹配到'}；"
+          f"两者必须相同，否则缓存命中率会静默归零")
+
+    check(g3, "同优先级内新条目优先（停摆恢复时首屏不能全是旧闻）",
+          bool(_s) and _s.group(1) == "DESC",
+          "FIFO 会让 1.1 万条积压里两天前的稿子先上首屏，"
+          "而大盘情绪取 24h 窗口会一直算不出来")
+
     # ── 时效性（2026-07-29 线上事故后新增的红线用例）─────────────────
     #
     # 事故：一条 2024-08-21 的币安广场帖（DOGS 第 57 期 Launchpool）以
