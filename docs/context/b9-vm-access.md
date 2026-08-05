@@ -12,6 +12,6 @@ B9 推荐策略服务（binance_B9_rcmd_strategy_service-）的**代码运行环
 
 本地 `~/.ssh/config` 已配好别名，直接 `ssh manus-vm` 即可免密登录（2026-07-26 配置的公钥认证）。
 
-**How to apply:** 任何涉及跑 pipeline、查 MySQL、看服务状态的操作都要 ssh 过去做，本地仓库只是代码副本。常用检查：`systemctl status crypto-news-api`、`docker ps`（rsshub 容器必须在跑）、`mysql -uroot -p'***REMOVED***' crypto_news`。
+**How to apply:** 任何涉及跑 pipeline、查 MySQL、看服务状态的操作都要 ssh 过去做，本地仓库只是代码副本。常用检查：`systemctl status crypto-news-api`、`docker ps`（rsshub 容器必须在跑）、`mysql -uroot -p'<见 config/.env 的 MYSQL_PASSWORD>' crypto_news`。
 
 相关：[[b9-dedup-gap]]

@@ -83,16 +83,19 @@ eval_bp = Blueprint("eval_tools", __name__)
 # AB对比这几个接口每次调用都会产生真实 OpenAI 费用，没有鉴权意味着任何能访问到
 # 这台机器的人都能白嫖调用、白花钱。跟其它 blueprint（lab_tools.py/
 # sector_insight.py/history_tools.py）保持同一套独立实现的鉴权模式。
-API_SECRET_KEY = os.environ.get("API_SECRET_KEY", "***REMOVED***")
+API_SECRET_KEY = os.environ.get("API_SECRET_KEY", "")
 API_TOKENS = {
-    "lawrence":  os.environ.get("API_TOKEN_LAWRENCE",  "***REMOVED***"),
-    "team-a":    os.environ.get("API_TOKEN_TEAM_A",    "***REMOVED***"),
-    "team-b":    os.environ.get("API_TOKEN_TEAM_B",    "***REMOVED***"),
-    "partner-1": os.environ.get("API_TOKEN_PARTNER1",  "***REMOVED***"),
-    "partner-2": os.environ.get("API_TOKEN_PARTNER2",  "***REMOVED***"),
-    "web":       os.environ.get("API_TOKEN_WEB",       "***REMOVED***"),
+    "lawrence":  os.environ.get("API_TOKEN_LAWRENCE", ""),
+    "team-a":    os.environ.get("API_TOKEN_TEAM_A", ""),
+    "team-b":    os.environ.get("API_TOKEN_TEAM_B", ""),
+    "partner-1": os.environ.get("API_TOKEN_PARTNER1", ""),
+    "partner-2": os.environ.get("API_TOKEN_PARTNER2", ""),
+    "web":       os.environ.get("API_TOKEN_WEB", ""),
 }
-VALID_API_KEYS = {API_SECRET_KEY, *API_TOKENS.values()}
+# 2026-08-05 仓库转 public：所有凭据的**硬编码兜底一律删除**，只从环境变量读。
+# 取不到就是空字符串，而空值**必须被剔除**——否则空 token 会成为一个合法凭据，
+# 把"忘了配 .env"直接变成"任何人空手就能过鉴权"，是最典型的 fail-open。
+VALID_API_KEYS = {k for k in (API_SECRET_KEY, *API_TOKENS.values()) if k}
 
 
 def require_api_key(f):

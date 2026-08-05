@@ -58,16 +58,19 @@ logger = logging.getLogger(__name__)
 
 enrich_bridge_bp = Blueprint("enrich_bridge", __name__)
 
-API_SECRET_KEY = os.environ.get("API_SECRET_KEY", "***REMOVED***")
+API_SECRET_KEY = os.environ.get("API_SECRET_KEY", "")
 API_TOKENS = {
-    "lawrence":  os.environ.get("API_TOKEN_LAWRENCE",  "***REMOVED***"),
-    "team-a":    os.environ.get("API_TOKEN_TEAM_A",    "***REMOVED***"),
-    "team-b":    os.environ.get("API_TOKEN_TEAM_B",    "***REMOVED***"),
-    "partner-1": os.environ.get("API_TOKEN_PARTNER1",  "***REMOVED***"),
-    "partner-2": os.environ.get("API_TOKEN_PARTNER2",  "***REMOVED***"),
-    "web":       os.environ.get("API_TOKEN_WEB",       "***REMOVED***"),
+    "lawrence":  os.environ.get("API_TOKEN_LAWRENCE", ""),
+    "team-a":    os.environ.get("API_TOKEN_TEAM_A", ""),
+    "team-b":    os.environ.get("API_TOKEN_TEAM_B", ""),
+    "partner-1": os.environ.get("API_TOKEN_PARTNER1", ""),
+    "partner-2": os.environ.get("API_TOKEN_PARTNER2", ""),
+    "web":       os.environ.get("API_TOKEN_WEB", ""),
 }
-VALID_API_KEYS = {API_SECRET_KEY, *API_TOKENS.values()}
+# 2026-08-05 仓库转 public：所有凭据的**硬编码兜底一律删除**，只从环境变量读。
+# 取不到就是空字符串，而空值**必须被剔除**——否则空 token 会成为一个合法凭据，
+# 把"忘了配 .env"直接变成"任何人空手就能过鉴权"，是最典型的 fail-open。
+VALID_API_KEYS = {k for k in (API_SECRET_KEY, *API_TOKENS.values()) if k}
 
 
 def require_api_key(f):
@@ -85,7 +88,7 @@ def require_api_key(f):
 def _db():
     return mysql.connector.connect(
         host="localhost", user="root",
-        password=os.environ.get("MYSQL_PASSWORD", "***REMOVED***"),
+        password=os.environ.get("MYSQL_PASSWORD", ""),
         database="crypto_news", charset="utf8mb4",
     )
 

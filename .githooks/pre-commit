@@ -1,0 +1,15 @@
+#!/bin/sh
+# B9 提交前密钥闸（2026-08-05 仓库转 public 时加）。
+# 只扫**本次暂存的内容**，不扫全仓库——历史里的旧值不该每次提交都拦人。
+# 注意 `sk-` 不能裸匹配：字符串 "task-01ABC..." 里就含 sk-，会天天误报。
+PATTERN='(^|[^A-Za-z])sk-[A-Za-z0-9_-]{16,}|CryptoNews[A-Za-z0-9!]+|(TOKEN|KEY|SECRET|PASSWORD|PWD)[A-Za-z_]*[[:space:]]*[:=][[:space:]]*["'"'"'][A-Za-z0-9_.:-]{16,}["'"'"']'
+HITS=$(git diff --cached -U0 | grep -E '^\+' | grep -vE '^\+\+\+' | grep -EnI "$PATTERN" | grep -vE '__B9_WEB_TOKEN__|YOUR_API_SECRET|env\.example|tokenized_equity')
+if [ -n "$HITS" ]; then
+  echo "✗ 提交被拦下：本次改动里疑似包含明文凭据"
+  echo "$HITS" | sed -E 's/(sk-|CryptoNews)[A-Za-z0-9_!-]*/\1<REDACTED>/g' | head -10
+  echo ""
+  echo "  凭据只能放 config/.env（已 gitignore）或 ~/.b9/credentials.json。"
+  echo "  确属误报时：git commit --no-verify"
+  exit 1
+fi
+exit 0

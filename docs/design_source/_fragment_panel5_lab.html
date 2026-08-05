@@ -535,7 +535,7 @@ var API = (location.protocol === "http:" || location.protocol === "https:")
 
 /* 鉴权：优先用主站 Tab03 里用户自己填的 secret（activeToken 是主脚本的全局函数），
    取不到再回退页面自带的演示 token —— lab.html 时期这里是写死的常量。*/
-var TOKEN_FALLBACK = "***REMOVED***";
+var TOKEN_FALLBACK = "__B9_WEB_TOKEN__";
 function token(){
   var t = (typeof activeToken === "function") ? activeToken() : "";
   return t || TOKEN_FALLBACK;

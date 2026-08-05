@@ -40,6 +40,8 @@ import sys
 import urllib.request
 
 VM = "manus-vm"
+# 口令只从环境变量读（2026-08-05 仓库转 public），代码里不留兜底值。
+_MYSQL_PWD = os.environ.get("MYSQL_PASSWORD", "")
 CRED_FILE = os.path.expanduser("~/.b9/credentials.json")
 
 PROMPT = """You decide ONE thing about a financial news item: is a percentage in it an actual
@@ -91,7 +93,7 @@ BATCH = 20
 def vm_sql(query: str) -> str:
     """在 VM 上执行 SQL，返回 tab 分隔的原始输出。"""
     out = subprocess.run(
-        ["ssh", VM, f"mysql -uroot -p***REMOVED*** crypto_news -sN -e {json.dumps(query)}"],
+        ["ssh", VM, f"mysql -uroot -p{_MYSQL_PWD} crypto_news -sN -e {json.dumps(query)}"],
         capture_output=True, text=True)
     if out.returncode != 0:
         raise RuntimeError(f"VM SQL 失败：{out.stderr[:300]}")

@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import subprocess
 import sys
 import time
@@ -34,8 +35,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from crawler import scoring  # noqa: E402  （用它的 SCORING_VERSION 常量，不重复定义一份）
 
 BASE = "http://localhost:8080"
-TOKEN = "***REMOVED***"
-LEGACY_TOKEN = "***REMOVED***"
+# 2026-08-05 仓库转 public：token 只从环境变量读。跑 QA 前先
+#   set -a && source config/.env && set +a
+TOKEN = os.environ.get("API_TOKEN_LAWRENCE", "")
+LEGACY_TOKEN = os.environ.get("API_SECRET_KEY", "")
 
 results: list[tuple[str, str, bool, str]] = []   # (分组, 用例, 通过?, 详情)
 
@@ -78,9 +81,14 @@ def _days_ago_str(n: int) -> str:
     return time.strftime("%Y-%m-%d", time.localtime(time.time() - n * 86400))
 
 
+# 口令只从环境变量读（2026-08-05 仓库转 public）。取不到就让 mysql 自己报鉴权失败，
+# 不在代码里留任何兜底值——留了兜底，改口令时代码和 .env 会各说各话。
+_MYSQL_PWD = os.environ.get("MYSQL_PASSWORD", "")
+
+
 def sql(query: str) -> list[list[str]]:
     out = subprocess.run(
-        ["mysql", "-uroot", "-p***REMOVED***", "crypto_news", "-sN", "-e", query],
+        ["mysql", "-uroot", f"-p{_MYSQL_PWD}", "crypto_news", "-sN", "-e", query],
         capture_output=True, text=True)
     if out.returncode != 0:
         return []

@@ -283,7 +283,7 @@ gpt-5.4。详见 WORKLOG #61。）
 ## 2026-07-28（申请到公司 LiteLLM 网关 key，要求全面切换）
 
 > 我跟公司申请到了一个key。立刻把这个rec hub服务改造成 都用这个key来做，包括新闻的处理，都用这个key来做，而不是用本地claude的credit了，他支持好几个模型。直接用最好的gpt模型 或者opus4.8
-> key：***REMOVED***
+> key：<见 config/.env / ~/.b9/credentials.json，不入库>
 > [附公司 LiteLLM 网关接入说明：base URL、39个可用模型清单、有效期 2026-08-03]
 
 （实测发现网关是 Binance 内网专用地址（私网 IP + 内部 ELB），生产 pipeline

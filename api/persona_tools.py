@@ -69,16 +69,19 @@ persona_bp = Blueprint("persona_tools", __name__)
 # 与 lab_tools.py / eval_tools.py / history_tools.py 同一套独立实现。这份重复
 # 是项目已知并接受的技术债（README §七.4），代价是"换 token 要五处一起改"——
 # 已经因此踩过两次 401，新增 blueprint 时务必把新 token 同步加到这里。
-API_SECRET_KEY = os.environ.get("API_SECRET_KEY", "***REMOVED***")
+API_SECRET_KEY = os.environ.get("API_SECRET_KEY", "")
 API_TOKENS = {
-    "lawrence":  os.environ.get("API_TOKEN_LAWRENCE",  "***REMOVED***"),
-    "team-a":    os.environ.get("API_TOKEN_TEAM_A",    "***REMOVED***"),
-    "team-b":    os.environ.get("API_TOKEN_TEAM_B",    "***REMOVED***"),
-    "partner-1": os.environ.get("API_TOKEN_PARTNER1",  "***REMOVED***"),
-    "partner-2": os.environ.get("API_TOKEN_PARTNER2",  "***REMOVED***"),
-    "web":       os.environ.get("API_TOKEN_WEB",       "***REMOVED***"),
+    "lawrence":  os.environ.get("API_TOKEN_LAWRENCE", ""),
+    "team-a":    os.environ.get("API_TOKEN_TEAM_A", ""),
+    "team-b":    os.environ.get("API_TOKEN_TEAM_B", ""),
+    "partner-1": os.environ.get("API_TOKEN_PARTNER1", ""),
+    "partner-2": os.environ.get("API_TOKEN_PARTNER2", ""),
+    "web":       os.environ.get("API_TOKEN_WEB", ""),
 }
-VALID_API_KEYS = {API_SECRET_KEY, *API_TOKENS.values()}
+# 2026-08-05 仓库转 public：所有凭据的**硬编码兜底一律删除**，只从环境变量读。
+# 取不到就是空字符串，而空值**必须被剔除**——否则空 token 会成为一个合法凭据，
+# 把"忘了配 .env"直接变成"任何人空手就能过鉴权"，是最典型的 fail-open。
+VALID_API_KEYS = {k for k in (API_SECRET_KEY, *API_TOKENS.values()) if k}
 
 MODEL = "gpt-5.4"          # 网关切换尝试见 crawler/pipeline.py 同名常量的注释（已回退，未生效）
 MAX_UPLOAD_BYTES = 512 * 1024      # 人设文件 512KB 上限，纯文本足够用了

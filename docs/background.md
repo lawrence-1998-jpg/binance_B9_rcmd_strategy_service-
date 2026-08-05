@@ -149,7 +149,7 @@ CoinDesk、TheBlock、Cointelegraph、Decrypt、Blockworks、TheDefiant、CNBC�
 | `X_BEARER_TOKEN` | X API KOL 推文拉取 | 已配置，每天 192 req |
 | `COINMARKETCAL_API_KEY` | 催化剂日历 | free tier，3000 req/月 |
 | `API_SECRET_KEY` | Flask API 鉴权 | `***REMOVED***` |
-| `MYSQL_PASSWORD` | 数据库密码 | `***REMOVED***` |
+| `MYSQL_PASSWORD` | 数据库密码 | `<见 config/.env 的 MYSQL_PASSWORD>` |
 
 完整 key 值见 `config/.env`（仓库私有，安全存储）。
 

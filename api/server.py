@@ -48,23 +48,26 @@ logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 
-API_SECRET_KEY = os.environ.get("API_SECRET_KEY", "***REMOVED***")
+API_SECRET_KEY = os.environ.get("API_SECRET_KEY", "")
 
 # 2026-07-26：按 Lawrence 要求生成 5 个独立 token，方便分给不同的人/团队用——
 # 出问题时可以单独吊销一个，不用所有对接方一起换 token。原 API_SECRET_KEY
 # 继续有效（向下兼容，不影响已经在用它的地方），这 5 个是新增的。
 # 环境变量可覆盖默认值（生产环境如需轮换，改 config/.env 后重启服务即可）。
 API_TOKENS = {
-    "lawrence":  os.environ.get("API_TOKEN_LAWRENCE",  "***REMOVED***"),
-    "team-a":    os.environ.get("API_TOKEN_TEAM_A",    "***REMOVED***"),
-    "team-b":    os.environ.get("API_TOKEN_TEAM_B",    "***REMOVED***"),
-    "partner-1": os.environ.get("API_TOKEN_PARTNER1",  "***REMOVED***"),
-    "partner-2": os.environ.get("API_TOKEN_PARTNER2",  "***REMOVED***"),
+    "lawrence":  os.environ.get("API_TOKEN_LAWRENCE", ""),
+    "team-a":    os.environ.get("API_TOKEN_TEAM_A", ""),
+    "team-b":    os.environ.get("API_TOKEN_TEAM_B", ""),
+    "partner-1": os.environ.get("API_TOKEN_PARTNER1", ""),
+    "partner-2": os.environ.get("API_TOKEN_PARTNER2", ""),
     # 工作台页面自身取数用。单独一条是为了让前端源码里不出现任何人名
     # （老的 legacy secret 里带名字），同时它被吊销也不影响任何下游接入方。
-    "web":       os.environ.get("API_TOKEN_WEB",       "***REMOVED***"),
+    "web":       os.environ.get("API_TOKEN_WEB", ""),
 }
-VALID_API_KEYS = {API_SECRET_KEY, *API_TOKENS.values()}
+# 2026-08-05 仓库转 public：所有凭据的**硬编码兜底一律删除**，只从环境变量读。
+# 取不到就是空字符串，而空值**必须被剔除**——否则空 token 会成为一个合法凭据，
+# 把"忘了配 .env"直接变成"任何人空手就能过鉴权"，是最典型的 fail-open。
+VALID_API_KEYS = {k for k in (API_SECRET_KEY, *API_TOKENS.values()) if k}
 
 
 def get_db():
@@ -73,7 +76,7 @@ def get_db():
             host=os.environ.get("MYSQL_HOST", "localhost"),
             port=int(os.environ.get("MYSQL_PORT", 3306)),
             user=os.environ.get("MYSQL_USER", "root"),
-            password=os.environ.get("MYSQL_PASSWORD", "***REMOVED***"),
+            password=os.environ.get("MYSQL_PASSWORD", ""),
             database=os.environ.get("MYSQL_DATABASE", "crypto_news"),
             charset="utf8mb4",
         )
@@ -786,6 +789,15 @@ def _nocache(resp):
     return resp
 
 
+# 页面自身取数用的 token 在 HTML 里只放占位符，由服务端在**下发那一刻**替换成
+# 真值（2026-08-05 仓库转 public 时改）。
+#
+# 这个 token 本来就要交到浏览器手里、算不上机密，但"不算机密"和"该躺在公开
+# 仓库里"是两回事：留在源码里，轮换要改仓库、要重新 push，而且任何 fork/克隆
+# 都会带走一份历史副本。改成下发时注入之后，换 token 只改 .env 重启即可。
+_WEB_TOKEN_PLACEHOLDER = "__B9_WEB_TOKEN__"
+
+
 @app.route("/", methods=["GET"])
 @app.route("/<page>", methods=["GET"])
 def web_page(page=""):
@@ -794,7 +806,19 @@ def web_page(page=""):
     filename = WEB_PAGES.get(page)
     if not filename:
         return jsonify({"error": "Not found"}), 404
-    return _nocache(send_from_directory(WEB_DIR, filename))
+    path = os.path.join(WEB_DIR, filename)
+    if not os.path.isfile(path):
+        return jsonify({"error": "Not found"}), 404
+    with open(path, encoding="utf-8") as fh:
+        html = fh.read()
+    web_token = API_TOKENS.get("web") or ""
+    if _WEB_TOKEN_PLACEHOLDER in html and not web_token:
+        # 宁可让页面明确取不到数，也不要静默发一个空 token 出去——空 token 会
+        # 让前端所有请求 401，表现为"页面全空白"，比这里直接报出来难查得多。
+        logger.error("API_TOKEN_WEB 未配置，页面将无法取数；请在 config/.env 里补上")
+    html = html.replace(_WEB_TOKEN_PLACEHOLDER, web_token)
+    resp = app.response_class(html, mimetype="text/html")
+    return _nocache(resp)
 
 
 @app.route("/assets/<path:filename>", methods=["GET"])

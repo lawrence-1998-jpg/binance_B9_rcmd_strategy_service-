@@ -195,7 +195,7 @@ cd ~/crypto-news-crawler
 python3 run_pipeline.py
 
 # 4. 验证数据质量（零丢失铁律）
-mysql -uroot -p'***REMOVED***' crypto_news -e "
+mysql -uroot -p'<见 config/.env 的 MYSQL_PASSWORD>' crypto_news -e "
 SELECT run_at, raw_count, deduped_count, enriched_count, events_count, status 
 FROM pipeline_runs ORDER BY run_at DESC LIMIT 5;"
 # 确认 enriched_count == deduped_count，status == 'success'
