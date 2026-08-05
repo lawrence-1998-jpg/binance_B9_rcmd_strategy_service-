@@ -1182,6 +1182,21 @@ footer{border-top:1px solid var(--rule);padding:26px 0 40px;font-size:12px;color
 #panel-5 .cap-actions button{padding:4px 12px;border-radius:8px;font-size:12px;font-weight:600;
   border:1px solid #DCD3C4;background:#F9F4ED;color:#474238;cursor:pointer}
 #panel-5 .cap-actions button:hover{border-color:#C67139;color:#8C491A}
+/* 详情展开区（2026-08-06 补：审批人必须能看到申请的完整内容）。
+   显隐用内联 style.display 切，不用 hidden 属性——上面刚踩过
+   display:flex 特异性压过 [hidden] 的坑，不再给它第二次机会。 */
+#panel-5 .cap-item-head{cursor:pointer;user-select:none}
+#panel-5 .cap-item-head:hover .cap-item-title{color:#8C491A}
+#panel-5 .cap-caret{margin-left:auto;color:#82796A;font-size:12px}
+#panel-5 .cap-detail{margin-top:8px;border-top:1px dashed #DCD3C4;padding-top:8px}
+#panel-5 .cap-drow{display:flex;gap:10px;padding:3px 0;font-size:12.5px;line-height:1.6}
+#panel-5 .cap-dk{flex:none;width:88px;color:#82796A}
+#panel-5 .cap-dv{color:#2E2B25;white-space:pre-wrap;word-break:break-word}
+#panel-5 .cap-order{margin-top:8px}
+#panel-5 .cap-order summary{cursor:pointer;font-size:12px;color:#8C491A;font-weight:600}
+#panel-5 .cap-order pre{margin:8px 0 0;padding:10px 12px;background:#F4EFE3;
+  border:1px solid #DCD3C4;border-radius:8px;font-size:11.5px;line-height:1.6;
+  white-space:pre-wrap;word-break:break-word;max-height:420px;overflow-y:auto}
 /* 审批弹窗：secret 手输、type=password、请求完即清 */
 .cap-modal-mask{position:fixed;inset:0;background:rgba(46,43,37,.45);z-index:60;
   display:flex;align-items:center;justify-content:center}
@@ -7346,27 +7361,94 @@ function capLoadList(){
     if (!box) return;
     if (!rows.length){ box.innerHTML = '<p class="lb-hint">还没有任何申请。</p>'; return; }
     box.innerHTML = rows.map(function(r){
+      // 头部整行可点展开详情——审批人必须能先看到申请的完整内容再做决定，
+      // 这是这个列表存在的前提，不是附加功能（2026-08-06 被用户指出后补）。
       var h = '<div class="cap-item" data-id="'+r.id+'">' +
-        '<div class="cap-item-head">' +
+        '<div class="cap-item-head" data-cap-toggle="'+r.id+'" role="button" tabindex="0" '+
+             'aria-expanded="false" title="点击展开/收起详情">' +
           '<span class="cap-kind-tag">#'+r.id+' · '+esc(CAP_KIND_LABELS[r.kind]||r.kind)+'</span>' +
           '<span class="cap-item-title">'+esc(r.title)+'</span>' +
           '<span class="cap-pill '+esc(r.status)+'">'+esc(CAP_STATUS_LABELS[r.status]||r.status)+'</span>' +
+          '<span class="cap-caret" aria-hidden="true">▸</span>' +
         '</div>' +
         '<div class="cap-item-meta">'+esc(r.submitted_by||"匿名")+' · '+
           esc(String(r.submitted_at||"").replace("T"," ").slice(0,16))+
           (r.has_change_order ? ' · 已生成变更单' : '')+'</div>';
       if (r.status === "rejected" && r.decide_note)
         h += '<div class="cap-reason">拒绝原因：'+esc(r.decide_note)+'</div>';
+      h += '<div class="cap-detail" id="capDetail-'+r.id+'" style="display:none"></div>';
       if (r.status === "pending")
         h += '<div class="cap-actions">' +
              '<button type="button" data-cap-act="approve" data-id="'+r.id+'">批准…</button>' +
              '<button type="button" data-cap-act="reject" data-id="'+r.id+'">拒绝…</button></div>';
       return h + '</div>';
     }).join("");
+    // 深链 ?cap=N：直接展开指定申请（通知/审批提醒里可给直达链接）
+    var capN = parseInt(new URLSearchParams(location.search).get("cap"), 10);
+    if (capN) capToggleDetail(capN, true);
   }).catch(function(){
     var box = document.getElementById("capList");
     if (box) box.innerHTML = '<p class="lb-hint">列表加载失败（接口不可达）。</p>';
   });
+}
+
+/* 详情渲染：按 kind 把 payload 的每个字段用中文标签铺开——审批人看的是
+   "申请人到底填了什么"，不是 JSON。变更单放 <details> 里默认收起（很长）。 */
+var CAP_FIELD_LABELS = {
+  label: [["description","标签描述"],["problem","想解决的问题"],
+          ["value_type","标签类型"],["category","标签分类"]],
+  quota: [["position","保量位置"],["content","保量内容"]],
+  rag:   [["mode","模式"],["description","描述"],["files","文件"]]
+};
+var CAP_VALUE_LABELS = {binary:"0 / 1", continuous:"连续值", categorical:"分类值",
+  base_factor:"基础因子（进七因子权重）", bonus_factor:"加分因子（进加分项）",
+  tag_only:"仅识别标签（只展示不进分）", upload:"上传文件", describe:"输入描述自动生成"};
+
+function capRenderDetail(d){
+  var rows = (CAP_FIELD_LABELS[d.kind]||[]).map(function(f){
+    var v = (d.payload||{})[f[0]];
+    if (v === undefined || v === null || v === "" ||
+        (Array.isArray(v) && !v.length)) return "";
+    if (Array.isArray(v)) v = v.join("、");
+    v = CAP_VALUE_LABELS[v] || v;
+    return '<div class="cap-drow"><span class="cap-dk">'+esc(f[1])+'</span>' +
+           '<span class="cap-dv">'+esc(String(v))+'</span></div>';
+  }).join("");
+  var h = rows || '<div class="cap-drow"><span class="cap-dv">（无内容）</span></div>';
+  if (d.decide_note && d.status !== "rejected")   // 拒绝原因已在列表行展示，不重复
+    h += '<div class="cap-drow"><span class="cap-dk">审批备注</span>' +
+         '<span class="cap-dv">'+esc(d.decide_note)+'</span></div>';
+  if (d.change_order)
+    h += '<details class="cap-order"><summary>变更单（批准时生成，点开查看）</summary>' +
+         '<pre>'+esc(d.change_order)+'</pre></details>';
+  return h;
+}
+
+function capToggleDetail(id, forceOpen){
+  var el = document.getElementById("capDetail-" + id);
+  var head = document.querySelector('[data-cap-toggle="'+id+'"]');
+  if (!el) return;
+  var opening = forceOpen || el.style.display === "none";
+  if (!opening){
+    el.style.display = "none";
+    if (head){ head.setAttribute("aria-expanded","false");
+               var c=head.querySelector(".cap-caret"); if(c) c.textContent="▸"; }
+    return;
+  }
+  el.style.display = "block";
+  if (head){ head.setAttribute("aria-expanded","true");
+             var c2=head.querySelector(".cap-caret"); if(c2) c2.textContent="▾";
+             head.scrollIntoView({block:"nearest"}); }
+  if (!el.dataset.loaded){
+    el.innerHTML = '<p class="lb-hint">加载详情…</p>';
+    apiGet("/api/capabilities/requests/" + id + "/detail", {}).then(function(d){
+      el.innerHTML = capRenderDetail(d);
+      el.dataset.loaded = "1";
+    }).catch(function(e){
+      el.innerHTML = '<p class="lb-hint">详情加载失败：'+esc(e.message||"接口不可达")+'</p>';
+      // 不设 loaded，下次点开重试
+    });
+  }
 }
 
 function capOpenModal(act, id){
@@ -7429,6 +7511,21 @@ document.addEventListener("click", function(e){
   else if (t.dataset && t.dataset.capAct) capOpenModal(t.dataset.capAct, t.dataset.id);
   else if (t.dataset && t.dataset.capModal === "cancel") capCloseModal();
   else if (t.dataset && t.dataset.capModal === "ok") capModalOk(t.dataset.act, t.dataset.id);
+  else {
+    // 详情展开：点的往往是标题/徽章等子元素，必须 closest 往上找，
+    // 直接比对 e.target 会"点标题没反应、点空白才有反应"——又一种基础走不通
+    var head = t.closest ? t.closest("[data-cap-toggle]") : null;
+    if (head) capToggleDetail(parseInt(head.dataset.capToggle, 10));
+  }
+});
+// 键盘可达：头部是 role=button + tabindex，回车/空格也要能展开
+document.addEventListener("keydown", function(e){
+  if (e.key !== "Enter" && e.key !== " ") return;
+  var t = e.target;
+  if (t && t.dataset && t.dataset.capToggle){
+    e.preventDefault();
+    capToggleDetail(parseInt(t.dataset.capToggle, 10));
+  }
 });
 
 function moodOverrideValue(){
