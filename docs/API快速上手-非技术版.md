@@ -12,29 +12,29 @@
 ### 看最新最重要的 20 条新闻
 
 ```
-http://34.138.247.158:8080/api/news?limit=20&token=***REMOVED***
+http://34.138.247.158:8080/api/news?limit=20&token=YOUR_API_SECRET
 ```
 
 ### 只看最重大的事件（S 级和 A 级）
 
 ```
-http://34.138.247.158:8080/api/news?event_tier=S&limit=20&token=***REMOVED***
+http://34.138.247.158:8080/api/news?event_tier=S&limit=20&token=YOUR_API_SECRET
 ```
 
 ```
-http://34.138.247.158:8080/api/news?event_tier=A&limit=20&token=***REMOVED***
+http://34.138.247.158:8080/api/news?event_tier=A&limit=20&token=YOUR_API_SECRET
 ```
 
 ### 看某个板块的新闻（比如 DeFi）
 
 ```
-http://34.138.247.158:8080/api/news?sector=DeFi&limit=20&token=***REMOVED***
+http://34.138.247.158:8080/api/news?sector=DeFi&limit=20&token=YOUR_API_SECRET
 ```
 
 ### 排除谣言，只看已核实的
 
 ```
-http://34.138.247.158:8080/api/news?is_rumor=0&limit=20&token=***REMOVED***
+http://34.138.247.158:8080/api/news?is_rumor=0&limit=20&token=YOUR_API_SECRET
 ```
 
 ### 看系统运行是否正常
@@ -66,13 +66,13 @@ http://34.138.247.158:8080/health
 链接的结构是这样的：
 
 ```
-http://34.138.247.158:8080/api/news  ?  参数1=值  &  参数2=值  &  token=***REMOVED***
+http://34.138.247.158:8080/api/news  ?  参数1=值  &  参数2=值  &  token=YOUR_API_SECRET
 └──────────── 固定不变 ────────────┘   └──── 你可以自由组合 ────┘   └── 必须带上 ──┘
 ```
 
 **规则**：
 - 第一个参数前面用 `?`，后面每加一个参数用 `&` 连接
-- `token=***REMOVED***` 是通行证，**每个链接都必须带**，不带会提示 Unauthorized
+- `token=YOUR_API_SECRET` 是通行证，**每个链接都必须带**，不带会提示 Unauthorized
 
 ### 常用参数对照表
 
@@ -114,7 +114,7 @@ Layer1/Layer2           New Listing Monitoring  Fan Token   tCommodities
 想看"MEME 板块、排除谣言、最重要的 10 条"：
 
 ```
-http://34.138.247.158:8080/api/news?sector=MEME&is_rumor=0&limit=10&token=***REMOVED***
+http://34.138.247.158:8080/api/news?sector=MEME&is_rumor=0&limit=10&token=YOUR_API_SECRET
 ```
 
 ---
@@ -152,7 +152,7 @@ http://34.138.247.158:8080/api/news?sector=MEME&is_rumor=0&limit=10&token=***REM
 ## 五、常见问题
 
 **Q：显示 `{"error": "Unauthorized"}` 怎么办？**
-链接末尾漏了 `&token=***REMOVED***`，或者拼写有误。注意第一个参数前
+链接末尾漏了 `&token=YOUR_API_SECRET`，或者拼写有误。注意第一个参数前
 用 `?`，后面的用 `&`。
 
 **Q：数据多久更新一次？**

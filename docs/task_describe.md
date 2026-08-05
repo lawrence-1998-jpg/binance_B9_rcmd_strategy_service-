@@ -175,7 +175,7 @@ GET /api/x_posts                     # X KOL 原始推文
 **接入方式**：
 ```
 Base URL:  http://34.138.247.158:8080
-Auth:      Authorization: Bearer ***REMOVED***
+Auth:      Authorization: Bearer YOUR_API_SECRET
 ```
 
 ---
@@ -202,7 +202,7 @@ FROM pipeline_runs ORDER BY run_at DESC LIMIT 5;"
 
 # 5. 查看 Top 20 事件
 curl -s "http://localhost:8080/api/news?limit=20" \
-  -H "Authorization: Bearer ***REMOVED***" | python3 -m json.tool
+  -H "Authorization: Bearer YOUR_API_SECRET" | python3 -m json.tool
 ```
 
 ---

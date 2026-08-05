@@ -43,7 +43,7 @@ DEFAULT_MODEL = "gpt-5.4"
 
 # VM 侧元数据同步（只发元数据，永不发 key）
 API_BASE = os.environ.get("B9_API_BASE", "http://34.138.247.158:8080")
-API_TOKEN = os.environ.get("B9_API_TOKEN", "***REMOVED***")
+API_TOKEN = os.environ.get("B9_API_TOKEN", "")
 
 WARN_DAYS = 2      # 剩余天数 ≤ 这个值就告警
 

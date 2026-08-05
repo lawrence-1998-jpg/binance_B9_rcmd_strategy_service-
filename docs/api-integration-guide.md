@@ -261,21 +261,21 @@ Fan Token, Infrastructure, AI, Launchpool, Megadrop, MEME
 
 ```bash
 curl -s "http://34.138.247.158:8080/api/news?limit=20&sort=importance" \
-  -H "Authorization: Bearer ***REMOVED***"
+  -H "Authorization: Bearer YOUR_API_SECRET"
 ```
 
 **取 DeFi 板块新闻，排除谣言**
 
 ```bash
 curl -s "http://34.138.247.158:8080/api/news?sector=DeFi&is_rumor=0&limit=10" \
-  -H "Authorization: Bearer ***REMOVED***"
+  -H "Authorization: Bearer YOUR_API_SECRET"
 ```
 
 **只看 S/A 级重大事件（需分两次请求，暂不支持多值）**
 
 ```bash
 curl -s "http://34.138.247.158:8080/api/news?event_tier=S&limit=20" \
-  -H "Authorization: Bearer ***REMOVED***"
+  -H "Authorization: Bearer YOUR_API_SECRET"
 ```
 
 **按中文信源筛选（注意 URL 编码）**
@@ -283,7 +283,7 @@ curl -s "http://34.138.247.158:8080/api/news?event_tier=S&limit=20" \
 ```bash
 curl -s -G "http://34.138.247.158:8080/api/news" \
   --data-urlencode "source=吴说区块链" --data-urlencode "limit=10" \
-  -H "Authorization: Bearer ***REMOVED***"
+  -H "Authorization: Bearer YOUR_API_SECRET"
 ```
 
 **Python 接入示例**
@@ -292,7 +292,7 @@ curl -s -G "http://34.138.247.158:8080/api/news" \
 import requests
 
 BASE = "http://34.138.247.158:8080"
-HEADERS = {"Authorization": "Bearer ***REMOVED***"}
+HEADERS = {"Authorization": "Bearer YOUR_API_SECRET"}
 
 def fetch_macro_feed(limit=20):
     r = requests.get(f"{BASE}/api/news",

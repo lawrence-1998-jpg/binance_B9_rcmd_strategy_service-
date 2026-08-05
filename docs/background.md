@@ -78,7 +78,7 @@
 
 ```
 Base URL:  http://34.138.247.158:8080
-Auth:      Authorization: Bearer ***REMOVED***
+Auth:      Authorization: Bearer YOUR_API_SECRET
 
 GET /health                          # 健康检查
 GET /api/news?limit=20               # 最新事件（按 importance_score 排序）
@@ -148,7 +148,7 @@ CoinDesk、TheBlock、Cointelegraph、Decrypt、Blockworks、TheDefiant、CNBC�
 | `OPENAI_API_KEY` | LLM 结构化（gpt-5.4） | OpenAI 官方 key，TPM 500k |
 | `X_BEARER_TOKEN` | X API KOL 推文拉取 | 已配置，每天 192 req |
 | `COINMARKETCAL_API_KEY` | 催化剂日历 | free tier，3000 req/月 |
-| `API_SECRET_KEY` | Flask API 鉴权 | `***REMOVED***` |
+| `API_SECRET_KEY` | Flask API 鉴权 | `YOUR_API_SECRET` |
 | `MYSQL_PASSWORD` | 数据库密码 | `<见 config/.env 的 MYSQL_PASSWORD>` |
 
 完整 key 值见 `config/.env`（仓库私有，安全存储）。

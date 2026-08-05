@@ -84,5 +84,5 @@ GET /api/sources                  → 全部信源分布统计
 
 - **定时**：cron 每 4 小时自动跑一轮（0/4/8/12/16/20 点）
 - **手动**：`cd ~/crypto-news-crawler && python3 run_pipeline.py`
-- **API**：`http://34.138.247.158:8080`，鉴权 `Authorization: Bearer ***REMOVED***`
+- **API**：`http://34.138.247.158:8080`，鉴权 `Authorization: Bearer YOUR_API_SECRET`
 - **依赖**：RSSHub Docker 容器（localhost:1200），挂掉需 `docker start rsshub`

@@ -258,7 +258,7 @@ market_scope≠crypto 的事件启用独立的评分梯度，同一批真实数�
 > 另外下面资料里可能有可以用的宏观新闻API key，请帮我看看是不是有，有的话就用。并告诉我key和网站。这是公司给的账号。
 > [转发邮件：Drew Z 转发 dxFeed 技术支持的账号信息——Fundamental Service
 > （tools.dxfeed.com）与 News Service（news.dxfeed.com），用户名/密码均为
-> binance / ***REMOVED***]
+> binance / YOUR_API_SECRET]
 
 （核实结论：`benzinga.zip` 里只有示例响应数据和字段说明，**没有真实 key**，
 massive.com 文档页也没有列出 base URL 或获取 key 的方式，需要找 Massive

@@ -43,7 +43,7 @@ import urllib.request
 
 # ── 配置 ─────────────────────────────────────────────────────────────
 API_BASE = os.environ.get("B9_API_BASE", "http://34.138.247.158:8080")
-API_TOKEN = os.environ.get("B9_API_TOKEN", "***REMOVED***")
+API_TOKEN = os.environ.get("B9_API_TOKEN", "")
 # 2026-07-26 提速（40→100、4→6、唤醒间隔 30→15 分钟，见 plist）：OpenAI credit
 # 只剩 $40，Lawrence 要求"尽量使用 claude 本机来跑"。Mac 在线的每一小时都要
 # 尽可能多清 staging 积压，让 12h 一次的 pipeline 到点时命中率最大化。
