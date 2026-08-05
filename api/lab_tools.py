@@ -47,6 +47,9 @@ from crawler.timeutil import now_local
 # 这种平铺方式引入同目录模块的——所以这里必须用 `import strategy_config` 而不是
 # `from . import strategy_config`，后者在启动时直接 ImportError。
 import strategy_config
+# 部署/回滚会改变全站生产排序，2026-08-06 起收进 approver 档（ADR-003）：
+# 页面 token 打开网页即拿到，不能让"能开页面"等于"能改生产"。
+from auth import require_approver
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 鉴权：与 api/server.py 里的 require_api_key 逻辑保持一致（同一个静态 token），
@@ -930,7 +933,7 @@ def strategy_config_save():
 
 
 @lab_bp.route("/api/strategy-config/deploy", methods=["POST"])
-@require_api_key
+@require_approver
 def strategy_config_deploy():
     """部署到生产（"部署到 Agent"）。与 rollback 分开：rollback 挪的是实验室
     默认指针，deploy 挪的是生产指针——生产从此按该版本参数查询时实时计算
@@ -951,7 +954,7 @@ def strategy_config_deploy():
 
 
 @lab_bp.route("/api/strategy-config/rollback", methods=["POST"])
-@require_api_key
+@require_approver
 def strategy_config_rollback():
     body = request.get_json(force=True, silent=True) or {}
     try:

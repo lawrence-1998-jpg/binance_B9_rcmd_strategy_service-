@@ -26,6 +26,7 @@ from history_tools import history_bp
 from enrich_bridge import enrich_bridge_bp
 from source_catalog import source_catalog_bp
 from persona_tools import persona_bp
+from capability_tools import capability_bp
 from crawler.timeutil import now_local
 from crawler import freshness, market_mood, market_weight, scoring
 
@@ -100,6 +101,10 @@ def require_api_key(f):
     方式 2 的代价是 token 会出现在浏览器历史和服务器访问日志里。当前 API 本身
     就是 HTTP 明文传输、单一静态 token，安全模型已经是"仅供内部可信网络使用"，
     这一项没有实质性降低安全等级。生产化时应连同 HTTPS 与分级 token 一起改造。
+
+    会**改变生产行为**的动作（审批原子能力、部署/回滚排序配置）不用这一档——
+    它们走 api/auth.py 的 require_approver：页面 token 打开网页就拿得到，
+    不能让"能打开页面"等于"能批准变更"（ADR-003）。
     """
     @wraps(f)
     def decorated(*args, **kwargs):
@@ -384,10 +389,20 @@ def pipeline_monitor():
             verdict != "ok" and (staging.get("unconsumed") or 0) > 2000),
     }
 
+    # 原子能力待审批数（ADR-003）。挂在监控 payload 上是为了让 Claude Code
+    # 与看板一条链路就能看到"有 N 条在等审批"。表可能还没建（迁移未跑），
+    # fail-open 回 0——待办计数坏了不能连累监控本身。
+    try:
+        pending_approvals = one(
+            "SELECT COUNT(*) FROM capability_requests WHERE status='pending'") or 0
+    except Exception:
+        pending_approvals = 0
+
     cur.close()
     return jsonify({"staging": staging, "throughput": throughput,
                     "stored": stored, "factor_coverage": coverage,
                     "health": health,
+                    "pending_approvals": pending_approvals,
                     "generated_at": now_local().isoformat()})
 
 
@@ -834,6 +849,7 @@ app.register_blueprint(history_bp)
 app.register_blueprint(enrich_bridge_bp)
 app.register_blueprint(source_catalog_bp)
 app.register_blueprint(persona_bp)
+app.register_blueprint(capability_bp)
 
 
 if __name__ == "__main__":

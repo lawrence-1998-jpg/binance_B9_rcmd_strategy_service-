@@ -2503,3 +2503,51 @@ QA 135 项：修完后剩 2 项红，都是 #97 回补的余波（聚合器孤�
 
 用 `getComputedStyle` 返回的对象跨语句读——**它是活对象**，改完 class 再读拿到的是
 改之后的状态，我因此误判过一次"样式没生效"。量样式要当场取值快照。
+
+---
+
+# 需求 #99：策略实验室「新增原子能力」——申请 → 审批 → Claude Code 开发落地（ADR-003）
+
+## 需求
+
+实验室加第 3 个子 tab，同事可提交三类申请：**新增标签**（描述/要解决的问题/类型
+0-1·连续·分类/分类 基础因子·加分因子·仅识别）、**新增保量策略**（位置/内容）、
+**新增 RAG**（上传文件或描述自动生成）。推送 Lawrence 审批；**本期批准后不自动生效**，
+由 Claude Code 走正常开发流程落地；拒绝必填原因、状态所有人可见。
+硬约束："绝对不要把线上搞崩了"。
+
+## 设计要点（详见 docs/adr/ADR-003）
+
+- **单表状态机**：`capability_requests`（022 迁移，纯新增）。
+  pending → approved（生成变更单）/ rejected（原因必填）→ applied。
+- **approver 档鉴权**（`api/auth.py`，独立小模块，刻意不做第七份鉴权复制）：
+  批准/拒绝只认 `API_TOKEN_APPROVER`，手输、不进 HTML/localStorage、未配置 503。
+  **顺手堵存量漏洞**：`strategy-config/deploy`、`/rollback` 此前页面 token 就能调
+  ——页面 token 是服务端注入进 HTML 的，"能打开网页"曾经等于"能改生产排序"。
+- **变更单**：批准时按 kind 生成，含既定落地路径、预计改动文件、成本估算、回滚方式。
+  label 类固定写入「独立标签计算通道」路径（不动主 prompt_hash，避免每标签 ~$90 全库重算）。
+- **读 fail-open**（表缺失回空列表，实测 rename 表后 /api/news 与 monitor 照常）、
+  **写 fail-closed**。
+- 深链 `?lpane=3` 直达子 tab（审批提醒可给直达链接）。
+
+## 过程中抓到的两个自己写的 bug（都在上线验证时暴露）
+
+1. **`window.capLoadList` 死守卫**——capLoadList 在 IIFE 里根本不在 window 上，
+   守卫恒假、列表永不加载。**就是三天前刚写进长期记忆的 #98 同款**，
+   这次在部署后第一轮真实点击里当场抓住。教训再加一条：写 `window.X` 的手要停一下。
+2. **`display:flex` 压过 `[hidden]`**——给 `.cap-fields` 设的 flex 特异性高于 UA 的
+   `[hidden]{display:none}`，hidden 属性在（DOM 断言全过），视觉上三套表单全摊开。
+   **DOM 断言测的是属性，截图测的是像素**——headless Chrome 截真实页面才抓到。
+   修法：显式补 `.cap-fields[hidden]{display:none}`；断言从此量 computed display。
+
+## 验证（全部在生产环境）
+
+- 权限：无 token 401；页面 token 批准/拒绝/deploy/rollback 全 403；错 secret 403
+  且 UI 内展示后端报错；重复批准 409；拒绝缺原因 400
+- 链路：UI 提交 → 回显单号 → 角标亮 → 弹窗（password 型、用后即清）→ 批准 →
+  变更单生成（路径/成本/回滚三要素齐）→ 列表状态翻转 → 角标灭；拒绝原因页面 token 可见
+- RAG：md 上传落盘路径正确；.exe 被拒；describe 模式校验必填
+- fail-open：rename 表模拟迁移未跑，列表回空、/api/news 200、monitor 正常，改回
+- 三态表单互斥在 **computed display** 层面验证；headless 截图肉眼过
+- QA **142 项过 141**（唯一红为按设计保留的 S/A 孤证人工队列）；
+  自测数据已清空；整点轮次正常（08-05 23:00，当日入库 3302 条）

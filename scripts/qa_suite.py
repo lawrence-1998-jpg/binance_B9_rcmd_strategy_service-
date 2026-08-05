@@ -141,6 +141,40 @@ def qa_auth():
     st, _ = http("/api/news?limit=1", token=LEGACY_TOKEN)
     check(g, "旧 token 仍向下兼容", st == 200, f"status={st}")
 
+    # ── approver 档（ADR-003，2026-08-06）──────────────────────────────
+    # 这些端点会改变生产行为，普通 token（页面上打开网页就拿得到）必须打不动。
+    # 这组断言钉住的是"能开页面 ≠ 能批变更/改生产"这条线——它被打破过
+    # （deploy/rollback 曾经只认普通档，任何打开页面的人都能部署配置）。
+    st, _ = http("/api/capabilities/requests/999999/approve", method="POST",
+                 body={})                       # 普通 token
+    check(g, "普通 token 批准申请应 403（approver 档）", st == 403, f"status={st}")
+    st, _ = http("/api/capabilities/requests/999999/reject", method="POST",
+                 body={"reason": "x"})
+    check(g, "普通 token 拒绝申请应 403（approver 档）", st == 403, f"status={st}")
+    st, _ = http("/api/strategy-config/deploy", method="POST",
+                 body={"version": 1})
+    check(g, "普通 token 部署排序配置应 403（存量漏洞回归钉）", st == 403, f"status={st}")
+    st, _ = http("/api/strategy-config/rollback", method="POST",
+                 body={"version": 1})
+    check(g, "普通 token 回滚排序配置应 403（存量漏洞回归钉）", st == 403, f"status={st}")
+
+    ap = os.environ.get("API_TOKEN_APPROVER", "")
+    if ap:
+        st, _ = http("/api/capabilities/requests/999999/reject", method="POST",
+                     body={}, token=ap)
+        check(g, "approver 拒绝缺 reason 应 400（拒绝必填原因）", st == 400, f"status={st}")
+        st, _ = http("/api/capabilities/requests/999999/approve", method="POST",
+                     body={}, token=ap)
+        check(g, "approver 批准不存在的申请应 404", st == 404, f"status={st}")
+    else:
+        check(g, "API_TOKEN_APPROVER 已配置（未配置时审批全 503，功能不可用）",
+              False, "在 config/.env 里补配后重启服务")
+
+    # 提交与查看走普通档（人人可提、状态人人可见是产品要求）
+    st, d = http("/api/capabilities/requests")
+    check(g, "申请列表普通 token 可读（fail-open 结构）",
+          st == 200 and isinstance(d, dict) and "data" in d, f"status={st}")
+
 
 def qa_endpoints():
     print("\n[3/8] 只读接口与页面")
@@ -346,10 +380,17 @@ def qa_tools(run_paid: bool):
                                         "k_tradable": 0.05, "cap": 0.5}}})
     check(g, "基线配置：三项和超封顶但峰值未超应放行（互斥口径）",
           st == 200, f"status={st}")
-    st, _d = http("/api/strategy-config/rollback", "POST", {"version": 999999})
-    check(g, "基线配置：回滚到不存在版本应 400", st == 400, f"status={st}")
-    st, _d = http("/api/strategy-config/deploy", "POST", {"version": 999999})
-    check(g, "部署到生产：不存在版本应 400", st == 400, f"status={st}")
+    # 2026-08-06 起 deploy/rollback 收进 approver 档（ADR-003），这两条用例
+    # 改用 approver token——它们验的是"坏版本被业务校验拦下"，得先过鉴权这一层。
+    _ap = os.environ.get("API_TOKEN_APPROVER", "")
+    st, _d = http("/api/strategy-config/rollback", "POST", {"version": 999999},
+                  token=_ap or TOKEN)
+    check(g, "基线配置：回滚到不存在版本应 400（approver 档内）",
+          st == 400, f"status={st}" + ("" if _ap else "（approver 未配置，退用普通档必 403）"))
+    st, _d = http("/api/strategy-config/deploy", "POST", {"version": 999999},
+                  token=_ap or TOKEN)
+    check(g, "部署到生产：不存在版本应 400（approver 档内）",
+          st == 400, f"status={st}" + ("" if _ap else "（approver 未配置，退用普通档必 403）"))
 
     # ── 生产×实验室平价（2026-07-30"部署到Agent"的核心红线）────────────
     # 有版本部署到生产时，生产 /api/news 与实验室同参数同池同情绪必须给出

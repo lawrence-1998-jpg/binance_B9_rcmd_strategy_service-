@@ -1142,6 +1142,60 @@ footer{border-top:1px solid var(--rule);padding:26px 0 40px;font-size:12px;color
 #panel-5 .lb-mix-hint{font-size:11.5px;color:#82796A}
 #panel-5 .lb-mix-hint.is-dirty{color:#8C491A;font-weight:600}
 #panel-5 .lb-mix-hint.is-done{color:#3F5A46}
+/* ── 新增原子能力（ADR-003）──────────────────────────────────────────
+   表单沿用实验室既有的卡片语言；状态徽章语义色与全站一致（赤陶=待办/拒绝，
+   鼠尾草=通过，中性=已上线）。所有颜色写字面值——8-05 实测过 var() 在
+   这块作用域里会静默解析失败。 */
+.cap-badge{display:inline-block;min-width:16px;padding:1px 5px;margin-left:6px;
+  border-radius:8px;background:#C67139;color:#fff;font-size:10px;font-weight:700;
+  text-align:center;vertical-align:1px}
+#panel-5 .cap-form-card{background:#F9F4ED;border:1px solid #DCD3C4;border-radius:12px;
+  padding:16px 18px;margin-top:12px}
+#panel-5 .cap-kind-row{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+#panel-5 .cap-kind{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;
+  border:1px solid #DCD3C4;border-radius:9px;background:#fff;cursor:pointer;font-size:12.5px}
+#panel-5 .cap-kind:has(input:checked){border-color:#C67139;background:#FFF2EB;font-weight:600}
+#panel-5 .cap-common,#panel-5 .cap-fields{display:flex;flex-direction:column;gap:10px;margin-bottom:10px}
+/* 必须显式压回去：上面的 display:flex 特异性高于 UA 的 [hidden]{display:none}，
+   否则 hidden 属性在（DOM 断言会过），视觉上却三套表单全摊开——截图抓出来的真 bug。 */
+#panel-5 .cap-fields[hidden],#panel-5 .cap-form-card label[hidden]{display:none}
+#panel-5 .cap-two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+#panel-5 .cap-form-card label{font-size:12px;color:#645C50;display:flex;flex-direction:column;gap:4px}
+#panel-5 .cap-form-card input[type=text],#panel-5 .cap-form-card textarea,
+#panel-5 .cap-form-card select{border:1px solid #DCD3C4;border-radius:8px;padding:7px 10px;
+  font-size:13px;background:#fff;font-family:inherit}
+#panel-5 .cap-submit-row{display:flex;align-items:center;gap:10px;margin-top:4px}
+#panel-5 .cap-list{display:flex;flex-direction:column;gap:10px;margin-top:10px}
+#panel-5 .cap-item{background:#fff;border:1px solid #DCD3C4;border-radius:11px;padding:12px 15px}
+#panel-5 .cap-item-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+#panel-5 .cap-item-title{font-weight:600;font-size:13.5px}
+#panel-5 .cap-pill{padding:2px 9px;border-radius:9px;font-size:11px;font-weight:700}
+#panel-5 .cap-pill.pending{background:#FFF2EB;color:#8C491A}
+#panel-5 .cap-pill.approved{background:#F0FAE1;color:#3F5A46}
+#panel-5 .cap-pill.rejected{background:#FBE9E7;color:#B3261E}
+#panel-5 .cap-pill.applied{background:#EEE7DB;color:#474238}
+#panel-5 .cap-kind-tag{font-size:11px;color:#82796A;font-family:ui-monospace,Menlo,monospace}
+#panel-5 .cap-item-meta{font-size:11.5px;color:#82796A;margin-top:4px}
+#panel-5 .cap-reason{margin-top:6px;font-size:12px;color:#B3261E;background:#FBE9E7;
+  border-radius:8px;padding:6px 10px}
+#panel-5 .cap-actions{display:flex;gap:8px;margin-top:8px}
+#panel-5 .cap-actions button{padding:4px 12px;border-radius:8px;font-size:12px;font-weight:600;
+  border:1px solid #DCD3C4;background:#F9F4ED;color:#474238;cursor:pointer}
+#panel-5 .cap-actions button:hover{border-color:#C67139;color:#8C491A}
+/* 审批弹窗：secret 手输、type=password、请求完即清 */
+.cap-modal-mask{position:fixed;inset:0;background:rgba(46,43,37,.45);z-index:60;
+  display:flex;align-items:center;justify-content:center}
+.cap-modal{background:#F9F4ED;border-radius:14px;padding:20px 22px;width:min(420px,90vw);
+  box-shadow:0 18px 50px rgba(0,0,0,.25)}
+.cap-modal h4{margin:0 0 10px;font-size:15px}
+.cap-modal label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:#645C50;margin-bottom:10px}
+.cap-modal input,.cap-modal textarea{border:1px solid #DCD3C4;border-radius:8px;
+  padding:7px 10px;font-size:13px;background:#fff;font-family:inherit}
+.cap-modal .row{display:flex;gap:8px;justify-content:flex-end;margin-top:6px}
+.cap-modal .row button{padding:6px 16px;border-radius:8px;font-size:13px;font-weight:600;
+  border:1px solid #DCD3C4;background:#fff;cursor:pointer}
+.cap-modal .row button.primary{background:#C67139;border-color:#C67139;color:#fff}
+.cap-modal .err{color:#B3261E;font-size:12px;min-height:16px}
 #panel-5 .lb-tag.ver{background:var(--lab-g100);color:var(--lab-g800)}
 /* 2026-07-29：情绪同向/反转加成标签，和 tab02（真实数据展示）保持同一套
    语义色——反转用最深的赤陶+反白，做成"值得多看一眼"的醒目样式（它本来就
@@ -3138,6 +3192,7 @@ footer{border-top:1px solid var(--rule);padding:26px 0 40px;font-size:12px;color
     <nav class="lb-subtabs" role="tablist" aria-label="策略实验室子导航">
       <button class="lb-stab" type="button" role="tab" id="lstab-1" aria-controls="lpane-1" aria-selected="true"><span class="idx">01</span>单版本权重调节 · 实时重排</button>
       <button class="lb-stab" type="button" role="tab" id="lstab-2" aria-controls="lpane-2" aria-selected="false"><span class="idx">02</span>两版本权重对比</button>
+      <button class="lb-stab" type="button" role="tab" id="lstab-3" aria-controls="lpane-3" aria-selected="false"><span class="idx">03</span>新增原子能力<span id="capBadge" class="cap-badge" hidden></span></button>
     </nav>
   </div>
 
@@ -3327,6 +3382,86 @@ footer{border-top:1px solid var(--rule);padding:26px 0 40px;font-size:12px;color
       <p class="lb-hint" id="labFootMeta">—</p>
     </div>
   </div><!-- /lpane-2 -->
+
+  <!-- ══════════════ 子 Tab 3：新增原子能力（ADR-003，2026-08-06）══════════════
+       申请 → 审批 → Claude Code 开发落地。批准/拒绝需要手输 approver secret
+       （不是页面 token——那个打开网页就拿得到，不能用来批变更）。 -->
+  <div class="lb-pane" id="lpane-3" role="tabpanel" aria-labelledby="lstab-3" hidden>
+    <div class="lb-sec">
+      <div class="lb-sec-head">
+        <span class="lb-eyebrow">03 · New Atomic Capability</span>
+        <h3>新增原子能力</h3>
+      </div>
+      <p class="lb-hint" style="margin-top:2px">
+        提交后进入待审批队列；<b>批准</b>后由 Claude Code 按正常流程开发落地
+        （需求理解 → 代码开发 → 测试通过 → 上线），<b>拒绝</b>会附原因、对所有人可见。
+        审批动作需要 approver secret（找 Lawrence）。
+      </p>
+
+      <!-- 类型选择 + 三套表单 -->
+      <div class="cap-form-card">
+        <div class="cap-kind-row" role="radiogroup" aria-label="申请类型">
+          <label class="cap-kind"><input type="radio" name="capKind" value="label" checked><span>新增标签</span></label>
+          <label class="cap-kind"><input type="radio" name="capKind" value="quota"><span>新增保量策略</span></label>
+          <label class="cap-kind"><input type="radio" name="capKind" value="rag"><span>新增 RAG</span></label>
+        </div>
+
+        <div class="cap-common">
+          <label>标题（一句话说清这个能力）<input type="text" id="capTitle" maxlength="120" placeholder="例：监管处罚事件加分标签"></label>
+          <label>提交人<input type="text" id="capBy" maxlength="64" placeholder="你的名字"></label>
+        </div>
+
+        <div class="cap-fields" id="capFieldsLabel">
+          <label>标签描述<textarea id="capLabelDesc" rows="2" placeholder="这个标签判断什么？例：事件是否涉及监管机构的处罚/起诉/禁令"></textarea></label>
+          <label>想解决的问题<textarea id="capLabelProblem" rows="2" placeholder="现在哪里不好？例：监管类大事件情绪强但排不上首屏"></textarea></label>
+          <div class="cap-two">
+            <label>标签类型
+              <select id="capLabelVtype">
+                <option value="binary">0 / 1</option>
+                <option value="continuous">连续值</option>
+                <option value="categorical">分类值</option>
+              </select>
+            </label>
+            <label>标签分类
+              <select id="capLabelCat">
+                <option value="base_factor">基础因子（进七因子权重）</option>
+                <option value="bonus_factor">加分因子（进加分项）</option>
+                <option value="tag_only">仅识别标签（只展示不进分）</option>
+              </select>
+            </label>
+          </div>
+        </div>
+
+        <div class="cap-fields" id="capFieldsQuota" hidden>
+          <label>保量位置<input type="text" id="capQuotaPos" maxlength="200" placeholder="例：Top1 / Top3 / 每10条至少N条"></label>
+          <label>保量内容<textarea id="capQuotaContent" rows="2" placeholder="要保什么内容？例：market_scope=crypto 的事件每10条至少2条"></textarea></label>
+        </div>
+
+        <div class="cap-fields" id="capFieldsRag" hidden>
+          <div class="cap-kind-row">
+            <label class="cap-kind"><input type="radio" name="capRagMode" value="upload" checked><span>① 上传 RAG 文件</span></label>
+            <label class="cap-kind"><input type="radio" name="capRagMode" value="describe"><span>② 输入描述自动生成</span></label>
+          </div>
+          <label id="capRagFileRow">选择文件（txt / md / csv / pdf，单个 ≤5MB）
+            <input type="file" id="capRagFiles" multiple accept=".txt,.md,.csv,.pdf"></label>
+          <label id="capRagDescRow" hidden>描述（写清语料应覆盖什么，自动生成的初稿会随变更单一起人审）
+            <textarea id="capRagDesc" rows="3" placeholder="例：各国加密监管机构名录及其职权范围，用于内容理解阶段辅助判断监管类事件"></textarea></label>
+        </div>
+
+        <div class="cap-submit-row">
+          <button type="button" id="capSubmitBtn" class="lb-mix-btn">提交申请</button>
+          <span id="capSubmitHint" class="lb-mix-hint"></span>
+        </div>
+      </div>
+
+      <!-- 申请列表：全状态可见，含拒绝原因 -->
+      <div class="lb-sec-head" style="margin-top:26px">
+        <span class="lb-eyebrow">Requests</span>
+        <h3>申请与审批记录</h3>
+      </div>
+      <div id="capList" class="cap-list"><p class="lb-hint">加载中…</p></div>
+    </div>
+  </div><!-- /lpane-3 -->
 </div>
 
 <div role="tabpanel" id="panel-6" aria-labelledby="tab-6" hidden>
@@ -7100,6 +7235,202 @@ document.addEventListener("input", function(e){
 });
 function bindMixControls(){ /* 绑定已上移为文档级委托，这里不再需要做事 */ }
 
+/* ══════════════════════════════════════════════════════════════════════════
+   新增原子能力（ADR-003，2026-08-06）
+   全部走 document 级委托——控件 HTML 一渲染就可用，不依赖 init() 时序
+   （#98 的教训：init 里绑定的控件在页面刚加载那段窗口是"看得见点不动"的）。
+   approver secret 只在弹窗里 type=password 手输，请求发完立即清空，
+   不进 localStorage、不进任何全局变量。
+   ══════════════════════════════════════════════════════════════════════════ */
+var CAP_KIND_LABELS = {label:"新增标签", quota:"保量策略", rag:"RAG"};
+var CAP_STATUS_LABELS = {pending:"待审批", approved:"已批准 · 待开发",
+                         rejected:"已拒绝", applied:"已上线"};
+
+/* 本文件没有全局 apiPost（差点引用了一个不存在的函数——正是 #98 那类
+   "守卫恒假"的静默失效，这次在上线前的作用域核对里抓住了）。
+   POST 统一走这个小 helper：无论 HTTP 状态都把 body 解析出来交给调用方，
+   由调用方看 d.id / d.error 决定成败——错误信息是后端写好的中文，直接展示。 */
+function capPost(path, body){
+  return fetch(liveUrl(path, {}), {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify(body || {})
+  }).then(function(r){ return r.json(); });
+}
+
+function capCurrentKind(){
+  var el = document.querySelector('input[name="capKind"]:checked');
+  return el ? el.value : "label";
+}
+function capSwitchKind(){
+  var k = capCurrentKind();
+  var m = {label:"capFieldsLabel", quota:"capFieldsQuota", rag:"capFieldsRag"};
+  Object.keys(m).forEach(function(kk){
+    var el = document.getElementById(m[kk]);
+    if (el) el.hidden = (kk !== k);
+  });
+}
+function capSwitchRagMode(){
+  var mode = (document.querySelector('input[name="capRagMode"]:checked')||{}).value || "upload";
+  var f = document.getElementById("capRagFileRow"), d = document.getElementById("capRagDescRow");
+  if (f) f.hidden = (mode !== "upload");
+  if (d) d.hidden = (mode !== "describe");
+}
+function capHint(msg, cls){
+  var h = document.getElementById("capSubmitHint");
+  if (h){ h.className = "lb-mix-hint " + (cls||""); h.textContent = msg; }
+}
+
+function capSubmit(){
+  var kind = capCurrentKind();
+  var title = (document.getElementById("capTitle").value||"").trim();
+  var by = (document.getElementById("capBy").value||"").trim();
+  if (!title){ capHint("先填标题——列表里靠它认出这条申请", "is-dirty"); return; }
+
+  var btn = document.getElementById("capSubmitBtn");
+  btn.disabled = true; capHint("提交中…");
+  var done = function(d){
+    btn.disabled = false;
+    if (d && d.id){
+      capHint("已提交 #" + d.id + "，等待审批", "is-done");
+      // 提交成功即清空表单，防止重复点两下提交两单
+      ["capTitle","capLabelDesc","capLabelProblem","capQuotaPos","capQuotaContent","capRagDesc"]
+        .forEach(function(id){ var e=document.getElementById(id); if(e) e.value=""; });
+      var fe = document.getElementById("capRagFiles"); if (fe) fe.value = "";
+      capLoadList();
+    } else {
+      capHint("提交失败：" + ((d&&d.error)||"未知错误"), "is-dirty");
+    }
+  };
+  var fail = function(e){ btn.disabled=false; capHint("提交失败：网络或服务异常", "is-dirty"); };
+
+  if (kind === "rag" &&
+      (document.querySelector('input[name="capRagMode"]:checked')||{}).value === "upload"){
+    // multipart 路径（带文件）。fetch 手工拼 FormData，token 沿用页面机制
+    var files = document.getElementById("capRagFiles").files;
+    if (!files.length){ btn.disabled=false; capHint("upload 模式要先选文件", "is-dirty"); return; }
+    var fd = new FormData();
+    fd.append("kind","rag"); fd.append("title",title); fd.append("submitted_by",by);
+    fd.append("mode","upload");
+    for (var i=0;i<files.length;i++) fd.append("files", files[i]);
+    fetch(API + "/api/capabilities/requests?token=" + encodeURIComponent(activeToken()),
+          {method:"POST", body:fd})
+      .then(function(r){return r.json();}).then(done).catch(fail);
+    return;
+  }
+
+  var payload;
+  if (kind === "label"){
+    payload = {description: document.getElementById("capLabelDesc").value,
+               problem: document.getElementById("capLabelProblem").value,
+               value_type: document.getElementById("capLabelVtype").value,
+               category: document.getElementById("capLabelCat").value};
+  } else if (kind === "quota"){
+    payload = {position: document.getElementById("capQuotaPos").value,
+               content: document.getElementById("capQuotaContent").value};
+  } else {
+    payload = {mode:"describe", description: document.getElementById("capRagDesc").value};
+  }
+  capPost("/api/capabilities/requests",
+          {kind:kind, title:title, submitted_by:by, payload:payload})
+    .then(done).catch(fail);
+}
+
+function capLoadList(){
+  apiGet("/api/capabilities/requests", {}).then(function(d){
+    var rows = (d && d.data) || [];
+    // 待办角标：pending 数
+    var b = document.getElementById("capBadge");
+    if (b){ b.hidden = !d.pending; b.textContent = d.pending || ""; }
+    var box = document.getElementById("capList");
+    if (!box) return;
+    if (!rows.length){ box.innerHTML = '<p class="lb-hint">还没有任何申请。</p>'; return; }
+    box.innerHTML = rows.map(function(r){
+      var h = '<div class="cap-item" data-id="'+r.id+'">' +
+        '<div class="cap-item-head">' +
+          '<span class="cap-kind-tag">#'+r.id+' · '+esc(CAP_KIND_LABELS[r.kind]||r.kind)+'</span>' +
+          '<span class="cap-item-title">'+esc(r.title)+'</span>' +
+          '<span class="cap-pill '+esc(r.status)+'">'+esc(CAP_STATUS_LABELS[r.status]||r.status)+'</span>' +
+        '</div>' +
+        '<div class="cap-item-meta">'+esc(r.submitted_by||"匿名")+' · '+
+          esc(String(r.submitted_at||"").replace("T"," ").slice(0,16))+
+          (r.has_change_order ? ' · 已生成变更单' : '')+'</div>';
+      if (r.status === "rejected" && r.decide_note)
+        h += '<div class="cap-reason">拒绝原因：'+esc(r.decide_note)+'</div>';
+      if (r.status === "pending")
+        h += '<div class="cap-actions">' +
+             '<button type="button" data-cap-act="approve" data-id="'+r.id+'">批准…</button>' +
+             '<button type="button" data-cap-act="reject" data-id="'+r.id+'">拒绝…</button></div>';
+      return h + '</div>';
+    }).join("");
+  }).catch(function(){
+    var box = document.getElementById("capList");
+    if (box) box.innerHTML = '<p class="lb-hint">列表加载失败（接口不可达）。</p>';
+  });
+}
+
+function capOpenModal(act, id){
+  var mask = document.createElement("div");
+  mask.className = "cap-modal-mask"; mask.id = "capModalMask";
+  mask.innerHTML =
+    '<div class="cap-modal">' +
+      '<h4>'+(act==="approve"?"批准":"拒绝")+'申请 #'+id+'</h4>' +
+      (act==="reject"
+        ? '<label>拒绝原因（必填，申请人可见）<textarea id="capModalReason" rows="2"></textarea></label>'
+        : '<label>备注（可选）<input type="text" id="capModalNote"></label>') +
+      '<label>Approver Secret（手输，不会被保存）' +
+        '<input type="password" id="capModalSecret" autocomplete="off"></label>' +
+      '<div class="err" id="capModalErr"></div>' +
+      '<div class="row">' +
+        '<button type="button" data-cap-modal="cancel">取消</button>' +
+        '<button type="button" class="primary" data-cap-modal="ok" data-act="'+act+'" data-id="'+id+'">'+
+          (act==="approve"?"确认批准":"确认拒绝")+'</button>' +
+      '</div></div>';
+  document.body.appendChild(mask);
+  var s = document.getElementById("capModalSecret"); if (s) s.focus();
+}
+function capCloseModal(){
+  var m = document.getElementById("capModalMask");
+  if (m){ var s=document.getElementById("capModalSecret"); if(s) s.value=""; m.remove(); }
+}
+function capModalOk(act, id){
+  var secret = (document.getElementById("capModalSecret").value||"").trim();
+  var err = document.getElementById("capModalErr");
+  if (!secret){ err.textContent = "要输入 approver secret"; return; }
+  var body = {};
+  if (act === "reject"){
+    body.reason = (document.getElementById("capModalReason").value||"").trim();
+    if (!body.reason){ err.textContent = "拒绝必须填写原因"; return; }
+  } else {
+    var n = document.getElementById("capModalNote");
+    if (n && n.value.trim()) body.note = n.value.trim();
+  }
+  err.textContent = "提交中…";
+  fetch(API + "/api/capabilities/requests/" + id + "/" + act,
+        {method:"POST",
+         headers:{"Content-Type":"application/json","Authorization":"Bearer "+secret},
+         body: JSON.stringify(body)})
+    .then(function(r){ return r.json().then(function(d){ return {st:r.status, d:d}; }); })
+    .then(function(x){
+      if (x.st === 200){ capCloseModal(); capLoadList(); }
+      else err.textContent = (x.d && x.d.error) || ("失败 HTTP " + x.st);
+    })
+    .catch(function(){ err.textContent = "网络或服务异常"; });
+}
+
+document.addEventListener("change", function(e){
+  if (e.target && e.target.name === "capKind") capSwitchKind();
+  if (e.target && e.target.name === "capRagMode") capSwitchRagMode();
+});
+document.addEventListener("click", function(e){
+  var t = e.target;
+  if (!t) return;
+  if (t.id === "capSubmitBtn") capSubmit();
+  else if (t.dataset && t.dataset.capAct) capOpenModal(t.dataset.capAct, t.dataset.id);
+  else if (t.dataset && t.dataset.capModal === "cancel") capCloseModal();
+  else if (t.dataset && t.dataset.capModal === "ok") capModalOk(t.dataset.act, t.dataset.id);
+});
+
 function moodOverrideValue(){
   var auto = $("#moodAuto");
   if (!auto || auto.checked) return null;
@@ -7485,11 +7816,15 @@ function loadBaseline(){
    showTab() 管（#tab5），子 tab 再去改 hash 会把主 tab 的定位冲掉，所以去掉。
    ══════════════════════════════════════════════════════════════════════════ */
 function showLabPane(n){
-  [1,2].forEach(function(i){
+  [1,2,3].forEach(function(i){
     var pane = $("#lpane-" + i), tab = $("#lstab-" + i);
     if (pane) pane.hidden = (i !== n);
     if (tab)  tab.setAttribute("aria-selected", i === n ? "true" : "false");
   });
+  // 直接引用，不写 window.capLoadList 守卫——capLoadList 在同一 IIFE 里，
+  // window 上根本没有它，那个守卫会恒假（#98 同款静默失效，这次差点重犯）。
+  // typeof 判断只为容忍"本函数在文件里先于 capLoadList 定义"的声明顺序。
+  if (n === 3 && typeof capLoadList === "function") capLoadList();
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -7530,10 +7865,13 @@ function init(){
     });
   });
 
-  [1,2].forEach(function(i){
+  [1,2,3].forEach(function(i){
     var tab = $("#lstab-" + i);
     if (tab) tab.addEventListener("click", function(){ showLabPane(i); });
   });
+  // 深链：?lpane=N 直达实验室子 tab（审批提醒里可以直接给"打开待办"的链接）
+  var _lp = parseInt(new URLSearchParams(location.search).get("lpane"), 10);
+  if (_lp >= 1 && _lp <= 3) showLabPane(_lp);
 
   /* 公式切换与板块选择是同一件事的两个入口，保持单向同步：
      选了板块 → 必然是 Sector 场景；点 Macro → 清空板块。
