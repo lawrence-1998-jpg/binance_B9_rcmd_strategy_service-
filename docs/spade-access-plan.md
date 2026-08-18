@@ -4,6 +4,24 @@
 > （价格变化 → 交易 / 查看）。敏感者高频低门槛发 price alert，反之高门槛低频。
 > 状态：2026-08-19 起步。本文件是跨会话的工作底稿。
 
+## ⚠️ 前提（Lawrence 2026-08-19 澄清，决定了整个方法论）
+
+**目前线上没有 price alert 产品。** 因此这是一个**纯观察性研究**：
+
+```
+自然价格波动 → 用户自然的访问 / 交易（针对其持仓标的）→ 反推敏感度 → 0→1 上线产品
+```
+
+由此产生的三个结论：
+
+1. **不需要 alert 点击回流数据**。之前标记的"3-E 缺口"随之消失——没有产品就没有推送，
+   监督信号来自用户对自然行情的自发反应。
+2. **反向因果的担忧大幅减轻**。没有推送干预，观察到的行为就是自发的；
+   但代价是**没有实验变异**，因果结论在产品上线前无法验证，只能是相关性证据。
+3. **解释了 price_alert 表族的怪象**：还在更新的几张都在 `cmc_dw.*`
+   （CoinMarketCap，独立产品），主站那几张 2024 年就停更了——因为主站根本没上这个功能。
+   **这些表只能当参考口径，不是本课题的数据源。**
+
 ## 一、接入方式（已摸清）
 
 Spade 官方支持程序化接入，**不需要扒浏览器 session**：
@@ -196,6 +214,58 @@ BnQuery 遇到无权限的表会**当场弹 Apply For Access**，申请入口在
 Data Map 真正的取数接口是
 `POST https://bdp-bff.toolsfdg.net/api/bigdata-datamap/homepage/getSearchResultList`，
 但直接 fetch 会被 Claude Code 分类器拦，目前只能走 UI。
+
+## 六-B、权限申请：流程与进度
+
+### 流程（已跑通）
+直达 URL：`https://spade.toolsfdg.net/datamap/detail?name=<库.表>&assetType=hive_table&apply=true`
+表单要点：
+- Permission Type 默认 **Read Only**（保持）
+- Permission Duration 默认 **7 days → 必须改成 60 days**（选项：7/30/60…，建模项目 7 天不够）
+- 字段清单默认全选
+- **Request Reason 必填**，用第四节话术 + 该表具体字段与用途
+- 提交成功会弹 "Successfully request access"，但**提示可能一闪而过**
+
+### ⚠️ 验证纪律
+**提交后必须去 Access Center → My Request → In Progress 核对**，不能凭有没有看到 toast 判断。
+（08-19 第二条申请就没截到提示，实际已成功。同 `verify-write-not-just-return-code`。）
+
+- `My Request` = 我提交的申请（含 In Progress / Completed）
+- `My Access` = 已获批的权限（批之前是空的，别误判成申请失败）
+- URL：`https://spade.toolsfdg.net/security/access-center/my-request`
+
+### 进度
+
+| ID | 表 | 用途 | 状态 |
+|---|---|---|---|
+| 148808 | `bnb_dwd.fact_main_user_behavior_hr_d` | 行为埋点·小时粒度（核心） | In Progress |
+| 148809 | `bnb_dws.fact_main_user_asset_sr_df_ha` | 持仓快照 | In Progress |
+
+待申请：`dwd_main_ms_spot_bnb_kline_di`（K线）、`dwd_web3_kline_offline_hi`（小时K线）、
+`bnb_tdm.user_profile_spot / _action / _vip`（画像特征）、`fact_main_user_behavior_d`（日粒度）。
+
+### 已确认的表结构
+
+**`bnb_dwd.fact_main_user_behavior_hr_d`** — 自埋点流量中间表·按小时分区
+Table Owner `run.huang` / Tech Owner `maya.c`，Data Domain `User/Traffic`，
+Business Process `View`，Asset Level P3，建于 2020-11-03，2026-08-18 仍更新。
+
+字段（全 string 除注明）：`user_id`、`event_name`、`local_time`、`url`、`element_id`、
+`client`、`client_type`、`os`、`browser`、`user_agent`、`finger_print`、`language`、
+`ip_country_name`、`ip_country_code`、`screen_height`、`screen_weight`
+分区键：`date_key`(int) + `hr`(string)
+
+> `event_name` 是识别"看了行情页 / 看了某币详情页"的关键字段；
+> `url` 可用于解析用户看的是哪个 symbol。这两个字段决定了"看"这一半能不能落地。
+
+**`bnb_dws.fact_main_user_asset_sr_df_ha`** — user_asset df
+Table Owner `kevin.ww`，字段含 `funding_wallet_balance` decimal(28,8)、
+`po_fi_asset_holding_btc` decimal(38,16)（POS 定期持仓）、
+`sv_fi_asset_holding_btc` decimal(38,16)（Savings 定期持仓）等持仓金额列。
+
+> ⚠️ 存疑：该表 Views 仅 6、近 7 天查询 0、Update History 显示 2026-01-09，
+> 且 Data Domain / Business Segment 均为 None。**拿到权限后第一件事是验数据新鲜度**，
+> 若确为废弃表则改用 `bnb_dws.dws_main_asset_user_sr_td_ha`。
 
 ## 七、下一步
 
