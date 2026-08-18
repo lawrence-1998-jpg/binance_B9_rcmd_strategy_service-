@@ -368,7 +368,10 @@ def pipeline_monitor():
     # 流水线是半小时一轮，3 小时无产出 = 连丢 6 轮，一定出事了。
     last_ev_h = one("SELECT ROUND(TIMESTAMPDIFF(MINUTE, MAX(created_at), NOW())/60, 1) "
                     "FROM news_events")
-    stalled_h = float(last_ev_h or 999)
+    # 2026-08-19 修：不能写 `last_ev_h or 999`——刚产出时 ROUND(...) 恰好是 0.0，
+    # 是 falsy，会被 or 换成 999，于是**系统最新鲜的那一刻横幅反而报停摆**。
+    # 999 只兜"表为空 / 查询失败"（None），0 是最健康的值，必须原样保留。
+    stalled_h = 999.0 if last_ev_h is None else float(last_ev_h)
     if stalled_h >= 3:
         verdict, reason = "down", (
             f"已 {stalled_h} 小时没有新事件落库。上游任一环断了都会这样，"
