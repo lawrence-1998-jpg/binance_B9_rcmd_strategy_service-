@@ -399,3 +399,80 @@ Business Process / Tech Owner / Tags。**先在这里定位，再去详情页申
 1. **持仓快照** —— `_ha` 那条被否，需从「数据专辑 → Main → Asset(4)」里重挑一张正规表
 2. **K 线行情** —— `bnb_dwd.dwd_main_ms_spot_bnb_kline_di` 待申请
 3. **用户画像** —— `bnb_dws.fact_main_user_profile_s`（C0、12 收藏、有描述）候选
+
+---
+
+## 十一、关键突破：一张表同时覆盖"看"和"交易"（2026-08-19 实测）
+
+`bnb_dwd.dwd_main_user_traffic_sensor_behavior_di`（148868 已批准，1 年）
+是 **175 列的神策全端埋点宽表**，实测结论：
+
+### 覆盖量级（这是选它的决定性理由）
+
+| 表 | 去重用户 | 说明 |
+|---|---|---|
+| `fact_main_user_behavior_hr_d` | **12.4 万 / 全天** | 仅 Web + Hybrid，App 原生缺失 |
+| `dwd_main_user_traffic_sensor_behavior_di` | **2400 万 / 单小时** | 全端全量 |
+
+体量：每天 170~210 亿条事件。**任何查询必须带 `date_key` 分区 + 时间窗，不能裸扫。**
+
+### 关键字段（175 列中的有效部分）
+
+`user_id`、`event`（主事件类型）、`eventname`（多为 null，别用）、
+**`symbol`**（交易对）、`asset`（币种）、`pagename`、`element_name`、
+`total_time`（停留时长）、`actual_event_time`（timestamp 类型，
+比较时必须用 `TIMESTAMP '2026-08-18 12:00:00'` 字面量，直接给字符串会报
+`Cannot apply operator: timestamp(3) <= varchar`）、`date_key`（int 分区）
+
+### `event` 取值分布（08-18 12:00–12:15 抽样）
+
+| event | 事件数 | 去重用户 | 带 symbol |
+|---|---|---|---|
+| `$AppExposure` | 1.05亿 | 118.9万 | 0 |
+| `$AppViewScreen` | 3750万 | 35.5万 | 99.8万 |
+| `$AppClick` | 2248万 | 37.2万 | 152.6万 |
+| `ModuleView` | 252万 | 20.1万 | 45.9万 |
+| **`place_order_event`** | **30.9万** | **4.2万** | **30.4万（98.5%）** |
+| `kline_ws_timeout` | 76.6万 | 3.7万 | 76.6万 |
+
+### 🎯 结论：不需要单独的交易表
+
+`place_order_event` 带 `symbol`，直接给出「**谁 · 何时 · 对哪个交易对下单**」：
+
+```
+symbol      n       uu
+GRVT        55926   1557
+TUTUSDT     25467   4595
+BTCUSDT     11498   3160
+ETHUSDT      9239   2568
+```
+
+**"价格变化 → 交易"和"价格变化 → 看"两半都能从这一张表出**，
+用 `event` 区分行为类型，用 `symbol` 对齐标的。省掉一整条交易表的申请与 join。
+
+### 因此放弃的两张交易表
+
+- `bnb_dwd.fact_main_spot_order_d`（148871 **已批准但没用**）——
+  **实测数据只到 2021-04-17，停更五年**。元数据显示 "Last Updated 2026-05-18"
+  但那是元数据变更时间，不是数据时间。**教训：元数据的更新时间不可信，
+  申请前必须 `SELECT MAX(分区)` 验一次。**
+- `bnb_dws.dws_main_trade_spot_order_uid_td`（**主动放弃，未提交**）——
+  字段全是 `_td` 累计口径（`order_cnt_td`、`first/last_order_datetime_td`），
+  **没有 symbol、没有单日明细**，答不了"用户在 D 日是否交易了币 Y"。
+  看字段就该发现，不该只看表名和更新时间。
+
+## 十二、申请进度（2026-08-19 更新）
+
+| ID | 表 | 状态 | 时长 | 用途 |
+|---|---|---|---|---|
+| 148808 | `bnb_dwd.fact_main_user_behavior_hr_d` | ✅ 已批 | 60天 | Web 埋点，覆盖不足，仅作对照 |
+| **148868** | **`bnb_dwd.dwd_main_user_traffic_sensor_behavior_di`** | **✅ 已批** | 1年 | **主力表：看 + 交易 全覆盖** |
+| 148871 | `bnb_dwd.fact_main_spot_order_d` | ✅ 已批 | 1年 | ⚠️ 数据停在 2021，弃用 |
+| 148877 | `bnb_dwd.fact_main_asset_ss_d` | Reviewing | 1年 | 持仓快照（token + 净持仓量） |
+| ~~148809~~ | ~~`fact_main_user_asset_sr_df_ha`~~ | ❌ Rejected | — | Kevin 否掉（`_ha`） |
+| ~~148865~~ | ~~`bnb_sensor.user_behavior`~~ | ❌ 已撤 | — | Maya 指出选错 |
+
+### 还缺
+**K 线行情** —— `bnb_dwd.dwd_main_ms_spot_bnb_kline_di` 字段已确认
+（`high_price`/`low_price`/`close_price`/`volume`/`number_of_trades`，分区 `date_key`），
+待提交申请。注意它挂在 MS(市占率) 域下、0 收藏，但字段就是标准 OHLCV，可用。
