@@ -1,0 +1,265 @@
+<title>持币者会对波动做出反应吗</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+
+<style>
+:root{
+  --ground:#F6F7F9; --panel:#FFFFFF; --panel-2:#EEF1F5;
+  --ink:#161B22; --ink-2:#3D4756; --ink-3:#6B7788;
+  --rule:#DDE2E9; --rule-2:#C9D0DA;
+  --amber:#A97417; --amber-soft:#F0E2C6;
+  --up:#1B7F5E; --down:#B04A47;
+  --bar:#C9D6E4; --bar-hi:#A97417;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --ground:#12161C; --panel:#1A1F27; --panel-2:#222833;
+    --ink:#E7EBF1; --ink-2:#AEB8C6; --ink-3:#7C8798;
+    --rule:#2A313C; --rule-2:#3A4350;
+    --amber:#D9A441; --amber-soft:#3A2E17;
+    --up:#3FB78C; --down:#DE6F6B;
+    --bar:#313B48; --bar-hi:#D9A441;
+  }
+}
+:root[data-theme="dark"]{
+  --ground:#12161C; --panel:#1A1F27; --panel-2:#222833;
+  --ink:#E7EBF1; --ink-2:#AEB8C6; --ink-3:#7C8798;
+  --rule:#2A313C; --rule-2:#3A4350;
+  --amber:#D9A441; --amber-soft:#3A2E17;
+  --up:#3FB78C; --down:#DE6F6B;
+  --bar:#313B48; --bar-hi:#D9A441;
+}
+:root[data-theme="light"]{
+  --ground:#F6F7F9; --panel:#FFFFFF; --panel-2:#EEF1F5;
+  --ink:#161B22; --ink-2:#3D4756; --ink-3:#6B7788;
+  --rule:#DDE2E9; --rule-2:#C9D0DA;
+  --amber:#A97417; --amber-soft:#F0E2C6;
+  --up:#1B7F5E; --down:#B04A47;
+  --bar:#C9D6E4; --bar-hi:#A97417;
+}
+
+*{box-sizing:border-box}
+body{
+  margin:0; background:var(--ground); color:var(--ink);
+  font-family:"IBM Plex Sans",-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;
+  font-size:15.5px; line-height:1.65; -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:920px; margin:0 auto; padding:48px 24px 96px; display:flex; flex-direction:column; gap:44px}
+
+.eyebrow{
+  font-family:"IBM Plex Mono",monospace; font-size:11.5px; letter-spacing:.14em;
+  text-transform:uppercase; color:var(--ink-3); margin:0;
+}
+h1{
+  font-family:Archivo,sans-serif; font-weight:700; font-size:clamp(30px,5vw,44px);
+  line-height:1.12; letter-spacing:-.015em; margin:10px 0 0; text-wrap:balance;
+}
+.dek{color:var(--ink-2); max-width:62ch; margin:14px 0 0; font-size:16.5px}
+h2{
+  font-family:Archivo,sans-serif; font-weight:600; font-size:22px; letter-spacing:-.01em;
+  margin:0 0 6px; text-wrap:balance;
+}
+h3{font-family:Archivo,sans-serif; font-weight:600; font-size:16px; margin:0 0 4px}
+p{margin:0; max-width:66ch}
+section{display:flex; flex-direction:column; gap:16px}
+.lede{color:var(--ink-2)}
+
+.verdict{
+  background:var(--panel); border:1px solid var(--rule); border-radius:3px;
+  padding:26px 28px; display:flex; flex-direction:column; gap:18px;
+}
+.figs{display:flex; flex-wrap:wrap; gap:36px}
+.fig{display:flex; flex-direction:column; gap:2px}
+.fig .n{
+  font-family:"IBM Plex Mono",monospace; font-variant-numeric:tabular-nums;
+  font-size:32px; font-weight:500; line-height:1; color:var(--amber);
+}
+.fig .n.plain{color:var(--ink)}
+.fig .l{font-size:12.5px; color:var(--ink-3)}
+
+table{border-collapse:collapse; width:100%; font-size:13.5px}
+.scroll{overflow-x:auto; border:1px solid var(--rule); border-radius:3px; background:var(--panel)}
+th,td{padding:7px 12px; text-align:right; white-space:nowrap; border-bottom:1px solid var(--rule)}
+th:first-child,td:first-child{text-align:left}
+thead th{
+  font-family:"IBM Plex Mono",monospace; font-size:10.5px; letter-spacing:.09em;
+  text-transform:uppercase; color:var(--ink-3); font-weight:500;
+  background:var(--panel-2); position:sticky; top:0;
+}
+tbody tr:last-child td{border-bottom:none}
+tbody tr.wknd td{color:var(--ink-3)}
+.num{font-family:"IBM Plex Mono",monospace; font-variant-numeric:tabular-nums}
+.up{color:var(--up)} .down{color:var(--down)}
+.barcell{width:120px}
+.bar{height:7px; background:var(--bar); border-radius:1px; display:block}
+.bar.hi{background:var(--bar-hi)}
+
+.split{display:grid; grid-template-columns:repeat(auto-fit,minmax(250px,1fr)); gap:16px}
+.card{
+  background:var(--panel); border:1px solid var(--rule); border-radius:3px; padding:18px 20px;
+  display:flex; flex-direction:column; gap:7px;
+}
+.card p{font-size:14px; color:var(--ink-2)}
+.tag{
+  font-family:"IBM Plex Mono",monospace; font-size:10.5px; letter-spacing:.09em;
+  text-transform:uppercase; padding:2px 7px; border-radius:2px; align-self:flex-start;
+}
+.tag.killed{background:var(--amber-soft); color:var(--amber)}
+.tag.open{background:var(--panel-2); color:var(--ink-3); border:1px solid var(--rule-2)}
+
+.claims{display:flex; flex-direction:column; gap:1px; background:var(--rule); border:1px solid var(--rule); border-radius:3px; overflow:hidden}
+.claim{background:var(--panel); padding:14px 18px; display:flex; gap:14px; align-items:baseline}
+.claim .mark{font-family:"IBM Plex Mono",monospace; font-size:13px; font-weight:500; flex:0 0 auto}
+.claim.yes .mark{color:var(--up)} .claim.no .mark{color:var(--down)}
+.claim span:last-child{font-size:14.5px; color:var(--ink-2)}
+
+.pipe{display:flex; flex-direction:column; gap:10px}
+.step{display:flex; gap:14px; align-items:flex-start}
+.step .k{
+  font-family:"IBM Plex Mono",monospace; font-size:11.5px; color:var(--ink-3);
+  flex:0 0 96px; padding-top:3px;
+}
+.step .v{font-size:14px; color:var(--ink-2)}
+.step .v code{
+  font-family:"IBM Plex Mono",monospace; font-size:12.5px;
+  background:var(--panel-2); padding:1px 5px; border-radius:2px; color:var(--ink);
+}
+hr{border:none; border-top:1px solid var(--rule); margin:0}
+footer{color:var(--ink-3); font-size:13px; display:flex; flex-direction:column; gap:5px}
+@media (prefers-reduced-motion:no-preference){
+  .bar{transition:width .4s ease}
+}
+</style>
+
+<div class="wrap">
+
+<header>
+  <p class="eyebrow">B9 推荐策略 · 用户价格敏感度建模</p>
+  <h1>持币者会对波动做出反应吗</h1>
+  <p class="dek">
+    结论：会。BTC 日内振幅越大，持有 BTC 的用户当天越可能打开行情、越可能下单。
+    这是 price alert 产品从 0 到 1 的前提假设，现在有数据支撑了。
+  </p>
+</header>
+
+<section class="verdict">
+  <div class="figs">
+    <div class="fig"><span class="n">+0.83</span><span class="l">振幅 ↔ 活跃人数（r，22天）</span></div>
+    <div class="fig"><span class="n">+0.81</span><span class="l">振幅 ↔ 交易人数（r，22天）</span></div>
+    <div class="fig"><span class="n plain">+15.4%</span><span class="l">高振幅日的活跃增幅</span></div>
+    <div class="fig"><span class="n plain">13,662</span><span class="l">队列用户数</span></div>
+  </div>
+  <hr>
+  <p style="font-size:14px;color:var(--ink-2)">
+    队列定义：2026-08-01 持有 BTC 且折合 ≥ $100 的用户，按 user_id 哈希 1/200 抽样。
+    观察窗口 07-28 至 08-18（22 天）。行为口径：当天在 BTCUSDT 上有埋点事件记为「活跃」，
+    有 <code style="font-family:'IBM Plex Mono',monospace;font-size:12.5px">place_order_event</code> 记为「交易」。
+  </p>
+</section>
+
+<section>
+  <h2>逐日证据</h2>
+  <p class="lede">振幅列的长条即当日 BTC 日内振幅（(高−低)/开盘）。灰色行为周末。</p>
+  <div class="scroll">
+    <table>
+      <thead>
+        <tr>
+          <th>日期</th><th>振幅</th><th class="barcell"></th>
+          <th>当日收益</th><th>活跃用户</th><th>交易用户</th><th>交易/活跃</th>
+        </tr>
+      </thead>
+      <tbody id="tb"></tbody>
+    </table>
+  </div>
+</section>
+
+<section>
+  <h2>先排除的伪相关</h2>
+  <p class="lede">看到正相关不等于有信号。下面三个替代解释里，前两个已经用数据排除。</p>
+  <div class="split">
+    <div class="card">
+      <span class="tag killed">已排除</span>
+      <h3>只是币的人气不同？</h3>
+      <p>第一版按「各币下单人数 vs 涨跌幅」跨币种算，得 r=+0.13。这个数没有意义——BTCUSDT 有 12.9 万人下单跟它当天涨 0.30% 无关，纯粹因为它最热门。改成同币种跨天后，人气被自然控制住。</p>
+    </div>
+    <div class="card">
+      <span class="tag killed">已排除</span>
+      <h3>只是周末效应？</h3>
+      <p>周末同时具备「用户少」和「波动小」，足以单独造出正相关。实测周末平均活跃 0.79 倍、平均振幅 0.38%。剔除周末后 r 仍有 +0.72，信号不是周末造出来的。</p>
+    </div>
+    <div class="card">
+      <span class="tag open">未排除</span>
+      <h3>反向因果？</h3>
+      <p>是波动引发交易，还是交易引发波动？日粒度分不出方向。需要用「上午振幅 → 下午行为」的时序错位来定，这是下一步。</p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>现在能说什么，不能说什么</h2>
+  <div class="claims">
+    <div class="claim yes"><span class="mark">能说</span><span>BTC 持有者的行为强度与 BTC 当日振幅正相关，方向明确、量级可观。</span></div>
+    <div class="claim yes"><span class="mark">能说</span><span>用「日内振幅」比用「收盘涨跌幅」解释力强得多（r=+0.83 vs +0.53）。用户反应的是盘中波动，不是收盘价。</span></div>
+    <div class="claim no"><span class="mark">不能说</span><span>波动「导致」了交易。观察性研究没有实验变异，因果需等产品上线后的 A/B。</span></div>
+    <div class="claim no"><span class="mark">不能说</span><span>某个具体用户的敏感度阈值。当前是队列聚合，个体级曲线需要更长窗口积累每人足够的观测天数。</span></div>
+    <div class="claim no"><span class="mark">不能说</span><span>该结论适用于 BTC 以外的币。目前只跑了 BTC 队列。</span></div>
+  </div>
+</section>
+
+<section>
+  <h2>数据管线</h2>
+  <div class="pipe">
+    <div class="step"><span class="k">持仓</span><span class="v"><code>bnb_dwd.fact_main_asset_ss_d</code> · 每用户每币每天一行，6.5 亿行/天。取 <code>token</code>、<code>asset_holding_usdt</code>。</span></div>
+    <div class="step"><span class="k">行为</span><span class="v"><code>bnb_dwd.dwd_main_user_traffic_sensor_behavior_di</code> · 神策全端埋点，197 亿行/天。用 <code>event</code> 区分看/交易，<code>symbol</code> 对齐标的。</span></div>
+    <div class="step"><span class="k">价格</span><span class="v">币安公共 K 线 API，无需内部权限。振幅 = (high−low)/open。</span></div>
+    <div class="step"><span class="k">连接键</span><span class="v"><code>distinct_id</code>（非 <code>user_id</code>）。埋点表的 <code>user_id</code> 是 64 位哈希，与持仓表的真实 UID 不同源；<code>is_login=1</code> 时 <code>distinct_id</code> 才是真实 UID。</span></div>
+  </div>
+</section>
+
+<section>
+  <h2>下一步</h2>
+  <div class="claims">
+    <div class="claim"><span class="mark" style="color:var(--amber)">01</span><span>时序错位检验：上午振幅 → 下午行为，定因果方向。</span></div>
+    <div class="claim"><span class="mark" style="color:var(--amber)">02</span><span>扣除大盘共动：减去 BTC 当日收益后看其他币的残差反应。</span></div>
+    <div class="claim"><span class="mark" style="color:var(--amber)">03</span><span>窗口拉到 90 天、扩到 Top 20 币，让每用户攒够观测天数，做个体级剂量反应曲线。</span></div>
+    <div class="claim"><span class="mark" style="color:var(--amber)">04</span><span>用拐点（触发阈值）与斜率（敏感度）给用户分档，直接输出 alert 的频率与门槛策略。</span></div>
+  </div>
+</section>
+
+<footer>
+  <hr>
+  <p>数据窗口 2026-07-28 → 2026-08-18 · 查询于 2026-08-19 · Spade / Trino476</p>
+  <p>只读聚合分析，无个体画像。工作底稿见仓库 <code style="font-family:'IBM Plex Mono',monospace">docs/spade-access-plan.md</code>。</p>
+</footer>
+
+</div>
+
+<script>
+var DATA=[
+ ["07-28",2.13,+0.25,375,61,0],["07-29",2.31,+0.11,294,49,0],
+ ["07-30",2.46,+1.24,320,41,0],["07-31",4.54,-2.92,375,72,0],
+ ["08-01",1.39,-0.10,282,41,1],["08-02",1.58,+1.19,276,29,1],
+ ["08-03",2.80,-0.08,351,63,0],["08-04",1.93,+0.92,314,45,0],
+ ["08-05",1.79,+0.87,306,45,0],["08-06",1.28,-0.53,289,42,0],
+ ["08-07",1.90,+0.93,314,41,0],["08-08",0.63,+0.06,257,29,1],
+ ["08-09",1.15,-0.09,256,24,1],["08-10",2.44,-1.44,353,45,0],
+ ["08-11",2.00,-0.58,301,46,0],["08-12",1.87,-0.19,279,46,0],
+ ["08-13",1.90,+0.02,319,37,0],["08-14",1.70,-0.70,278,49,0],
+ ["08-15",0.43,+0.07,245,23,1],["08-16",1.07,-0.29,231,18,1],
+ ["08-17",2.96,+2.59,336,47,0],["08-18",1.60,+0.30,287,48,0]
+];
+var MAXR=4.54, tb=document.getElementById("tb");
+DATA.forEach(function(d){
+  var rng=d[1], ret=d[2], act=d[3], tr=d[4], wk=d[5];
+  var tr_el=document.createElement("tr");
+  if(wk) tr_el.className="wknd";
+  tr_el.innerHTML=
+    '<td>'+d[0]+(wk?' <span style="font-size:11px">周末</span>':'')+'</td>'+
+    '<td class="num">'+rng.toFixed(2)+'%</td>'+
+    '<td class="barcell"><span class="bar'+(rng>=1.9?' hi':'')+'" style="width:'+(rng/MAXR*100).toFixed(1)+'%"></span></td>'+
+    '<td class="num '+(ret>=0?'up':'down')+'">'+(ret>=0?'+':'')+ret.toFixed(2)+'%</td>'+
+    '<td class="num">'+act+'</td>'+
+    '<td class="num">'+tr+'</td>'+
+    '<td class="num">'+(tr/act*100).toFixed(1)+'%</td>';
+  tb.appendChild(tr_el);
+});
+</script>

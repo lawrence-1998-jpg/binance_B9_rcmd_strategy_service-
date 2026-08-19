@@ -552,3 +552,67 @@ curl -s "https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=1d&limit=
 7 天 × 6 symbol 的 `COUNT(DISTINCT user_id)` 聚合：**77 秒**。
 该表每天 170~210 亿行，查询必须带 `date_key` 分区裁剪 + `event` 过滤，
 30 天全 symbol 的扫描前需先估成本。
+
+---
+
+## 十四、端到端交付完成（2026-08-19）
+
+**报告**：`docs/analysis/price-sensitivity.html`
+（Artifact: https://claude.ai/code/artifact/73681ab0-6285-4230-bd43-b44fd73f0faa ）
+
+### 14-A 🔑 join key 的坑（这是最大的一个）
+
+两张核心表的 `user_id` **不是同一个 ID 体系**，直接 join 会静默返回 0 行：
+
+| 表 | `user_id` 类型 | 样例 | 含义 |
+|---|---|---|---|
+| `fact_main_asset_ss_d`（持仓） | varchar | `36452418` | **真实 Binance UID** |
+| `dwd_main_user_traffic_sensor_behavior_di`（埋点） | bigint | `-8421139983678617957` | 64 位哈希，**不是 UID** |
+
+**正确的连接键是埋点表的 `distinct_id`**，且必须加 `is_login = 1`：
+
+```sql
+JOIN cohort c ON c.user_id = b.distinct_id   -- 不是 b.user_id
+WHERE b.is_login = 1
+```
+
+神策惯例：用户登录后 `distinct_id` 才被改写成真实登录 ID。
+排查路径：先 `typeof(user_id)` 比类型 → 再肉眼看两边样例值 → 在 175 列里找
+`distinct_id` / `is_login` / `track_signup_original_id`。
+
+### 14-B 队列与口径
+
+- 队列：2026-08-01 持有 BTC 且 `asset_holding_usdt >= 100`，
+  按 `MOD(ABS(from_big_endian_64(xxhash64(to_utf8(user_id)))), 200) = 0` 抽样
+  → **13,662 人**
+- 窗口：2026-07-28 ~ 08-18（22 天）
+- 活跃 = 当天在 `symbol='BTCUSDT'` 上有埋点事件
+- 交易 = 当天有 `event='place_order_event'`
+
+### 14-C 结果
+
+| 自变量 | 因变量 | r (22天) | r (仅工作日,16天) |
+|---|---|---|---|
+| **日内振幅** | 活跃人数 | **+0.830** | +0.716 |
+| **日内振幅** | 交易人数 | **+0.813** | +0.716 |
+| \|收盘涨跌\| | 活跃人数 | +0.531 | +0.466 |
+| \|收盘涨跌\| | 交易人数 | +0.400 | +0.300 |
+
+**重要发现：日内振幅的解释力远强于收盘涨跌幅**（+0.83 vs +0.53）。
+用户反应的是盘中波动，不是收盘价。**建模的自变量应该用振幅，不是收益率。**
+
+高振幅日（≥1.9%，工作日）vs 低振幅日：活跃 **+15.4%**、交易 **+8.1%**。
+
+### 14-D 查询性能实测
+
+| 查询 | 耗时 |
+|---|---|
+| 队列抽样（单分区持仓表） | ~30s |
+| 22天 × 队列 join 埋点表 | **3分40秒** |
+| 7天 × 6 symbol 聚合（无 join） | 77s |
+
+`spq.sh` 轮询上限已从 240s 提到 20 分钟——**之前"查询超时"的报错其实是我的轮询太短，查询本身在正常跑**。
+
+### 14-E 仍未排除
+反向因果（需时序错位）、大盘共动（需扣 BTC 收益看残差）、
+仅 BTC 单币、队列级而非个体级。**报告里已明确标注"能说/不能说"。**
