@@ -273,3 +273,64 @@ Table Owner `kevin.ww`，字段含 `funding_wallet_balance` decimal(28,8)、
 2. 补搜 price alert 点击回流（3-E 那块缺口）
 3. 逐张对需要的表点 Apply For Access，用第四节的话术
 4. 打通 Personal Token → JWT，摆脱浏览器依赖
+
+---
+
+## 八、首次取数实测（2026-08-19，权限批下来之后）
+
+**能取到数据了。** 148808 已批准，Trino 查询 9~10 秒返回。
+
+### 8-A 程序化通路已打通（不再依赖浏览器）
+
+`~/.b9/bin/spade.sh <api路径> [json-body]` — 自动用 `~/.b9/spade_token`
+换 JWT 并缓存到 `~/.b9/.spade_jwt`（12h 有效，超过 11h 自动刷新）。
+`/api/users/me` 实测 200 正常返回。
+
+⚠️ BnQuery 的提交查询接口 body 结构还没拿到：路径是
+`POST /api/bigdata-bquery/queries`（返回 400 "Failed to read request" 说明路径对、
+body 格式不对）。前端用 XHR 不是 fetch，挂钩 `window.fetch` 抓不到，
+下次改挂 `XMLHttpRequest.prototype.send`。**在此之前 SQL 仍走浏览器 UI。**
+
+### 8-B ⚠️ 重大发现：这张核心表覆盖不了全量用户
+
+`bnb_dwd.fact_main_user_behavior_hr_d`，2026-08-18 全天：
+
+| event_name | 事件数 | 去重用户 |
+|---|---|---|
+| elementShow | 3,182,372 | 124,308 |
+| webClick | 1,248,349 | 114,527 |
+| keypress | 2,658 | **1** |
+| onChange | 1,978 | **1** |
+| **pageView** | **1,484** | **77** |
+| pageQuit | 483 | 45 |
+
+按 client 拆：
+
+| client | client_type | 事件数 | 去重用户 |
+|---|---|---|---|
+| **Web** | Web | 3,925,138 | **115,311** |
+| iOS | Hybrid | 285,119 | 7,697 |
+| Android | Hybrid | 216,941 | 6,539 |
+| Unknown | electron | 10,330 | 88 |
+
+**结论：这是 Web 端埋点表，不是 App 全量埋点。**
+
+- 全天去重用户约 12 万量级，**远低于币安真实 DAU**
+- iOS/Android 只有 Hybrid（App 内嵌 H5）的部分，**原生页面完全不在这张表里**
+- `pageView` 全天仅 77 个用户、`keypress`/`onChange` 各只有 1 个用户
+  —— 这些事件基本没有铺开埋点，**不能用来度量"看了行情页"**
+- 可用的只有 `elementShow`（元素曝光）和 `webClick`（点击），
+  要靠 `url` + `element_id` 反推用户看的是哪个 symbol
+
+**对课题的影响：**
+1. 单靠这张表，"价格变化 → 看" 这一半只能覆盖 Web + Hybrid 用户，
+   **App 原生用户（大头）缺失**，样本有严重选择偏差。
+2. 必须补一张 **App 原生埋点表**。候选：`bnb_sensor.user_behavior`（神策原始层）、
+   `bnb_tdm.user_profile_sensor`、或 `bnb_dwd.fact_main_user_behavior_d`（日粒度，
+   需确认是否同源）。**下一步优先查清 App 埋点落在哪张表。**
+3. 在补齐之前，**任何基于此表的敏感度结论都只能声明为"Web 端用户"**，
+   不能外推到全体用户。
+
+> 教训同 `aggregate-number-hides-first-screen`：3,900,000 条事件看着很足，
+> 但拆开才发现 pageView 只有 77 个用户、App 原生完全没覆盖。
+> **拿到数据的第一件事是验证它能不能回答问题，而不是有多少行。**
