@@ -334,3 +334,68 @@ body 格式不对）。前端用 XHR 不是 fetch，挂钩 `window.fetch` 抓不
 > 教训同 `aggregate-number-hides-first-screen`：3,900,000 条事件看着很足，
 > 但拆开才发现 pageView 只有 77 个用户、App 原生完全没覆盖。
 > **拿到数据的第一件事是验证它能不能回答问题，而不是有多少行。**
+
+
+---
+
+## 九、选表纪律（2026-08-19 Lawrence + 表 owner 的反馈，必须遵守）
+
+**用户原话："别给我乱搞一些乱七八糟的边缘表。申请一些正常的表。"**
+
+我一开始申请了 `bnb_dws.fact_main_user_asset_sr_df_ha`（`_ha` 后缀）和
+`bnb_sensor.user_behavior`（原始层、0 收藏、无描述），两次都被纠正：
+
+- **Kevin.ww（表 owner）**："别用ha表吧" —— `_ha` 后缀的表不要用。
+  我给不出 `_ha` 的权威定义（按命名习惯猜是小时全量或历史归档），
+  但**owner 说不用就不用，不需要理解原因**。
+- **Maya.c（Tech Owner）**：想查神策数据应该申请
+  `bnb_dwd.dwd_main_user_traffic_sensor_behavior_di`，而不是 `bnb_sensor.user_behavior`。
+
+### 判断一张表是不是"正常主流表"
+
+| 看什么 | 好 | 差 |
+|---|---|---|
+| Asset Level | **P0 / P1** | P3 或空 |
+| 收藏数 | 十几到几十 | 0 |
+| 描述 | 有中英文说明 | "no description information" |
+| 库 | `bnb_dwd` / `bnb_dws` / `bnb_dwm` | `bnb_temp` / `bnb_dtest` / `ods` / `_bak_日期` |
+| 后缀 | `_di` `_df` `_d` | **`_ha`（明确禁用）** |
+| Data Domain | 填了（User / Trade / Asset） | None |
+
+对比实例：`bnb_dwd.dwd_main_user_traffic_sensor_behavior_di` 是 **P0、31 收藏、
+有中英文描述**；而我最初挑的 `bnb_sensor.user_behavior` 是 **0 收藏、无描述**。
+差别一眼可见，我当时没看。
+
+### 找表应该从「数据专辑」进，不要盲搜
+
+**Data Map → DW Data 页签**（`/datamap/batchdata`）就是官方数据专辑：
+数仓团队清洗、编目、打标签过的表，按 业务板块 → 数据域 → 产品线 三级组织，
+每个域还配了 Confluence 文档和讲解视频。
+
+```
+hive
+├── Main (17)          ← 主站，我们要的
+│   ├── User (5) → All / Info / KYB
+│   ├── Trade (14) → Spot / Margin / Derivatives / BLVT / EuroOptions / OTC / Stock ...
+│   ├── Asset (4)
+│   ├── Financial (14) / Marketing (6) / NFT (7) / Risk (3) / UFO (1) ...
+├── CMC (4) / Cloud (4) / Chain (3) / Custody (3) / Canada (3) ...
+```
+
+顶部还有筛选器：Security Level / Database / Business Segment / Data Domain /
+Business Process / Tech Owner / Tags。**先在这里定位，再去详情页申请。**
+
+## 十、权限申请进度（2026-08-19 收盘）
+
+| ID | 表 | 用途 | 时长 | 状态 |
+|---|---|---|---|---|
+| 148808 | `bnb_dwd.fact_main_user_behavior_hr_d` | Web 埋点·小时 | 60天 | ✅ **已批准，可查** |
+| 148868 | `bnb_dwd.dwd_main_user_traffic_sensor_behavior_di` | 神策全端埋点（Maya 推荐，P0） | 1年 | Reviewing |
+| 148871 | `bnb_dwd.fact_main_spot_order_d` | 主站现货订单明细 | 1年 | Reviewing |
+| ~~148809~~ | ~~`bnb_dws.fact_main_user_asset_sr_df_ha`~~ | — | — | ❌ Kevin 否掉（`_ha`） |
+| ~~148865~~ | ~~`bnb_sensor.user_behavior`~~ | — | — | ❌ 我主动撤（Maya 指出选错） |
+
+### 还缺
+1. **持仓快照** —— `_ha` 那条被否，需从「数据专辑 → Main → Asset(4)」里重挑一张正规表
+2. **K 线行情** —— `bnb_dwd.dwd_main_ms_spot_bnb_kline_di` 待申请
+3. **用户画像** —— `bnb_dws.fact_main_user_profile_s`（C0、12 收藏、有描述）候选
