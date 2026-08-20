@@ -1,3 +1,4 @@
+<meta charset="utf-8">
 <title>持币者会对波动做出反应吗</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
 
@@ -7,6 +8,7 @@
   --ink:#161B22; --ink-2:#3D4756; --ink-3:#6B7788;
   --rule:#DDE2E9; --rule-2:#C9D0DA;
   --amber:#A97417; --amber-soft:#F0E2C6;
+  --blue:#2F5E8F; --blue-soft:#D9E5F0;
   --up:#1B7F5E; --down:#B04A47;
   --bar:#C9D6E4; --bar-hi:#A97417;
 }
@@ -16,6 +18,7 @@
     --ink:#E7EBF1; --ink-2:#AEB8C6; --ink-3:#7C8798;
     --rule:#2A313C; --rule-2:#3A4350;
     --amber:#D9A441; --amber-soft:#3A2E17;
+    --blue:#6FA3D8; --blue-soft:#1F2E3E;
     --up:#3FB78C; --down:#DE6F6B;
     --bar:#313B48; --bar-hi:#D9A441;
   }
@@ -25,6 +28,7 @@
   --ink:#E7EBF1; --ink-2:#AEB8C6; --ink-3:#7C8798;
   --rule:#2A313C; --rule-2:#3A4350;
   --amber:#D9A441; --amber-soft:#3A2E17;
+  --blue:#6FA3D8; --blue-soft:#1F2E3E;
   --up:#3FB78C; --down:#DE6F6B;
   --bar:#313B48; --bar-hi:#D9A441;
 }
@@ -33,233 +37,383 @@
   --ink:#161B22; --ink-2:#3D4756; --ink-3:#6B7788;
   --rule:#DDE2E9; --rule-2:#C9D0DA;
   --amber:#A97417; --amber-soft:#F0E2C6;
+  --blue:#2F5E8F; --blue-soft:#D9E5F0;
   --up:#1B7F5E; --down:#B04A47;
   --bar:#C9D6E4; --bar-hi:#A97417;
 }
-
 *{box-sizing:border-box}
-body{
-  margin:0; background:var(--ground); color:var(--ink);
+body{margin:0; background:var(--ground); color:var(--ink);
   font-family:"IBM Plex Sans",-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;
-  font-size:15.5px; line-height:1.65; -webkit-font-smoothing:antialiased;
-}
-.wrap{max-width:920px; margin:0 auto; padding:48px 24px 96px; display:flex; flex-direction:column; gap:44px}
-
-.eyebrow{
-  font-family:"IBM Plex Mono",monospace; font-size:11.5px; letter-spacing:.14em;
-  text-transform:uppercase; color:var(--ink-3); margin:0;
-}
-h1{
-  font-family:Archivo,sans-serif; font-weight:700; font-size:clamp(30px,5vw,44px);
-  line-height:1.12; letter-spacing:-.015em; margin:10px 0 0; text-wrap:balance;
-}
-.dek{color:var(--ink-2); max-width:62ch; margin:14px 0 0; font-size:16.5px}
-h2{
-  font-family:Archivo,sans-serif; font-weight:600; font-size:22px; letter-spacing:-.01em;
-  margin:0 0 6px; text-wrap:balance;
-}
-h3{font-family:Archivo,sans-serif; font-weight:600; font-size:16px; margin:0 0 4px}
-p{margin:0; max-width:66ch}
+  font-size:15.5px; line-height:1.66; -webkit-font-smoothing:antialiased}
+.wrap{max-width:960px; margin:0 auto; padding:48px 24px 96px; display:flex; flex-direction:column; gap:46px}
+.eyebrow{font-family:"IBM Plex Mono",monospace; font-size:11.5px; letter-spacing:.14em; text-transform:uppercase; color:var(--ink-3); margin:0}
+h1{font-family:Archivo,sans-serif; font-weight:700; font-size:clamp(30px,5vw,44px); line-height:1.12; letter-spacing:-.015em; margin:10px 0 0; text-wrap:balance}
+.dek{color:var(--ink-2); max-width:64ch; margin:14px 0 0; font-size:16.5px}
+h2{font-family:Archivo,sans-serif; font-weight:600; font-size:22px; letter-spacing:-.01em; margin:0; text-wrap:balance}
+h3{font-family:Archivo,sans-serif; font-weight:600; font-size:16px; margin:0}
+p{margin:0; max-width:70ch}
 section{display:flex; flex-direction:column; gap:16px}
 .lede{color:var(--ink-2)}
+hr{border:none; border-top:1px solid var(--rule); margin:0}
+code{font-family:"IBM Plex Mono",monospace; font-size:12.5px; background:var(--panel-2); padding:1px 5px; border-radius:2px; color:var(--ink)}
+.num{font-family:"IBM Plex Mono",monospace; font-variant-numeric:tabular-nums}
 
-.verdict{
-  background:var(--panel); border:1px solid var(--rule); border-radius:3px;
-  padding:26px 28px; display:flex; flex-direction:column; gap:18px;
-}
-.figs{display:flex; flex-wrap:wrap; gap:36px}
+.figs{display:flex; flex-wrap:wrap; gap:34px; background:var(--panel); border:1px solid var(--rule); border-radius:3px; padding:24px 26px}
 .fig{display:flex; flex-direction:column; gap:2px}
-.fig .n{
-  font-family:"IBM Plex Mono",monospace; font-variant-numeric:tabular-nums;
-  font-size:32px; font-weight:500; line-height:1; color:var(--amber);
-}
+.fig .n{font-family:"IBM Plex Mono",monospace; font-variant-numeric:tabular-nums; font-size:30px; font-weight:500; line-height:1; color:var(--amber)}
 .fig .n.plain{color:var(--ink)}
 .fig .l{font-size:12.5px; color:var(--ink-3)}
 
-table{border-collapse:collapse; width:100%; font-size:13.5px}
 .scroll{overflow-x:auto; border:1px solid var(--rule); border-radius:3px; background:var(--panel)}
-th,td{padding:7px 12px; text-align:right; white-space:nowrap; border-bottom:1px solid var(--rule)}
+table{border-collapse:collapse; width:100%; font-size:13.5px}
+th,td{padding:8px 12px; text-align:right; white-space:nowrap; border-bottom:1px solid var(--rule)}
 th:first-child,td:first-child{text-align:left}
-thead th{
-  font-family:"IBM Plex Mono",monospace; font-size:10.5px; letter-spacing:.09em;
-  text-transform:uppercase; color:var(--ink-3); font-weight:500;
-  background:var(--panel-2); position:sticky; top:0;
-}
+thead th{font-family:"IBM Plex Mono",monospace; font-size:10.5px; letter-spacing:.09em; text-transform:uppercase; color:var(--ink-3); font-weight:500; background:var(--panel-2)}
 tbody tr:last-child td{border-bottom:none}
-tbody tr.wknd td{color:var(--ink-3)}
-.num{font-family:"IBM Plex Mono",monospace; font-variant-numeric:tabular-nums}
-.up{color:var(--up)} .down{color:var(--down)}
-.barcell{width:120px}
-.bar{height:7px; background:var(--bar); border-radius:1px; display:block}
-.bar.hi{background:var(--bar-hi)}
+td.hi{color:var(--amber); font-weight:600}
 
-.split{display:grid; grid-template-columns:repeat(auto-fit,minmax(250px,1fr)); gap:16px}
-.card{
-  background:var(--panel); border:1px solid var(--rule); border-radius:3px; padding:18px 20px;
-  display:flex; flex-direction:column; gap:7px;
-}
+.chart{background:var(--panel); border:1px solid var(--rule); border-radius:3px; padding:20px 20px 12px; overflow-x:auto}
+.chart .cap{font-size:12.5px; color:var(--ink-3); margin-top:8px}
+svg{display:block}
+svg text{font-family:"IBM Plex Mono",monospace; fill:var(--ink-3)}
+svg .lbl{font-size:10.5px}
+svg .val{font-size:10px; fill:var(--ink-2)}
+svg .axis{stroke:var(--rule-2)}
+svg .grid{stroke:var(--rule); stroke-dasharray:2 3}
+
+.callout{background:var(--amber-soft); border:1px solid var(--amber); border-radius:3px; padding:16px 20px; font-size:14.5px; color:var(--ink)}
+.callout b{color:var(--amber)}
+.note{background:var(--panel-2); border-left:3px solid var(--rule-2); padding:12px 16px; font-size:13.5px; color:var(--ink-2); border-radius:0 3px 3px 0}
+
+.grid2{display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:15px}
+.card{background:var(--panel); border:1px solid var(--rule); border-radius:3px; padding:17px 19px; display:flex; flex-direction:column; gap:8px}
 .card p{font-size:14px; color:var(--ink-2)}
-.tag{
-  font-family:"IBM Plex Mono",monospace; font-size:10.5px; letter-spacing:.09em;
-  text-transform:uppercase; padding:2px 7px; border-radius:2px; align-self:flex-start;
-}
+.tag{font-family:"IBM Plex Mono",monospace; font-size:10.5px; letter-spacing:.09em; text-transform:uppercase; padding:2px 7px; border-radius:2px; align-self:flex-start}
 .tag.killed{background:var(--amber-soft); color:var(--amber)}
-.tag.open{background:var(--panel-2); color:var(--ink-3); border:1px solid var(--rule-2)}
+.tag.confirmed{background:var(--blue-soft); color:var(--blue)}
 
 .claims{display:flex; flex-direction:column; gap:1px; background:var(--rule); border:1px solid var(--rule); border-radius:3px; overflow:hidden}
-.claim{background:var(--panel); padding:14px 18px; display:flex; gap:14px; align-items:baseline}
-.claim .mark{font-family:"IBM Plex Mono",monospace; font-size:13px; font-weight:500; flex:0 0 auto}
-.claim.yes .mark{color:var(--up)} .claim.no .mark{color:var(--down)}
+.claim{background:var(--panel); padding:13px 18px; display:flex; gap:14px; align-items:baseline}
+.claim .mark{font-family:"IBM Plex Mono",monospace; font-size:12.5px; font-weight:500; flex:0 0 auto}
+.claim.y .mark{color:var(--up)} .claim.n .mark{color:var(--down)}
 .claim span:last-child{font-size:14.5px; color:var(--ink-2)}
 
-.pipe{display:flex; flex-direction:column; gap:10px}
-.step{display:flex; gap:14px; align-items:flex-start}
-.step .k{
-  font-family:"IBM Plex Mono",monospace; font-size:11.5px; color:var(--ink-3);
-  flex:0 0 96px; padding-top:3px;
-}
+.pipe{display:flex; flex-direction:column; gap:0; background:var(--panel); border:1px solid var(--rule); border-radius:3px; overflow:hidden}
+.step{display:flex; gap:14px; padding:12px 18px; border-bottom:1px solid var(--rule); align-items:baseline}
+.step:last-child{border-bottom:none}
+.step .k{font-family:"IBM Plex Mono",monospace; font-size:11.5px; color:var(--amber); flex:0 0 104px}
 .step .v{font-size:14px; color:var(--ink-2)}
-.step .v code{
-  font-family:"IBM Plex Mono",monospace; font-size:12.5px;
-  background:var(--panel-2); padding:1px 5px; border-radius:2px; color:var(--ink);
-}
-hr{border:none; border-top:1px solid var(--rule); margin:0}
 footer{color:var(--ink-3); font-size:13px; display:flex; flex-direction:column; gap:5px}
-@media (prefers-reduced-motion:no-preference){
-  .bar{transition:width .4s ease}
-}
 </style>
 
 <div class="wrap">
 
 <header>
-  <p class="eyebrow">B9 推荐策略 · 用户价格敏感度建模</p>
+  <p class="eyebrow">B9 · 用户价格敏感度建模 · 深度分析 v2</p>
   <h1>持币者会对波动做出反应吗</h1>
   <p class="dek">
-    结论：会。BTC 日内振幅越大，持有 BTC 的用户当天越可能打开行情、越可能下单。
-    这是 price alert 产品从 0 到 1 的前提假设，现在有数据支撑了。
+    17,586 名持币者 × 23 天 × 8 币的个体级面板。答案分三层：<strong>会</strong>（极端异动日行动率翻 2–3.5 倍）；
+    <strong>但反应极不均匀</strong>（3.2% 的人贡献了几乎全部弹性，96% 毫无反应）；
+    <strong>而且行为先于价格</strong>（8·19 大行情当天，价格还没动，上午的主动关注已翻 2.6 倍——用户在响应消息，不是在响应 K 线）。
   </p>
 </header>
 
-<section class="verdict">
-  <div class="figs">
-    <div class="fig"><span class="n">+0.83</span><span class="l">振幅 ↔ 活跃人数（r，22天）</span></div>
-    <div class="fig"><span class="n">+0.81</span><span class="l">振幅 ↔ 交易人数（r，22天）</span></div>
-    <div class="fig"><span class="n plain">+15.4%</span><span class="l">高振幅日的活跃增幅</span></div>
-    <div class="fig"><span class="n plain">13,662</span><span class="l">队列用户数</span></div>
+<div class="figs">
+  <div class="fig"><span class="n">2.15×</span><span class="l">极端异动日 · 查看率倍数</span></div>
+  <div class="fig"><span class="n">2.58×</span><span class="l">极端异动日 · 下单率倍数</span></div>
+  <div class="fig"><span class="n">3.45×</span><span class="l">$10k+ 大户的下单倍数</span></div>
+  <div class="fig"><span class="n plain">3.2%</span><span class="l">高敏感用户占比</span></div>
+  <div class="fig"><span class="n plain">600K</span><span class="l">user×day×coin 观测</span></div>
+</div>
+
+<section>
+  <h2>一 · 研究设计</h2>
+  <div class="pipe">
+    <div class="step"><span class="k">队列</span><span class="v">2026-07-28 快照中持有 8 个研究币任一 ≥$100 的用户，按 <code>user_id</code> 哈希 1/300 抽样 → <b>17,586 人</b>（完整无截断；1/100 抽样会撞 5 万行上限被截尾，弃用）。对应总体约 530 万人。</span></div>
+    <div class="step"><span class="k">Treatment</span><span class="v">信号异动，按<b>每个币自身</b>滚动 30 天日内振幅分布定义：≥P80 为中度异动、≥P95 为极端异动。不用全市场统一阈值——BTC 的 3% 和 PEPE 的 3% 不是一回事。</span></div>
+    <div class="step"><span class="k">Outcome</span><span class="v">该用户当天对该币的 <b>看</b>（<code>$AppViewScreen</code>/<code>$AppClick</code>，主动行为）与 <b>买</b>（<code>place_order_event</code>）。被动曝光（<code>ModuleView</code>）单独统计，不混入。</span></div>
+    <div class="step"><span class="k">粒度</span><span class="v">user × day × coin，上/下午拆分。窗口 07-28 ~ 08-19 共 23 天、8 币、<b>603,955 个持有者-币-日观测</b>。</span></div>
+    <div class="step"><span class="k">数据</span><span class="v">持仓 <code>fact_main_asset_ss_d</code> + 行为 <code>dwd_main_user_traffic_sensor_behavior_di</code>（连接键 <code>distinct_id</code>+<code>is_login=1</code>）+ 价格用币安公共 K 线按<b>北京时区重新聚合</b>成日线。</span></div>
   </div>
-  <hr>
-  <p style="font-size:14px;color:var(--ink-2)">
-    队列定义：2026-08-01 持有 BTC 且折合 ≥ $100 的用户，按 user_id 哈希 1/200 抽样。
-    观察窗口 07-28 至 08-18（22 天）。行为口径：当天在 BTCUSDT 上有埋点事件记为「活跃」，
-    有 <code style="font-family:'IBM Plex Mono',monospace;font-size:12.5px">place_order_event</code> 记为「交易」。
-  </p>
+  <div class="note">
+    时区修正是本轮最重要的返工：埋点表时间戳为 UTC+8（用 8·19 价格爆发小时与下单峰值小时对齐验证），
+    而第一版异动定义用的是 UTC 日线，两者错位 8 小时。所有价格序列已用小时线重新聚合成北京时区日线后重算。
+    修正后全部效应量变大——错位本来在稀释信号。
+  </div>
 </section>
 
 <section>
-  <h2>逐日证据</h2>
-  <p class="lede">振幅列的长条即当日 BTC 日内振幅（(高−低)/开盘）。灰色行为周末。</p>
+  <h2>二 · 主结果：剂量反应曲线</h2>
+  <p class="lede">振幅越大，持有者行动率越高，且非线性——<b>5% 振幅是拐点</b>，之下缓坡，之上陡增。</p>
+
+  <div class="chart">
+    <svg viewBox="0 0 720 300" width="720" height="300" role="img" aria-label="剂量反应曲线">
+      <line class="axis" x1="60" y1="250" x2="690" y2="250"/>
+      <line class="grid" x1="60" y1="190" x2="690" y2="190"/><text class="lbl" x="24" y="194">1%</text>
+      <line class="grid" x1="60" y1="130" x2="690" y2="130"/><text class="lbl" x="24" y="134">2%</text>
+      <line class="grid" x1="60" y1="70"  x2="690" y2="70"/><text class="lbl" x="24" y="74">3%</text>
+      <line class="grid" x1="60" y1="10"  x2="690" y2="10"/><text class="lbl" x="24" y="14">4%</text>
+      <!-- x 桶中心: 0-1→110, 1-2→215, 2-3→320, 3-5→425, 5-10→530, 10+→635 ; y=250-pct*60 -->
+      <!-- 看: 1.48 1.559 1.628 1.773 3.162 3.817 -->
+      <polyline fill="none" stroke="var(--amber)" stroke-width="2.5"
+        points="110,161.2 215,156.5 320,152.3 425,143.6 530,60.3 635,21.0"/>
+      <g fill="var(--amber)">
+        <circle cx="110" cy="161.2" r="4"/><circle cx="215" cy="156.5" r="4"/><circle cx="320" cy="152.3" r="4"/>
+        <circle cx="425" cy="143.6" r="4"/><circle cx="530" cy="60.3" r="4.5"/><circle cx="635" cy="21.0" r="4.5"/>
+      </g>
+      <text class="val" x="96" y="150">1.48</text><text class="val" x="201" y="145">1.56</text>
+      <text class="val" x="306" y="141">1.63</text><text class="val" x="411" y="132">1.77</text>
+      <text class="val" x="512" y="49" style="font-weight:600">3.16</text><text class="val" x="617" y="12" style="font-weight:600">3.82</text>
+      <!-- 买 ×4 放大画在同图注明: 0.195 0.252 0.271 0.331 0.598 0.988 → y=250-pct*4*60 -->
+      <polyline fill="none" stroke="var(--blue)" stroke-width="2" stroke-dasharray="5 4"
+        points="110,203.2 215,189.5 320,185.0 425,170.6 530,106.5 635,12.9"/>
+      <g fill="var(--blue)">
+        <circle cx="110" cy="203.2" r="3.5"/><circle cx="215" cy="189.5" r="3.5"/><circle cx="320" cy="185.0" r="3.5"/>
+        <circle cx="425" cy="170.6" r="3.5"/><circle cx="530" cy="106.5" r="4"/><circle cx="635" cy="12.9" r="4"/>
+      </g>
+      <text class="val" x="96" y="219" style="fill:var(--blue)">0.20</text><text class="val" x="201" y="205" style="fill:var(--blue)">0.25</text>
+      <text class="val" x="306" y="200" style="fill:var(--blue)">0.27</text><text class="val" x="411" y="186" style="fill:var(--blue)">0.33</text>
+      <text class="val" x="510" y="122" style="fill:var(--blue);font-weight:600">0.60</text><text class="val" x="600" y="30" style="fill:var(--blue);font-weight:600">0.99</text>
+      <g class="lbl" text-anchor="middle">
+        <text x="110" y="270">0-1%</text><text x="215" y="270">1-2%</text><text x="320" y="270">2-3%</text>
+        <text x="425" y="270">3-5%</text><text x="530" y="270">5-10%</text><text x="635" y="270">10%+</text>
+        <text x="375" y="292" style="fill:var(--ink-3)">当日日内振幅（该币，北京时区日线）</text>
+      </g>
+      <g font-size="11">
+        <line x1="80" y1="26" x2="108" y2="26" stroke="var(--amber)" stroke-width="2.5"/><text x="114" y="30" style="fill:var(--ink-2)">看（左轴，%）</text>
+        <line x1="200" y1="26" x2="228" y2="26" stroke="var(--blue)" stroke-width="2" stroke-dasharray="5 4"/><text x="234" y="30" style="fill:var(--ink-2)">买（数值为真实 %，绘制放大 4×）</text>
+      </g>
+    </svg>
+    <p class="cap">n 按桶：59,862 / 224,533 / 151,702 / 127,936 / 29,949 / 5,973 个持有者-币-日。看 = 当日主动打开该币页面/点击；买 = 当日对该币下单。</p>
+  </div>
+
   <div class="scroll">
     <table>
-      <thead>
-        <tr>
-          <th>日期</th><th>振幅</th><th class="barcell"></th>
-          <th>当日收益</th><th>活跃用户</th><th>交易用户</th><th>交易/活跃</th>
-        </tr>
-      </thead>
-      <tbody id="tb"></tbody>
+      <thead><tr><th>Treatment</th><th>观测数</th><th>看</th><th>买</th><th>看倍数</th><th>买倍数</th></tr></thead>
+      <tbody>
+        <tr><td>正常日（&lt;P80）</td><td class="num">537,394</td><td class="num">1.61%</td><td class="num">0.27%</td><td class="num">1.00</td><td class="num">1.00</td></tr>
+        <tr><td>中度异动（P80–P95）</td><td class="num">36,247</td><td class="num">2.08%</td><td class="num">0.36%</td><td class="num">1.29</td><td class="num">1.36</td></tr>
+        <tr><td>极端异动（≥P95）</td><td class="num">26,314</td><td class="num hi">3.49%</td><td class="num hi">0.69%</td><td class="num hi">2.15</td><td class="num hi">2.58</td></tr>
+      </tbody>
     </table>
   </div>
 </section>
 
 <section>
-  <h2>先排除的伪相关</h2>
-  <p class="lede">看到正相关不等于有信号。下面三个替代解释里，前两个已经用数据排除。</p>
-  <div class="split">
+  <h2>三 · 时序：行为先于价格</h2>
+  <p class="lede">8·19 是 23 天里唯一的全市场极端异动日（7/8 个币同时触发 P95）。它的小时结构给出了因果方向上最有信息量的证据。</p>
+
+  <div class="chart">
+    <svg viewBox="0 0 720 320" width="720" height="320" role="img" aria-label="8月19日小时级价格与下单">
+      <!-- 下单柱: max 721706 → 高度/721706*180; x=54+h*27, 宽18 -->
+      <g id="bars"></g>
+      <line class="axis" x1="50" y1="240" x2="700" y2="240"/>
+      <!-- 振幅线: rng19 max 5.47 → y=240-rng/5.47*200 -->
+      <g id="rngline"></g>
+      <g class="lbl" text-anchor="middle" id="xlab"></g>
+      <text class="lbl" x="54" y="16" style="fill:var(--ink-2)">柱 = 全站 BTCUSDT 下单笔数（8·19 实线柱 vs 8·12 对照日空心柱） · 折线 = BTC 小时振幅</text>
+      <g font-size="11">
+        <text x="480" y="290" style="fill:var(--amber);font-weight:600">23时：振幅 5.47% ↔ 下单 72.2 万（对照日同时段 6.5×）</text>
+      </g>
+    </svg>
+    <p class="cap">北京时间。20–22 时价格开始爬升（0.8%→1.5%），23 时爆发；下单量逐小时同步放大，峰值与价格峰值落在同一个小时。行为对波动的响应在小时级紧耦合，看不到滞后。</p>
+  </div>
+
+  <div class="grid2">
     <div class="card">
-      <span class="tag killed">已排除</span>
-      <h3>只是币的人气不同？</h3>
-      <p>第一版按「各币下单人数 vs 涨跌幅」跨币种算，得 r=+0.13。这个数没有意义——BTCUSDT 有 12.9 万人下单跟它当天涨 0.30% 无关，纯粹因为它最热门。改成同币种跨天后，人气被自然控制住。</p>
+      <span class="tag confirmed">证据 1 · 小时级同步</span>
+      <h3>价格峰 = 行为峰，同一小时</h3>
+      <p>23 时振幅 5.47%（全天其余小时 &lt;1.5%），下单 72.2 万笔（当天小时均值的 5.9 倍、对照日 8·12 同时段的 6.5 倍）。日常晚间节律被对照日排除。</p>
     </div>
     <div class="card">
-      <span class="tag killed">已排除</span>
-      <h3>只是周末效应？</h3>
-      <p>周末同时具备「用户少」和「波动小」，足以单独造出正相关。实测周末平均活跃 0.79 倍、平均振幅 0.38%。剔除周末后 r 仍有 +0.72，信号不是周末造出来的。</p>
+      <span class="tag confirmed">证据 2 · 上午的反常</span>
+      <h3>价格还没动，关注已经翻倍</h3>
+      <p>8·19 上午每小时振幅仅 0.1–0.4%（全天最平静段），但队列<b>主动查看</b>率 2.65%——是正常日上午的 <b>2.61 倍</b>；下单率 0.48%，为正常日的 <b>3.20 倍</b>。</p>
+    </div>
+  </div>
+
+  <div class="callout">
+    <b>解释链（逐一排除后剩下的）：</b>不是前日行情惯性（8·16–8·18 三天全部 shock=0，振幅 1.3–2.8%）；
+    不是推荐流加大曝光的机械效应（被动曝光率上午仅 0.19%，量级不足以解释）。
+    剩下的解释是：<b>用户在响应消息面，而消息先于价格</b>——当天白天已流通美国加密监管预期改善、财政部扩大国债回购等报道（B9 事件库当日 S 级事件的归因），价格到北京 23 时美盘才兑现。
+    <b>产品含义：只盯价格波动的 alert 天然慢半拍，触发器应该是「价格异动 ∪ 消息异动」双通道——这正好是 B9 事件库的位置。</b>
+  </div>
+</section>
+
+<section>
+  <h2>四 · 谁在反应：异质性</h2>
+  <p class="lede">反应强度随持仓规模单调上升；持仓分散度（币种数）几乎不影响。</p>
+
+  <div class="chart">
+    <svg viewBox="0 0 720 250" width="720" height="250" role="img" aria-label="持仓规模异质性">
+      <!-- 三组，每组两根柱（正常日/极端日 看%），max 9.54 → h=pct/9.54*170; 基线 y=210 -->
+      <g id="hbars"></g>
+      <line class="axis" x1="50" y1="210" x2="700" y2="210"/>
+      <g class="lbl" text-anchor="middle">
+        <text x="165" y="230">$100–1k（n=380,269）</text>
+        <text x="390" y="230">$1k–10k（n=135,454）</text>
+        <text x="615" y="230">$10k+（n=21,671）</text>
+      </g>
+      <g font-size="11">
+        <rect x="80" y="8" width="14" height="10" fill="var(--bar)"/><text x="100" y="17" style="fill:var(--ink-2)">正常日 看%</text>
+        <rect x="200" y="8" width="14" height="10" fill="var(--amber)"/><text x="220" y="17" style="fill:var(--ink-2)">极端异动日 看%</text>
+      </g>
+    </svg>
+    <p class="cap">$10k+ 大户：正常日 4.58% → 极端日 9.54%（+4.96pp）；买 0.64% → 2.19%（3.45×）。绝对增量与相对倍数都最大。</p>
+  </div>
+
+  <div class="scroll">
+    <table>
+      <thead><tr><th>分组</th><th>观测</th><th>看·正常</th><th>看·极端</th><th>看倍数</th><th>买·正常</th><th>买·极端</th><th>买倍数</th></tr></thead>
+      <tbody>
+        <tr><td>持仓 $100–1k</td><td class="num">380,269</td><td class="num">1.12%</td><td class="num">2.58%</td><td class="num">2.31</td><td class="num">0.18%</td><td class="num">0.47%</td><td class="num">2.56</td></tr>
+        <tr><td>持仓 $1k–10k</td><td class="num">135,454</td><td class="num">2.50%</td><td class="num">5.10%</td><td class="num">2.04</td><td class="num">0.45%</td><td class="num">1.09%</td><td class="num">2.42</td></tr>
+        <tr><td>持仓 $10k+</td><td class="num">21,671</td><td class="num">4.58%</td><td class="num hi">9.54%</td><td class="num">2.08</td><td class="num">0.64%</td><td class="num hi">2.19%</td><td class="num hi">3.45</td></tr>
+        <tr><td>持 1 币</td><td class="num">260,480</td><td class="num">1.81%</td><td class="num">3.71%</td><td class="num">2.04</td><td class="num">0.32%</td><td class="num">0.71%</td><td class="num">2.22</td></tr>
+        <tr><td>持 2 币</td><td class="num">135,041</td><td class="num">1.42%</td><td class="num">3.30%</td><td class="num">2.32</td><td class="num">0.18%</td><td class="num">0.70%</td><td class="num">3.96</td></tr>
+        <tr><td>持 3+ 币</td><td class="num">141,873</td><td class="num">1.40%</td><td class="num">3.30%</td><td class="num">2.36</td><td class="num">0.26%</td><td class="num">0.65%</td><td class="num">2.50</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>分币（8·19 当天 vs 各自正常日基线）</h3>
+  <div class="scroll">
+    <table>
+      <thead><tr><th>币</th><th>持有者</th><th>当日振幅</th><th>看·基线</th><th>看·8·19</th><th>买·基线</th><th>买·8·19</th><th>买倍数</th></tr></thead>
+      <tbody>
+        <tr><td>LINK</td><td class="num">658</td><td class="num">6.6%</td><td class="num">1.30%</td><td class="num">4.26%</td><td class="num">0.22%</td><td class="num hi">1.22%</td><td class="num hi">5.55</td></tr>
+        <tr><td>ETH</td><td class="num">5,315</td><td class="num">10.9%</td><td class="num">1.58%</td><td class="num">3.80%</td><td class="num">0.29%</td><td class="num">0.98%</td><td class="num">3.38</td></tr>
+        <tr><td>SOL</td><td class="num">2,585</td><td class="num">8.3%</td><td class="num">2.01%</td><td class="num">4.60%</td><td class="num">0.36%</td><td class="num">0.97%</td><td class="num">2.69</td></tr>
+        <tr><td>BTC</td><td class="num">9,101</td><td class="num">8.2%</td><td class="num">1.89%</td><td class="num">4.33%</td><td class="num">0.28%</td><td class="num">0.76%</td><td class="num">2.71</td></tr>
+        <tr><td>PEPE</td><td class="num">429</td><td class="num">8.0%</td><td class="num">2.64%</td><td class="num">5.59%</td><td class="num">0.58%</td><td class="num">0.93%</td><td class="num">1.60</td></tr>
+        <tr><td>DOGE</td><td class="num">1,379</td><td class="num">6.1%</td><td class="num">1.60%</td><td class="num">2.18%</td><td class="num">0.27%</td><td class="num">0.36%</td><td class="num">1.33</td></tr>
+        <tr><td>XRP</td><td class="num">3,549</td><td class="num">7.8%</td><td class="num">1.13%</td><td class="num">2.20%</td><td class="num">0.21%</td><td class="num">0.28%</td><td class="num">1.33</td></tr>
+        <tr><td>BNB</td><td class="num">3,069</td><td class="num">3.1%*</td><td class="num">0.92%</td><td class="num">1.69%</td><td class="num">0.17%</td><td class="num">0.23%</td><td class="num">1.35</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="note">同一场大行情下，LINK/ETH 持有者的下单弹性是 XRP/DOGE 持有者的 3–4 倍——<b>alert 门槛必须按币校准，不能一刀切</b>。（*BNB 当日仅中度异动。）</p>
+</section>
+
+<section>
+  <h2>五 · 个体级：敏感度分布</h2>
+  <p class="lede">对每个用户计算「极端日行动率 − 正常日行动率」（要求 ≥10 个正常日在场观测）。分布极度右偏：</p>
+
+  <div class="chart">
+    <svg viewBox="0 0 720 260" width="720" height="260" role="img" aria-label="个体敏感度分布">
+      <!-- hist: <-10:249, -10~0:726, 0:15889, 0~10:33, 10~30:123, 30~60:210, >60:356 ; log scale h=log10(n+1)/log10(16000)*180 -->
+      <g id="ibars"></g>
+      <line class="axis" x1="50" y1="215" x2="700" y2="215"/>
+      <g class="lbl" text-anchor="middle" id="ilab"></g>
+      <text class="lbl" x="54" y="16" style="fill:var(--ink-2)">用户数（对数刻度） · uplift = 极端异动日行动率 − 正常日行动率</text>
+    </svg>
+    <p class="cap">n=17,586。中间的巨柱是 15,889 个 uplift 恰好为 0 的用户——他们无论市场怎样都不动。</p>
+  </div>
+
+  <div class="grid2">
+    <div class="card">
+      <h3>高敏感 · 566 人（3.2%）</h3>
+      <p>uplift &gt; +30pp。画像：中位总持仓 <b>$1,175</b>（无反应群的 2.1 倍）、正常日基线活跃率 <b>9.5%</b>（无反应群为 0）。<b>他们已经在自己盯盘</b>——alert 对他们是效率工具。</p>
     </div>
     <div class="card">
-      <span class="tag open">未排除</span>
-      <h3>反向因果？</h3>
-      <p>是波动引发交易，还是交易引发波动？日粒度分不出方向。需要用「上午振幅 → 下午行为」的时序错位来定，这是下一步。</p>
+      <h3>轻度敏感 · 156 人（0.9%）</h3>
+      <p>uplift 0–30pp。少量真实但弱的响应。</p>
+    </div>
+    <div class="card">
+      <h3>无反应 · 16,864 人（95.9%）</h3>
+      <p>极端日与正常日行动率无差（绝大多数两者皆为 0）。中位持仓 $564。<b>对这个群体，价格 alert 是从 0 到 1 的唤醒问题，不是频率优化问题。</b></p>
+    </div>
+    <div class="card">
+      <h3>口径提醒</h3>
+      <p>极端日样本少（多数用户只有 1–2 个极端日在场），个体 uplift 估计噪声大，分群比例是保守下界；"无反应"里包含 App 打开率本身极低的沉睡用户。</p>
     </div>
   </div>
 </section>
 
 <section>
-  <h2>现在能说什么，不能说什么</h2>
+  <h2>六 · 策略含义：分层触发矩阵</h2>
+  <p class="lede">把上面四个维度（振幅档 × 持仓规模 × 币种弹性 × 个体历史敏感度）直接翻译成 alert 触发策略：</p>
+  <div class="scroll">
+    <table>
+      <thead><tr><th>人群</th><th>识别方式（线上可算）</th><th>触发门槛</th><th>预期响应</th></tr></thead>
+      <tbody>
+        <tr><td><b>已验证敏感</b>（~3%）</td><td>近 30 天有异动日响应记录 × 基线活跃&gt;5%</td><td class="num">P80（中度）即推，高频低门槛</td><td class="num">看 ~10%，买 ~2%</td></tr>
+        <tr><td><b>大户</b>（$10k+，~4%）</td><td>持仓快照</td><td class="num">P80 即推</td><td class="num">看 9.5%，买 2.2%（极端日）</td></tr>
+        <tr><td><b>中户</b>（$1k–10k）</td><td>持仓快照</td><td class="num">P95（极端）才推</td><td class="num">看 5.1%，买 1.1%</td></tr>
+        <tr><td><b>小额+沉睡</b>（大多数）</td><td>基线活跃=0</td><td class="num">仅 P95 ∩ 消息共振（S/A 级事件）</td><td class="num">看 2.6%，买 0.5%——唤醒逻辑，控频防骚扰</td></tr>
+      </tbody>
+    </table>
+  </div>
   <div class="claims">
-    <div class="claim yes"><span class="mark">能说</span><span>BTC 持有者的行为强度与 BTC 当日振幅正相关，方向明确、量级可观。</span></div>
-    <div class="claim yes"><span class="mark">能说</span><span>用「日内振幅」比用「收盘涨跌幅」解释力强得多（r=+0.83 vs +0.53）。用户反应的是盘中波动，不是收盘价。</span></div>
-    <div class="claim no"><span class="mark">不能说</span><span>波动「导致」了交易。观察性研究没有实验变异，因果需等产品上线后的 A/B。</span></div>
-    <div class="claim no"><span class="mark">不能说</span><span>某个具体用户的敏感度阈值。当前是队列聚合，个体级曲线需要更长窗口积累每人足够的观测天数。</span></div>
-    <div class="claim no"><span class="mark">不能说</span><span>该结论适用于 BTC 以外的币。目前只跑了 BTC 队列。</span></div>
+    <div class="claim y"><span class="mark">加成</span><span><b>币种系数</b>：同样的振幅档，LINK/ETH/SOL/BTC 持有者响应强（买倍数 2.7–5.5×），XRP/DOGE/BNB 弱（1.3×）——后者门槛整体上调一档。</span></div>
+    <div class="claim y"><span class="mark">加成</span><span><b>双通道触发</b>：8·19 证明消息响应先于价格响应。B9 事件库的 S/A 级事件应作为独立触发信号，与价格异动取并集，而不是等价格确认。</span></div>
+    <div class="claim y"><span class="mark">加成</span><span><b>时段</b>：行为与波动在小时级同步，alert 延迟预算应压在分钟级；按日汇总推送没有意义。</span></div>
   </div>
 </section>
 
 <section>
-  <h2>数据管线</h2>
-  <div class="pipe">
-    <div class="step"><span class="k">持仓</span><span class="v"><code>bnb_dwd.fact_main_asset_ss_d</code> · 每用户每币每天一行，6.5 亿行/天。取 <code>token</code>、<code>asset_holding_usdt</code>。</span></div>
-    <div class="step"><span class="k">行为</span><span class="v"><code>bnb_dwd.dwd_main_user_traffic_sensor_behavior_di</code> · 神策全端埋点，197 亿行/天。用 <code>event</code> 区分看/交易，<code>symbol</code> 对齐标的。</span></div>
-    <div class="step"><span class="k">价格</span><span class="v">币安公共 K 线 API，无需内部权限。振幅 = (high−low)/open。</span></div>
-    <div class="step"><span class="k">连接键</span><span class="v"><code>distinct_id</code>（非 <code>user_id</code>）。埋点表的 <code>user_id</code> 是 64 位哈希，与持仓表的真实 UID 不同源；<code>is_login=1</code> 时 <code>distinct_id</code> 才是真实 UID。</span></div>
-  </div>
-</section>
-
-<section>
-  <h2>下一步</h2>
-  <div class="claims">
-    <div class="claim"><span class="mark" style="color:var(--amber)">01</span><span>时序错位检验：上午振幅 → 下午行为，定因果方向。</span></div>
-    <div class="claim"><span class="mark" style="color:var(--amber)">02</span><span>扣除大盘共动：减去 BTC 当日收益后看其他币的残差反应。</span></div>
-    <div class="claim"><span class="mark" style="color:var(--amber)">03</span><span>窗口拉到 90 天、扩到 Top 20 币，让每用户攒够观测天数，做个体级剂量反应曲线。</span></div>
-    <div class="claim"><span class="mark" style="color:var(--amber)">04</span><span>用拐点（触发阈值）与斜率（敏感度）给用户分档，直接输出 alert 的频率与门槛策略。</span></div>
+  <h2>七 · 已排除与未排除</h2>
+  <div class="grid2">
+    <div class="card"><span class="tag killed">已排除</span><h3>币种人气混杂</h3><p>全部对比在同币种内进行（自身 P80/P95 阈值 + 同币跨日），人气被设计控制。</p></div>
+    <div class="card"><span class="tag killed">已排除</span><h3>周末/节律混杂</h3><p>treatment 对比含全周期；时序证据用同小时对照日（8·12）排除晚间日常节律（6.5× 超额）。</p></div>
+    <div class="card"><span class="tag killed">已排除</span><h3>时区错位</h3><p>发现埋点为 UTC+8 后，价格全部按北京时区日线重算。修正后效应更强。</p></div>
+    <div class="card"><span class="tag killed">已排除</span><h3>被动曝光污染</h3><p>「看」只计主动事件；ModuleView 单独统计（上午仅 0.19%），不足以解释行为高企。</p></div>
+    <div class="card"><span class="tag killed">已排除</span><h3>前日惯性</h3><p>8·16–8·18 连续三天 shock=0，8·19 上午的高活跃不是行情延续。</p></div>
+    <div class="card"><span class="tag" style="background:var(--panel-2);color:var(--ink-3);border:1px solid var(--rule-2)">未排除</span><h3>严格因果</h3><p>观察性研究：消息、价格、行为可能共同由第三方事件驱动。小时级同步 + 上午领先给出方向性证据，但因果确认要等产品上线后的 A/B。单一极端日（8·19 承载 7/8 个极端币日）也限制外推。</p></div>
   </div>
 </section>
 
 <footer>
   <hr>
-  <p>数据窗口 2026-07-28 → 2026-08-18 · 查询于 2026-08-19 · Spade / Trino476</p>
-  <p>只读聚合分析，无个体画像。工作底稿见仓库 <code style="font-family:'IBM Plex Mono',monospace">docs/spade-access-plan.md</code>。</p>
+  <p>队列 17,586 人（1/300 哈希抽样，总体约 530 万）· 窗口 2026-07-28 ~ 08-19 · 603,955 持有者-币-日观测 · 分析于 2026-08-20</p>
+  <p>只读聚合分析，无个体画像。复现代码与查询：仓库 <code>docs/analysis/</code>；工作底稿 <code>docs/spade-access-plan.md</code>。</p>
 </footer>
 
 </div>
 
 <script>
-var DATA=[
- ["07-28",2.13,+0.25,375,61,0],["07-29",2.31,+0.11,294,49,0],
- ["07-30",2.46,+1.24,320,41,0],["07-31",4.54,-2.92,375,72,0],
- ["08-01",1.39,-0.10,282,41,1],["08-02",1.58,+1.19,276,29,1],
- ["08-03",2.80,-0.08,351,63,0],["08-04",1.93,+0.92,314,45,0],
- ["08-05",1.79,+0.87,306,45,0],["08-06",1.28,-0.53,289,42,0],
- ["08-07",1.90,+0.93,314,41,0],["08-08",0.63,+0.06,257,29,1],
- ["08-09",1.15,-0.09,256,24,1],["08-10",2.44,-1.44,353,45,0],
- ["08-11",2.00,-0.58,301,46,0],["08-12",1.87,-0.19,279,46,0],
- ["08-13",1.90,+0.02,319,37,0],["08-14",1.70,-0.70,278,49,0],
- ["08-15",0.43,+0.07,245,23,1],["08-16",1.07,-0.29,231,18,1],
- ["08-17",2.96,+2.59,336,47,0],["08-18",1.60,+0.30,287,48,0]
-];
-var MAXR=4.54, tb=document.getElementById("tb");
-DATA.forEach(function(d){
-  var rng=d[1], ret=d[2], act=d[3], tr=d[4], wk=d[5];
-  var tr_el=document.createElement("tr");
-  if(wk) tr_el.className="wknd";
-  tr_el.innerHTML=
-    '<td>'+d[0]+(wk?' <span style="font-size:11px">周末</span>':'')+'</td>'+
-    '<td class="num">'+rng.toFixed(2)+'%</td>'+
-    '<td class="barcell"><span class="bar'+(rng>=1.9?' hi':'')+'" style="width:'+(rng/MAXR*100).toFixed(1)+'%"></span></td>'+
-    '<td class="num '+(ret>=0?'up':'down')+'">'+(ret>=0?'+':'')+ret.toFixed(2)+'%</td>'+
-    '<td class="num">'+act+'</td>'+
-    '<td class="num">'+tr+'</td>'+
-    '<td class="num">'+(tr/act*100).toFixed(1)+'%</td>';
-  tb.appendChild(tr_el);
-});
+(function(){
+  // 图2：8·19 小时级
+  var o19=[262349,180667,87177,65359,97686,177617,116364,74893,43461,50168,47916,49708,40506,45418,61954,46356,56350,43802,38225,54289,100654,163228,240158,721706];
+  var o12=[68406,47041,41348,42113,38600,35007,31741,32531,44680,54950,50355,41681,41030,40788,55507,44759,45054,84953,76868,66534,138361,99115,154489,111163];
+  var rng=[0.33,0.26,0.26,0.24,0.13,0.13,0.13,0.23,0.38,0.25,0.10,0.21,0.15,0.27,0.28,0.19,0.40,0.17,0.13,0.13,0.80,0.65,1.47,5.47];
+  var bars=document.getElementById('bars'), xlab=document.getElementById('xlab'), rl=document.getElementById('rngline');
+  var maxO=721706, maxR=5.47, ns='http://www.w3.org/2000/svg';
+  function el(t,a){var e=document.createElementNS(ns,t);for(var k in a)e.setAttribute(k,a[k]);return e;}
+  for(var h=0;h<24;h++){
+    var x=54+h*27;
+    var h12=o12[h]/maxO*180, h19=o19[h]/maxO*180;
+    bars.appendChild(el('rect',{x:x, y:240-h12, width:18, height:h12, fill:'none', stroke:'var(--rule-2)', 'stroke-width':1}));
+    bars.appendChild(el('rect',{x:x, y:240-h19, width:18, height:h19, fill: h>=20?'var(--amber)':'var(--bar)', opacity:h>=20?1:.85}));
+    if(h%2===0){var t=el('text',{x:x+9, y:258, 'class':'lbl'}); t.textContent=h; xlab.appendChild(t);}
+  }
+  var pts='';
+  for(var h=0;h<24;h++){ pts+=(54+h*27+9)+','+(240-rng[h]/maxR*200)+' '; }
+  rl.appendChild(el('polyline',{points:pts.trim(), fill:'none', stroke:'var(--down)', 'stroke-width':2}));
+  for(var h=20;h<24;h++){ rl.appendChild(el('circle',{cx:54+h*27+9, cy:240-rng[h]/maxR*200, r:3.5, fill:'var(--down)'})); }
+
+  // 图3：异质性
+  var hb=document.getElementById('hbars');
+  var groups=[[1.12,2.58,110],[2.50,5.10,335],[4.58,9.54,560]];
+  var maxV=9.54;
+  groups.forEach(function(g){
+    var h0=g[0]/maxV*170, h2=g[1]/maxV*170;
+    hb.appendChild(el('rect',{x:g[2], y:210-h0, width:44, height:h0, fill:'var(--bar)'}));
+    hb.appendChild(el('rect',{x:g[2]+52, y:210-h2, width:44, height:h2, fill:'var(--amber)'}));
+    var t0=el('text',{x:g[2]+22, y:210-h0-6, 'class':'val', 'text-anchor':'middle'}); t0.textContent=g[0].toFixed(2)+'%'; hb.appendChild(t0);
+    var t2=el('text',{x:g[2]+74, y:210-h2-6, 'class':'val', 'text-anchor':'middle', style:'font-weight:600'}); t2.textContent=g[1].toFixed(2)+'%'; hb.appendChild(t2);
+  });
+
+  // 图5：个体分布（对数）
+  var ib=document.getElementById('ibars'), il=document.getElementById('ilab');
+  var hist=[['<-10pp',249],['-10~0',726],['=0',15889],['0~10',33],['10~30',123],['30~60',210],['>60pp',356]];
+  var lg=function(n){return Math.log10(n+1)/Math.log10(16000)*180;};
+  hist.forEach(function(d,i){
+    var x=70+i*92, hh=lg(d[1]);
+    var sens = i>=4;
+    ib.appendChild(el('rect',{x:x, y:215-hh, width:64, height:hh, fill: i===2?'var(--bar)':(sens?'var(--amber)':'var(--bar-hi)'), opacity:i===2?.9:(sens?1:.45)}));
+    var tv=el('text',{x:x+32, y:215-hh-6, 'class':'val', 'text-anchor':'middle'}); tv.textContent=d[1].toLocaleString(); ib.appendChild(tv);
+    var tl=el('text',{x:x+32, y:233, 'class':'lbl', 'text-anchor':'middle'}); tl.textContent=d[0]; il.appendChild(tl);
+  });
+})();
 </script>

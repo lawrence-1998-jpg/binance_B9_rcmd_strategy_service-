@@ -1,0 +1,281 @@
+{
+ "shock_effect": [
+  {
+   "lvl": 0,
+   "name": "正常日",
+   "n": 537394,
+   "p_view": 1.606,
+   "p_trade": 0.268
+  },
+  {
+   "lvl": 1,
+   "name": "中度异动",
+   "n": 36247,
+   "p_view": 2.075,
+   "p_trade": 0.364
+  },
+  {
+   "lvl": 2,
+   "name": "极端异动",
+   "n": 26314,
+   "p_view": 3.492,
+   "p_trade": 0.692
+  }
+ ],
+ "dose": [
+  {
+   "b": "0-1%",
+   "n": 59862,
+   "p_view": 1.48,
+   "p_trade": 0.195
+  },
+  {
+   "b": "1-2%",
+   "n": 224533,
+   "p_view": 1.559,
+   "p_trade": 0.252
+  },
+  {
+   "b": "2-3%",
+   "n": 151702,
+   "p_view": 1.628,
+   "p_trade": 0.271
+  },
+  {
+   "b": "3-5%",
+   "n": 127936,
+   "p_view": 1.773,
+   "p_trade": 0.331
+  },
+  {
+   "b": "5-10%",
+   "n": 29949,
+   "p_view": 3.162,
+   "p_trade": 0.598
+  },
+  {
+   "b": "10-∞%",
+   "n": 5973,
+   "p_view": 3.817,
+   "p_trade": 0.988
+  }
+ ],
+ "hetero_size": [
+  {
+   "seg": "$100-1k",
+   "n_base": 380269,
+   "view0": 1.12,
+   "view2": 2.58,
+   "lift_view": 1.46,
+   "rl_view": 2.31,
+   "trade0": 0.18,
+   "trade2": 0.47,
+   "lift_trade": 0.28,
+   "rl_trade": 2.56
+  },
+  {
+   "seg": "$1k-10k",
+   "n_base": 135454,
+   "view0": 2.5,
+   "view2": 5.1,
+   "lift_view": 2.6,
+   "rl_view": 2.04,
+   "trade0": 0.45,
+   "trade2": 1.09,
+   "lift_trade": 0.64,
+   "rl_trade": 2.42
+  },
+  {
+   "seg": "$10k+",
+   "n_base": 21671,
+   "view0": 4.58,
+   "view2": 9.54,
+   "lift_view": 4.96,
+   "rl_view": 2.08,
+   "trade0": 0.64,
+   "trade2": 2.19,
+   "lift_trade": 1.56,
+   "rl_trade": 3.45
+  }
+ ],
+ "hetero_ncoin": [
+  {
+   "seg": "持1币",
+   "n_base": 260480,
+   "view0": 1.81,
+   "view2": 3.71,
+   "lift_view": 1.89,
+   "rl_view": 2.04,
+   "trade0": 0.32,
+   "trade2": 0.71,
+   "lift_trade": 0.39,
+   "rl_trade": 2.22
+  },
+  {
+   "seg": "持2币",
+   "n_base": 135041,
+   "view0": 1.42,
+   "view2": 3.3,
+   "lift_view": 1.87,
+   "rl_view": 2.32,
+   "trade0": 0.18,
+   "trade2": 0.7,
+   "lift_trade": 0.52,
+   "rl_trade": 3.96
+  },
+  {
+   "seg": "持3+币",
+   "n_base": 141873,
+   "view0": 1.4,
+   "view2": 3.3,
+   "lift_view": 1.9,
+   "rl_view": 2.36,
+   "trade0": 0.26,
+   "trade2": 0.65,
+   "lift_trade": 0.39,
+   "rl_trade": 2.5
+  }
+ ],
+ "timing_normal": {
+  "n": 537394,
+  "am_view": 1.018,
+  "pm_view": 1.099,
+  "am_trade": 0.151,
+  "pm_trade": 0.16,
+  "am_exp": 0.09,
+  "pm_exp": 0.099
+ },
+ "timing_0819": {
+  "n": 26085,
+  "am_view": 2.653,
+  "pm_view": 2.204,
+  "am_trade": 0.483,
+  "pm_trade": 0.345,
+  "am_exp": 0.192,
+  "pm_exp": 0.157
+ },
+ "indiv_n": 17586,
+ "indiv_hist": [
+  [
+   "<-10%",
+   249
+  ],
+  [
+   "-10~0%",
+   726
+  ],
+  [
+   "0%",
+   15889
+  ],
+  [
+   "0~10%",
+   33
+  ],
+  [
+   "10~30%",
+   123
+  ],
+  [
+   "30~60%",
+   210
+  ],
+  [
+   ">60%",
+   356
+  ]
+ ],
+ "seg_share": {
+  "sensitive": 566,
+  "mild": 156,
+  "flat": 16864
+ },
+ "seg_profile": {
+  "sensitive": {
+   "n": 566,
+   "med_total": 1175,
+   "med_base": 9.5,
+   "med_ncoin": 1.0
+  },
+  "flat": {
+   "n": 16864,
+   "med_total": 564,
+   "med_base": 0.0,
+   "med_ncoin": 1.0
+  }
+ },
+ "coin_0819": [
+  {
+   "coin": "BTC",
+   "holders": 9101,
+   "rng": 8.2245,
+   "view0": 1.89,
+   "view1": 4.33,
+   "trade0": 0.28,
+   "trade1": 0.76
+  },
+  {
+   "coin": "ETH",
+   "holders": 5315,
+   "rng": 10.8984,
+   "view0": 1.58,
+   "view1": 3.8,
+   "trade0": 0.29,
+   "trade1": 0.98
+  },
+  {
+   "coin": "SOL",
+   "holders": 2585,
+   "rng": 8.2513,
+   "view0": 2.01,
+   "view1": 4.6,
+   "trade0": 0.36,
+   "trade1": 0.97
+  },
+  {
+   "coin": "BNB",
+   "holders": 3069,
+   "rng": 3.1137,
+   "view0": 0.92,
+   "view1": 1.69,
+   "trade0": 0.17,
+   "trade1": 0.23
+  },
+  {
+   "coin": "XRP",
+   "holders": 3549,
+   "rng": 7.8287,
+   "view0": 1.13,
+   "view1": 2.2,
+   "trade0": 0.21,
+   "trade1": 0.28
+  },
+  {
+   "coin": "DOGE",
+   "holders": 1379,
+   "rng": 6.1274,
+   "view0": 1.6,
+   "view1": 2.18,
+   "trade0": 0.27,
+   "trade1": 0.36
+  },
+  {
+   "coin": "PEPE",
+   "holders": 429,
+   "rng": 8.046,
+   "view0": 2.64,
+   "view1": 5.59,
+   "trade0": 0.58,
+   "trade1": 0.93
+  },
+  {
+   "coin": "LINK",
+   "holders": 658,
+   "rng": 6.5928,
+   "view0": 1.3,
+   "view1": 4.26,
+   "trade0": 0.22,
+   "trade1": 1.22
+  }
+ ]
+}
