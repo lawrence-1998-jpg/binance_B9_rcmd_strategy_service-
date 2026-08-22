@@ -1,0 +1,387 @@
+<meta charset="utf-8">
+<title>B9 推荐指标体系</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+
+<style>
+:root{
+  --ground:#F6F7F9; --panel:#FFFFFF; --panel-2:#EEF1F5;
+  --ink:#161B22; --ink-2:#3D4756; --ink-3:#6B7788;
+  --rule:#DDE2E9; --rule-2:#C9D0DA;
+  --amber:#A97417; --amber-soft:#F0E2C6;
+  --blue:#2F5E8F; --blue-soft:#D9E5F0;
+  --up:#1B7F5E; --up-soft:#DFF0E8;
+  --down:#B04A47; --down-soft:#F4E0DF;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --ground:#12161C; --panel:#1A1F27; --panel-2:#222833;
+    --ink:#E7EBF1; --ink-2:#AEB8C6; --ink-3:#7C8798;
+    --rule:#2A313C; --rule-2:#3A4350;
+    --amber:#D9A441; --amber-soft:#3A2E17;
+    --blue:#6FA3D8; --blue-soft:#1F2E3E;
+    --up:#3FB78C; --up-soft:#16342A;
+    --down:#DE6F6B; --down-soft:#3A1F1E;
+  }
+}
+:root[data-theme="dark"]{
+  --ground:#12161C; --panel:#1A1F27; --panel-2:#222833;
+  --ink:#E7EBF1; --ink-2:#AEB8C6; --ink-3:#7C8798;
+  --rule:#2A313C; --rule-2:#3A4350;
+  --amber:#D9A441; --amber-soft:#3A2E17;
+  --blue:#6FA3D8; --blue-soft:#1F2E3E;
+  --up:#3FB78C; --up-soft:#16342A;
+  --down:#DE6F6B; --down-soft:#3A1F1E;
+}
+:root[data-theme="light"]{
+  --ground:#F6F7F9; --panel:#FFFFFF; --panel-2:#EEF1F5;
+  --ink:#161B22; --ink-2:#3D4756; --ink-3:#6B7788;
+  --rule:#DDE2E9; --rule-2:#C9D0DA;
+  --amber:#A97417; --amber-soft:#F0E2C6;
+  --blue:#2F5E8F; --blue-soft:#D9E5F0;
+  --up:#1B7F5E; --up-soft:#DFF0E8;
+  --down:#B04A47; --down-soft:#F4E0DF;
+}
+*{box-sizing:border-box}
+body{margin:0; background:var(--ground); color:var(--ink);
+  font-family:"IBM Plex Sans",-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;
+  font-size:15.5px; line-height:1.66; -webkit-font-smoothing:antialiased}
+.wrap{max-width:980px; margin:0 auto; padding:48px 24px 96px; display:flex; flex-direction:column; gap:46px}
+.eyebrow{font-family:"IBM Plex Mono",monospace; font-size:11.5px; letter-spacing:.14em; text-transform:uppercase; color:var(--ink-3); margin:0}
+h1{font-family:Archivo,sans-serif; font-weight:700; font-size:clamp(30px,5vw,42px); line-height:1.12; letter-spacing:-.015em; margin:10px 0 0; text-wrap:balance}
+.dek{color:var(--ink-2); max-width:66ch; margin:14px 0 0; font-size:16.5px}
+h2{font-family:Archivo,sans-serif; font-weight:600; font-size:22px; letter-spacing:-.01em; margin:0; text-wrap:balance}
+h3{font-family:Archivo,sans-serif; font-weight:600; font-size:15.5px; margin:0}
+p{margin:0; max-width:72ch}
+section{display:flex; flex-direction:column; gap:16px}
+.lede{color:var(--ink-2)}
+hr{border:none; border-top:1px solid var(--rule); margin:0}
+code{font-family:"IBM Plex Mono",monospace; font-size:12.5px; background:var(--panel-2); padding:1px 5px; border-radius:2px; color:var(--ink)}
+.num{font-family:"IBM Plex Mono",monospace; font-variant-numeric:tabular-nums}
+
+.chain{background:var(--panel); border:1px solid var(--rule); border-radius:3px; padding:26px 24px; overflow-x:auto}
+.chain-row{display:flex; align-items:stretch; gap:0; min-width:760px}
+.link{flex:1; display:flex; flex-direction:column; gap:6px; padding:14px 16px; border:1.5px solid var(--rule-2); border-radius:3px; background:var(--ground)}
+.link .q{font-family:"IBM Plex Mono",monospace; font-size:10.5px; letter-spacing:.1em; text-transform:uppercase; color:var(--ink-3)}
+.link .t{font-family:Archivo,sans-serif; font-weight:700; font-size:17px}
+.link .m{font-size:12.5px; color:var(--amber); font-weight:600}
+.times{display:flex; align-items:center; padding:0 8px; font-family:"IBM Plex Mono",monospace; font-size:20px; color:var(--ink-3)}
+.chain .foot{margin-top:14px; font-size:13.5px; color:var(--ink-2)}
+
+.scroll{overflow-x:auto; border:1px solid var(--rule); border-radius:3px; background:var(--panel)}
+table{border-collapse:collapse; width:100%; font-size:13.5px}
+th,td{padding:9px 13px; text-align:left; border-bottom:1px solid var(--rule); vertical-align:top}
+thead th{font-family:"IBM Plex Mono",monospace; font-size:10.5px; letter-spacing:.09em; text-transform:uppercase; color:var(--ink-3); font-weight:500; background:var(--panel-2); white-space:nowrap}
+tbody tr:last-child td{border-bottom:none}
+td.c{white-space:nowrap}
+.main-metric{background:var(--amber-soft)}
+.main-metric td:first-child{border-left:3px solid var(--amber)}
+
+.pill{font-family:"IBM Plex Mono",monospace; font-size:10px; letter-spacing:.07em; padding:2px 7px; border-radius:2px; white-space:nowrap; display:inline-block}
+.pill.p0{background:var(--amber-soft); color:var(--amber)}
+.pill.now{background:var(--up-soft); color:var(--up)}
+.pill.later{background:var(--panel-2); color:var(--ink-3); border:1px solid var(--rule-2)}
+
+.grid2{display:grid; grid-template-columns:repeat(auto-fit,minmax(290px,1fr)); gap:15px}
+.card{background:var(--panel); border:1px solid var(--rule); border-radius:3px; padding:17px 19px; display:flex; flex-direction:column; gap:8px}
+.card p{font-size:14px; color:var(--ink-2)}
+
+.callout{background:var(--amber-soft); border:1px solid var(--amber); border-radius:3px; padding:16px 20px; font-size:14.5px}
+.callout b{color:var(--amber)}
+.note{background:var(--panel-2); border-left:3px solid var(--rule-2); padding:12px 16px; font-size:13.5px; color:var(--ink-2); border-radius:0 3px 3px 0}
+
+.claims{display:flex; flex-direction:column; gap:1px; background:var(--rule); border:1px solid var(--rule); border-radius:3px; overflow:hidden}
+.claim{background:var(--panel); padding:13px 18px; display:flex; gap:14px; align-items:baseline}
+.claim .mark{font-family:"IBM Plex Mono",monospace; font-size:12px; font-weight:500; flex:0 0 auto; color:var(--amber)}
+.claim span:last-child{font-size:14.5px; color:var(--ink-2)}
+footer{color:var(--ink-3); font-size:13px; display:flex; flex-direction:column; gap:5px}
+</style>
+
+<div class="wrap">
+
+<header>
+  <p class="eyebrow">B9 内容推荐 · 已上线：早午日报 / Macro Insight / Sector Insight</p>
+  <h1>B9 推荐指标体系</h1>
+  <p class="dek">
+    设计原则只有一条：<strong>先立核心逻辑，再从逻辑长出指标</strong>。
+    体系是一条乘法链——四个环节相乘等于产品价值，任何一环为零则全链为零。
+    老板周报只看 <strong>1 个北极星 + 4 个主指标</strong>；其余全部是诊断指标，只在主指标异动时下钻。
+  </p>
+</header>
+
+<section>
+  <h2>零 · 核心逻辑：一条乘法链</h2>
+  <p class="lede">这个产品做的事情是：把市场发生的重要事，及时、准确、按对的顺序，送到会在意的人眼前。价值在四个环节上逐层兑现——</p>
+
+  <div class="chain">
+    <div class="chain-row">
+      <div class="link"><span class="q">L1 · 供给</span><span class="t">捕得全</span><span class="m">S/A 事件召回率</span><span style="font-size:12.5px;color:var(--ink-3)">市场发生的重要事，进库了吗</span></div>
+      <div class="times">×</div>
+      <div class="link"><span class="q">L2 · 分发</span><span class="t">排得对</span><span class="m">头部命中率 @K</span><span style="font-size:12.5px;color:var(--ink-3)">进库的重要事，上位置头部了吗</span></div>
+      <div class="times">×</div>
+      <div class="link"><span class="q">L3 · 质量</span><span class="t">说得准</span><span class="m">内容准确率</span><span style="font-size:12.5px;color:var(--ink-3)">上头部的内容，是对的吗</span></div>
+      <div class="times">×</div>
+      <div class="link"><span class="q">L4 · 消费</span><span class="t">有人看</span><span class="m">位置 CTR</span><span style="font-size:12.5px;color:var(--ink-3)">对的内容，用户买账吗</span></div>
+    </div>
+    <p class="foot">
+      <b>北极星 = S/A 级事件有效触达率</b>：站外基准池中的 S/A 级事件，在事发 6 小时内出现在任一上线位置头部、且内容抽检合格的比例。
+      它就是四个因子的乘积——北极星跌了，看四个因子哪个跌，即可归责到「爬虫 / 排序 / 内容理解 / 端上」四个可干预环节之一。
+      <b>凡是不能归责到一个环节的指标，不进这个体系。</b>
+    </p>
+  </div>
+
+  <div class="callout">
+    <b>为什么锚在「S/A 级事件」而不是「全部新闻」：</b>候选池是百~千级（LLM4Rec 架构选型的前提），拼数量没有意义；
+    早午报的历史事故（美股大涨没出来、边缘小币刷屏）本质都是 <b>S/A 级事件的漏与错</b>。把整个体系锚在同一个稀缺对象上，四层才能真正相乘。
+  </div>
+</section>
+
+<section>
+  <h2>一 · L1 供给：捕得全（召回）</h2>
+  <div class="scroll">
+    <table>
+      <thead><tr><th>指标</th><th>定义（分子 / 分母）</th><th>口径要点</th><th>频率</th><th>归责</th></tr></thead>
+      <tbody>
+        <tr class="main-metric">
+          <td class="c"><b>S/A 事件召回率@6h</b> ★主</td>
+          <td>基准池当日 S/A 事件中，6h 内在我方库中有对应事件的条数 / 基准池 S/A 总数</td>
+          <td><b>基准池</b>：CNBC·Bloomberg·CoinDesk·TheBlock·金十 每日头条快照的并集（事件级去重）。<b>匹配用事件指纹（主体+动作+日期）或 URL，禁止关键词反查</b>——LLM 意译标题曾把 70% 召回误判成 45%</td>
+          <td class="c">日</td>
+          <td class="c">爬虫/信源</td>
+        </tr>
+        <tr>
+          <td class="c">召回漏斗量表</td>
+          <td>raw 抓取 → 去重后 → LLM 结构化 → 入库事件 → 其中 S/A 数，五级留存</td>
+          <td>老板要的「召回量（整个漏斗）」。看的是<b>环比变化</b>而非绝对值——任何一级突然缩量，都在北极星跌之前预警</td>
+          <td class="c">日</td>
+          <td class="c">全链路</td>
+        </tr>
+        <tr>
+          <td class="c">分市场召回率</td>
+          <td>同主指标，按 crypto / 美股 / 宏观 拆分</td>
+          <td>早午报 P0 事故（美股行情缺失）的直接哨兵。<b>聚合召回率会掩盖单市场塌方</b>——报总数必须同时报三个分项</td>
+          <td class="c">日</td>
+          <td class="c">爬虫/信源</td>
+        </tr>
+        <tr>
+          <td class="c">首报时延 P50 / P90</td>
+          <td>事件在基准媒体最早发布时间 → 我方入库时间</td>
+          <td>召回率的时间维度。P90 控尾部：一条 S 级晚 12 小时入库，等于没召回</td>
+          <td class="c">周</td>
+          <td class="c">爬虫/管线</td>
+        </tr>
+        <tr>
+          <td class="c">独家事件数</td>
+          <td>我方库中有、基准池没有的 S/A 事件数（抽检确真后计入）</td>
+          <td>召回率的对偶指标：防止团队为刷召回率而退化成「只抄基准媒体」。也是 AI 挖掘扩源（+211% 实证）价值的直接度量</td>
+          <td class="c">周</td>
+          <td class="c">爬虫/AI挖掘</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section>
+  <h2>二 · L2 分发：排得对（排序）</h2>
+  <p class="lede">同一套逻辑，三个位置三个落法——位置形态不同，「头部」的定义不同，但都在回答同一个问题。</p>
+  <div class="scroll">
+    <table>
+      <thead><tr><th>指标</th><th>定义</th><th>口径要点</th><th>频率</th><th>归责</th></tr></thead>
+      <tbody>
+        <tr class="main-metric">
+          <td class="c"><b>头部命中率@K</b> ★主</td>
+          <td>我方位置头部 K 条中属于「当期应出集合」的条数 / K</td>
+          <td>「应出集合」= 基准池 S/A ∪ 我方独家 S/A。三个位置的 K：早午报=入选条数（全部）；Macro=Top10；Sector=每板块 Top3</td>
+          <td class="c">日</td>
+          <td class="c">排序策略</td>
+        </tr>
+        <tr>
+          <td class="c">S 级倒挂率</td>
+          <td>库里已有、但没进对应位置头部的 S 级事件占比</td>
+          <td>主指标的对偶：命中率看「上去的对不对」，倒挂率看「该上的漏没漏」。BTC 破位排第 74 位那类事故的哨兵</td>
+          <td class="c">日</td>
+          <td class="c">排序策略</td>
+        </tr>
+        <tr>
+          <td class="c">头部重复率</td>
+          <td>头部 K 条中互为同一真实事件的条数 / K</td>
+          <td>「1 事 3 条」历史 P0 问题；跨轮归并失效时第一个冒头的就是它。红线 = 0</td>
+          <td class="c">日</td>
+          <td class="c">去重/聚类</td>
+        </tr>
+        <tr>
+          <td class="c">Sector 相关性精度</td>
+          <td>Sector 位展示条目中，人工/Agent 判定「与板块真相关」的占比</td>
+          <td>Sector Insight 的 P0 问题（相关性严重不足）专属。配套<b>空结果率</b>：宁缺毋滥的代价要可见，两者一起看</td>
+          <td class="c">周</td>
+          <td class="c">相关性策略</td>
+        </tr>
+        <tr>
+          <td class="c">头部新鲜度</td>
+          <td>头部条目的事发时间年龄分布 P50</td>
+          <td>时效因子是否被其他因子淹没的哨兵</td>
+          <td class="c">周</td>
+          <td class="c">排序策略</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section>
+  <h2>三 · L3 质量：说得准（准确率）</h2>
+  <div class="scroll">
+    <table>
+      <thead><tr><th>指标</th><th>定义</th><th>口径要点</th><th>频率</th><th>归责</th></tr></thead>
+      <tbody>
+        <tr class="main-metric">
+          <td class="c"><b>内容准确率</b> ★主</td>
+          <td>抽检合格条数 / 抽检条数。每周 50 条，按头部曝光加权抽样</td>
+          <td>四项全对才算合格：<b>事实成立 / 数字无误 / 时间正确 / 归因不夸大</b>。人工 + Agent4Rec 双评，分歧仲裁。抽样偏向头部——错在头部的代价远大于错在长尾</td>
+          <td class="c">周</td>
+          <td class="c">内容理解</td>
+        </tr>
+        <tr>
+          <td class="c">头部可信结构</td>
+          <td>头部条目中 VERIFIED / PROBABLE / UNVERIFIED / DISPUTED 的分布</td>
+          <td>已有 verification 体系的直接复用。<b>红线：DISPUTED 与 is_rumor 进头部 = 0 条</b></td>
+          <td class="c">日</td>
+          <td class="c">校验管线</td>
+        </tr>
+        <tr>
+          <td class="c">幻觉/误读率</td>
+          <td>抽检中「数字/幅度被误读」类错误占比</td>
+          <td>冲击力幅度误读（54% 那次）的常设哨兵；独立列出是因为它是 LLM 链路特有的失败模式</td>
+          <td class="c">周</td>
+          <td class="c">内容理解</td>
+        </tr>
+        <tr>
+          <td class="c">纠错时延</td>
+          <td>错误被发现 → 从线上头部消失的时间</td>
+          <td>错误不可能为零，纠错速度是第二道防线</td>
+          <td class="c">按例</td>
+          <td class="c">运营/管线</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section>
+  <h2>四 · L4 消费：有人看（点击与行动）</h2>
+  <div class="scroll">
+    <table>
+      <thead><tr><th>指标</th><th>定义</th><th>口径要点</th><th>频率</th><th>归责</th></tr></thead>
+      <tbody>
+        <tr class="main-metric">
+          <td class="c"><b>位置 CTR</b> ★主</td>
+          <td>点击 / 曝光，三个位置分开报，不合并</td>
+          <td>数据源：神策埋点（<code>$AppViewScreen</code>/<code>$AppClick</code> + 位置 <code>pagename</code>/<code>module</code>，需端上确认三个位置的埋点 ID）。<b>三个位置的 CTR 没有可比性，禁止排名</b>——日报是推送打开、Macro 是信息流、Sector 是上下文卡片</td>
+          <td class="c">日</td>
+          <td class="c">排序+端上</td>
+        </tr>
+        <tr>
+          <td class="c">有效阅读率</td>
+          <td>点击后停留 ≥3s 的占比</td>
+          <td>CTR 的诚实性检验：标题党能骗到点击，骗不到停留</td>
+          <td class="c">周</td>
+          <td class="c">内容质量</td>
+        </tr>
+        <tr>
+          <td class="c">看后行动率</td>
+          <td>点击新闻后 30 分钟内访问对应标的行情页 / 下单的占比</td>
+          <td>连接价格敏感度研究的桥：内容消费 → 交易意图。这是「新闻推荐对交易业务有什么用」的最终答案，也是给老板讲故事的终点</td>
+          <td class="c">周</td>
+          <td class="c">全链路</td>
+        </tr>
+        <tr>
+          <td class="c">负反馈率</td>
+          <td>关闭 / 不感兴趣 / 举报 / 长期不点击同类</td>
+          <td>「吵杂感、营销感」（协同一致文档里的底线问题）的量化出口</td>
+          <td class="c">周</td>
+          <td class="c">排序+频控</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section>
+  <h2>五 · 制衡设计：每个主指标都有一个对角指标看着它</h2>
+  <p class="lede">不堆砌指标的另一面，是<strong>不让任何单一指标被优化到荒谬</strong>。四个主指标各配一个天敌，谁被刷坏，天敌先报警：</p>
+  <div class="grid2">
+    <div class="card"><h3>召回率 ↑ 的作弊路径</h3><p>放宽入库标准灌水。<b>天敌：S/A 占比 + L3 准确率</b>——灌进来的边缘内容会立刻稀释这两个数。</p></div>
+    <div class="card"><h3>命中率 ↑ 的作弊路径</h3><p>直接抄基准媒体头条。<b>天敌：独家事件数 + 首报时延</b>——纯跟随者两个数都会难看。</p></div>
+    <div class="card"><h3>CTR ↑ 的作弊路径</h3><p>标题党、夸大幅度。<b>天敌：有效阅读率 + 幻觉率 + 负反馈</b>——三个都在等它。</p></div>
+    <div class="card"><h3>准确率 ↑ 的作弊路径</h3><p>只发绝对安全的旧闻。<b>天敌：头部新鲜度 + 召回率</b>——保守化会先在这两个数上现形。</p></div>
+  </div>
+</section>
+
+<section>
+  <h2>六 · 护栏红线（不进 KPI，触发即告警）</h2>
+  <div class="claims">
+    <div class="claim"><span class="mark">红线</span><span>头部出现 DISPUTED / rumor 条目 = 0 容忍；出现即告警并自动降位。</span></div>
+    <div class="claim"><span class="mark">红线</span><span>管线健康：距上次产出 ≥1.5h 预警、≥3h 判停摆（现有 verdict 机制直接复用）。</span></div>
+    <div class="claim"><span class="mark">红线</span><span>头部重复（同一真实事件 ≥2 条同屏）即告警。</span></div>
+    <div class="claim"><span class="mark">红线</span><span>单位事件成本超预算 50% 连续 3 天（现有 llm_gate 计量复用）。</span></div>
+  </div>
+</section>
+
+<section>
+  <h2>七 · 落地：从明天开始的三步</h2>
+  <div class="scroll">
+    <table>
+      <thead><tr><th>阶段</th><th>做什么</th><th>依赖</th><th>产出</th></tr></thead>
+      <tbody>
+        <tr>
+          <td class="c"><span class="pill now">第 1 周</span></td>
+          <td><b>基准池上线</b>：每日定时抓 5 家 TOP 媒体头条快照落表（现有爬虫框架加一个 job）；事件指纹匹配脚本；L1 召回率 + 漏斗量表先跑起来</td>
+          <td>无外部依赖，全部自有</td>
+          <td>每日召回率数字 + 漏斗表</td>
+        </tr>
+        <tr>
+          <td class="c"><span class="pill now">第 2 周</span></td>
+          <td><b>L2/L3 接入</b>：三个位置的头部快照落表（API 侧已有数据）；命中率/倒挂率/重复率脚本；周抽检 50 条流程建立（评测室 + Agent4Rec 双评）</td>
+          <td>Sector 位需研发确认线上 TopK 接口</td>
+          <td>四层主指标全部有数，第一份周报</td>
+        </tr>
+        <tr>
+          <td class="c"><span class="pill later">第 3-4 周</span></td>
+          <td><b>L4 打通</b>：与端上确认三个位置的埋点 ID（<code>pagename</code>/<code>module</code> 取值）；CTR/停留/看后行动率从神策表出数；北极星开始按周发布</td>
+          <td><b>唯一外部依赖：端上埋点 ID 清单</b>（Colson/Fosal/winnie 侧确认）</td>
+          <td>北极星 + 4 主指标周报模板固化</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="note">
+    数据源盘点：曝光点击 = 神策全端埋点表（已有权限，1 年）；头部快照 = 我方 API；基准池 = 新增每日爬取 job；
+    抽检 = 评测室 + Agent4Rec（Confluence 评估章节 @yikai 的 case review 机制正好挂在 L3）。
+    <b>整个体系只有一个新增采集项（基准池）和一个外部依赖（埋点 ID）</b>，其余全部复用现有资产。
+  </div>
+</section>
+
+<section>
+  <h2>八 · 周报的样子（就这 5 个数）</h2>
+  <div class="scroll">
+    <table>
+      <thead><tr><th>指标</th><th>本周</th><th>上周</th><th>环比</th><th>异动下钻</th></tr></thead>
+      <tbody>
+        <tr class="main-metric"><td><b>北极星 · S/A 有效触达率</b></td><td class="num">—</td><td class="num">—</td><td class="num">—</td><td>跌了看下面四行谁在跌</td></tr>
+        <tr><td>L1 召回率@6h</td><td class="num">—</td><td class="num">—</td><td class="num">—</td><td>→ 分市场 / 漏斗 / 时延</td></tr>
+        <tr><td>L2 头部命中率@K</td><td class="num">—</td><td class="num">—</td><td class="num">—</td><td>→ 倒挂 / 重复 / 新鲜度</td></tr>
+        <tr><td>L3 内容准确率</td><td class="num">—</td><td class="num">—</td><td class="num">—</td><td>→ 幻觉 / 可信结构</td></tr>
+        <tr><td>L4 位置 CTR ×3</td><td class="num">—</td><td class="num">—</td><td class="num">—</td><td>→ 停留 / 行动 / 负反馈</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="note">首期基线参考：AI 扩源实证（Macro Insight 事件 +211%、S/A +52%，2026-07-26）可作为 L1 的第一个锚点；其余指标第 2 周起自然形成基线。</p>
+</section>
+
+<footer>
+  <hr>
+  <p>B9 推荐指标体系 v1 · 2026-08-20 · 依据：Confluence《B9 内容推荐策略 All in One》(pageId 598858876) + 线上系统真实结构</p>
+  <p>三个已上线位置：001 早午日报 · 006 Macro Insight · 005 Sector Insight ｜ 架构前提：LLM4Rec (Lite OneRec)，候选池百~千级</p>
+</footer>
+
+</div>
