@@ -290,6 +290,7 @@ tools/spade/spq.sh "SELECT COUNT(*) AS c FROM hive.bnb_dwd.fact_main_user_behavi
 | `docs/spade-access-plan.md` | 板块 2 | 敏感度研究完整工作底稿 |
 | `tools/spade/` | 板块 3 | Spade 取数脚本 |
 | `docs/memory/` | 全局 | 49 篇经验教训（踩坑、历史、纪律） |
+| `docs/playbook/` | 全局 | Lawrence 常用 Prompt List（15 条，可一键复制的网页版同目录） |
 
 ---
 

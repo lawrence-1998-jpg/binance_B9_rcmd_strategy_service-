@@ -1,0 +1,513 @@
+<title>Lawrence 的 Prompt 库</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;500&display=swap">
+
+<style>
+:root{
+  --paper:#F5F7FA; --surface:#FFFFFF; --surface-2:#EDF0F5;
+  --ink:#131820; --slate:#59647A; --faint:#8B94A6;
+  --rule:#DDE3EC; --rule-strong:#C3CCDA;
+  --gold:#9C6F0C; --gold-bg:#FBF0D6; --gold-line:#E8CB88;
+  --scar:#A63A31; --scar-bg:#FBECEA; --scar-line:#E8BDB7;
+  --code-bg:#141A24; --code-ink:#DCE3ED; --code-faint:#78849A;
+  --shadow:0 1px 2px rgba(19,24,32,.05), 0 8px 24px -12px rgba(19,24,32,.18);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#0F131A; --surface:#171D26; --surface-2:#1E2530;
+    --ink:#E7EBF1; --slate:#A0AAB9; --faint:#727D8E;
+    --rule:#28313D; --rule-strong:#3A4553;
+    --gold:#E9B949; --gold-bg:#2A2416; --gold-line:#584A24;
+    --scar:#E88A80; --scar-bg:#2C1D1B; --scar-line:#5A3833;
+    --code-bg:#0A0E14; --code-ink:#D5DDE9; --code-faint:#6C7889;
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px -12px rgba(0,0,0,.6);
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#0F131A; --surface:#171D26; --surface-2:#1E2530;
+  --ink:#E7EBF1; --slate:#A0AAB9; --faint:#727D8E;
+  --rule:#28313D; --rule-strong:#3A4553;
+  --gold:#E9B949; --gold-bg:#2A2416; --gold-line:#584A24;
+  --scar:#E88A80; --scar-bg:#2C1D1B; --scar-line:#5A3833;
+  --code-bg:#0A0E14; --code-ink:#D5DDE9; --code-faint:#6C7889;
+  --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px -12px rgba(0,0,0,.6);
+}
+:root[data-theme="light"]{
+  --paper:#F5F7FA; --surface:#FFFFFF; --surface-2:#EDF0F5;
+  --ink:#131820; --slate:#59647A; --faint:#8B94A6;
+  --rule:#DDE3EC; --rule-strong:#C3CCDA;
+  --gold:#9C6F0C; --gold-bg:#FBF0D6; --gold-line:#E8CB88;
+  --scar:#A63A31; --scar-bg:#FBECEA; --scar-line:#E8BDB7;
+  --code-bg:#141A24; --code-ink:#DCE3ED; --code-faint:#78849A;
+  --shadow:0 1px 2px rgba(19,24,32,.05), 0 8px 24px -12px rgba(19,24,32,.18);
+}
+
+*{box-sizing:border-box}
+body{
+  margin:0; background:var(--paper); color:var(--ink);
+  font-family:"Noto Sans SC","Archivo",-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;
+  font-size:15px; line-height:1.75; -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:1180px; margin:0 auto; padding:0 20px}
+
+/* ── header ── */
+header{border-bottom:1px solid var(--rule); background:var(--surface)}
+.head{display:flex; flex-wrap:wrap; gap:20px 32px; align-items:flex-end; justify-content:space-between; padding:34px 0 26px}
+h1{
+  font-family:"Archivo",sans-serif; font-weight:700; font-size:clamp(24px,3.4vw,34px);
+  letter-spacing:-.02em; margin:0 0 6px; text-wrap:balance;
+}
+.sub{color:var(--slate); font-size:14.5px; max-width:60ch; margin:0}
+.sub b{color:var(--ink); font-weight:500}
+.stats{display:flex; gap:26px; flex-shrink:0}
+.stat .n{font-family:"Archivo",sans-serif; font-weight:700; font-size:26px; line-height:1.1; font-variant-numeric:tabular-nums}
+.stat .l{font-family:"JetBrains Mono",monospace; font-size:10.5px; letter-spacing:.1em; text-transform:uppercase; color:var(--faint)}
+
+/* ── toolbar ── */
+.bar{position:sticky; top:0; z-index:20; background:var(--surface); border-bottom:1px solid var(--rule)}
+.bar-in{display:flex; flex-wrap:wrap; gap:10px; align-items:center; padding:12px 0}
+#q{
+  flex:1 1 220px; min-width:180px; padding:8px 12px; font:inherit; font-size:14px;
+  color:var(--ink); background:var(--paper); border:1px solid var(--rule-strong); border-radius:7px;
+}
+#q::placeholder{color:var(--faint)}
+#q:focus{outline:2px solid var(--gold); outline-offset:1px; border-color:transparent}
+.chips{display:flex; gap:6px; flex-wrap:wrap}
+.chip{
+  font-family:"JetBrains Mono",monospace; font-size:11.5px; letter-spacing:.03em;
+  padding:6px 11px; border-radius:6px; cursor:pointer;
+  background:var(--surface-2); color:var(--slate); border:1px solid transparent;
+}
+.chip:hover{border-color:var(--rule-strong); color:var(--ink)}
+.chip[aria-pressed="true"]{background:var(--ink); color:var(--paper); border-color:var(--ink)}
+.chip:focus-visible{outline:2px solid var(--gold); outline-offset:2px}
+
+/* ── sections ── */
+main{padding:30px 0 60px; display:flex; flex-direction:column; gap:34px}
+.sec-h{display:flex; align-items:baseline; gap:12px; margin:0 0 14px}
+.sec-h h2{
+  font-family:"Archivo",sans-serif; font-weight:600; font-size:17px; margin:0; letter-spacing:-.01em;
+}
+.sec-h .k{
+  font-family:"JetBrains Mono",monospace; font-size:11px; color:var(--paper);
+  background:var(--ink); padding:2px 7px; border-radius:4px; letter-spacing:.05em;
+}
+.sec-h .note{color:var(--faint); font-size:13px}
+
+.grid{display:flex; flex-direction:column; gap:14px}
+
+/* ── card ── */
+.card{
+  background:var(--surface); border:1px solid var(--rule); border-radius:11px;
+  overflow:hidden; box-shadow:var(--shadow);
+}
+.card-h{display:flex; align-items:center; gap:11px; padding:14px 16px 11px; flex-wrap:wrap}
+.code{
+  font-family:"JetBrains Mono",monospace; font-size:11.5px; font-weight:500;
+  color:var(--gold); background:var(--gold-bg); border:1px solid var(--gold-line);
+  padding:2px 7px; border-radius:4px; letter-spacing:.04em;
+}
+.card-h h3{font-family:"Archivo",sans-serif; font-weight:600; font-size:15.5px; margin:0; flex:1 1 auto}
+.when{color:var(--faint); font-size:12.5px; width:100%; margin:-4px 0 0; padding:0 16px}
+
+.block{position:relative; margin:11px 16px 0}
+pre{
+  margin:0; background:var(--code-bg); color:var(--code-ink);
+  font-family:"JetBrains Mono",ui-monospace,monospace; font-size:12.8px; line-height:1.72;
+  padding:14px 15px; border-radius:8px; overflow-x:auto; white-space:pre-wrap; word-break:break-word;
+}
+.copy{
+  position:absolute; top:9px; right:9px;
+  font-family:"JetBrains Mono",monospace; font-size:11px; letter-spacing:.04em;
+  padding:5px 10px; border-radius:5px; cursor:pointer;
+  background:rgba(255,255,255,.09); color:#fff; border:1px solid rgba(255,255,255,.2);
+  transition:background .12s ease;
+}
+.copy:hover{background:rgba(255,255,255,.18)}
+.copy:focus-visible{outline:2px solid var(--gold); outline-offset:2px}
+.copy.ok{background:var(--gold); color:#12151A; border-color:var(--gold)}
+
+.why{
+  margin:11px 16px 15px; padding:10px 13px; border-radius:7px;
+  background:var(--scar-bg); border:1px solid var(--scar-line);
+  font-size:13px; line-height:1.7; color:var(--ink);
+}
+.why .tag{
+  font-family:"JetBrains Mono",monospace; font-size:10.5px; letter-spacing:.08em;
+  text-transform:uppercase; color:var(--scar); font-weight:500; display:block; margin-bottom:3px;
+}
+.why code{
+  font-family:"JetBrains Mono",monospace; font-size:11.8px;
+  background:var(--surface-2); padding:1px 5px; border-radius:3px; color:var(--slate);
+}
+.why.info{background:var(--gold-bg); border-color:var(--gold-line)}
+.why.info .tag{color:var(--gold)}
+
+/* ── standing table ── */
+.standing{border:1px solid var(--rule); border-radius:11px; background:var(--surface); overflow:hidden}
+.standing table{width:100%; border-collapse:collapse; font-size:13.5px}
+.standing th,.standing td{text-align:left; padding:11px 16px; border-bottom:1px solid var(--rule)}
+.standing tr:last-child td{border-bottom:none}
+.standing th{
+  font-family:"JetBrains Mono",monospace; font-size:10.5px; letter-spacing:.09em;
+  text-transform:uppercase; color:var(--faint); font-weight:500; background:var(--surface-2);
+}
+.standing td:last-child{color:var(--slate)}
+
+footer{border-top:1px solid var(--rule); padding:22px 0 40px; color:var(--faint); font-size:12.5px}
+.empty{display:none; color:var(--faint); text-align:center; padding:50px 0; font-size:14px}
+
+@media (max-width:640px){
+  .head{padding:26px 0 20px}
+  .stats{gap:20px}
+  .card-h,.when,.block,.why{margin-left:0; margin-right:0}
+  .card-h{padding-left:13px; padding-right:13px}
+  .when{padding:0 13px}
+  .block{margin:11px 13px 0}
+  .why{margin:11px 13px 14px}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none !important}}
+</style>
+
+<header>
+  <div class="wrap head">
+    <div>
+      <h1>Lawrence 的 Prompt 库</h1>
+      <p class="sub">从全部历史对话提取、去重、聚合而来。优化原则：<b>把你事后才补的约束前置进去</b>——凡是你说过第二遍的话，都说明第一遍漏了它，代价是一轮返工。</p>
+    </div>
+    <div class="stats">
+      <div class="stat"><div class="n">15</div><div class="l">Prompts</div></div>
+      <div class="stat"><div class="n">6</div><div class="l">场景</div></div>
+      <div class="stat"><div class="n">49</div><div class="l">教训沉淀</div></div>
+    </div>
+  </div>
+</header>
+
+<div class="bar">
+  <div class="wrap bar-in">
+    <input id="q" type="search" placeholder="搜索：救火 / 截断 / 申请表 / 上线…" aria-label="搜索 prompt">
+    <div class="chips" id="chips">
+      <button class="chip" data-f="all" aria-pressed="true">全部</button>
+      <button class="chip" data-f="A" aria-pressed="false">A 开工</button>
+      <button class="chip" data-f="B" aria-pressed="false">B 救火</button>
+      <button class="chip" data-f="C" aria-pressed="false">C 验收</button>
+      <button class="chip" data-f="D" aria-pressed="false">D 取数</button>
+      <button class="chip" data-f="E" aria-pressed="false">E 沉淀</button>
+      <button class="chip" data-f="F" aria-pressed="false">F 调研</button>
+    </div>
+  </div>
+</div>
+
+<main class="wrap" id="main">
+
+<section data-g="A">
+  <div class="sec-h"><span class="k">A</span><h2>开工</h2><span class="note">起手式，决定后面返工多少</span></div>
+  <div class="grid">
+
+    <article class="card" data-g="A" data-t="开工 万能开头 标准约束 并行 口径 默认值 界面验证">
+      <div class="card-h"><span class="code">A1</span><h3>新任务启动 · 万能开头</h3></div>
+      <p class="when">任何新需求，把约束一次说清，省掉三轮来回</p>
+      <div class="block"><button class="copy">复制</button><pre>&lt;任务描述&gt;
+
+标准约束（每次都适用，不用我重复）：
+- 先讲清你打算怎么做，再动手；有多个方案就给推荐，别让我做选择题
+- 独立的活并行做
+- 缺数据就说缺，绝不填默认值糊过去
+- 报任何数字前先对齐口径：这个数是怎么算的、代表什么、样本范围是什么
+- 做完在真实界面上自己验一遍，别只看返回码
+- 过程中的判断和踩的坑随手记进 TODO 和长期记忆</pre></div>
+      <div class="why"><span class="tag">防的是</span>无日期当成"现在"，2024 年新闻顶着今天日期上前端；把"SQL 取到 400 行"当成"缓存可用 400 条"报成果，实际可用 0 条。</div>
+    </article>
+
+    <article class="card" data-g="A" data-t="规划 先plan再做 架构 存量 回滚 不要搞崩线上">
+      <div class="card-h"><span class="code">A2</span><h3>先规划再做</h3></div>
+      <p class="when">大改动、碰生产、动排序主链路时</p>
+      <div class="block"><button class="copy">复制</button><pre>&lt;需求描述&gt;
+
+先出方案再动手，不要直接改代码。方案里要有：
+1. 现状是什么、问题在哪（基于你实际读过的代码，不是猜的）
+2. 打算怎么改，为什么这么改
+3. 会碰到哪些存量代码，有没有可能把线上搞崩
+4. 怎么验证改对了、怎么回滚
+
+绝对不要把线上搞崩。我确认方案后你再开工。</pre></div>
+      <div class="why info"><span class="tag">配合使用</span>加上 <code>/engineering:architecture</code> 会走完整的 ADR 流程，适合真正的架构决策。</div>
+    </article>
+
+    <article class="card" data-g="A" data-t="放手干 自主 不要问 一路干下去 autonomous">
+      <div class="card-h"><span class="code">A3</span><h3>放手干</h3></div>
+      <p class="when">不想被反复打断、要连续产出时</p>
+      <div class="block"><button class="copy">复制</button><pre>都做，不要再问我了，一路干下去。
+遇到只有我能决定的事（会花钱、会通知到别人、不可逆）再停下来问，
+其他的你自己判断，做完一起汇报。</pre></div>
+      <div class="why info"><span class="tag">注意</span>这条会关掉我的确认习惯。<b>危险动作我仍会停</b>——删数据、发消息给同事、花钱的操作。想连这些也放开得单独说。</div>
+    </article>
+
+  </div>
+</section>
+
+<section data-g="B">
+  <div class="sec-h"><span class="k">B</span><h2>救火</h2><span class="note">线上出问题时的两步</span></div>
+  <div class="grid">
+
+    <article class="card" data-g="B" data-t="救火 服务挂了 停更 不更新 诊断 根因 回补 恢复">
+      <div class="card-h"><span class="code">B1</span><h3>服务异常</h3></div>
+      <p class="when">发现首页不更新、打分没了、服务挂了</p>
+      <div class="block"><button class="copy">复制</button><pre>&lt;现象，例如：首页不更新了 / 情绪打分没有了 / 服务挂了&gt;
+
+先诊断再动手：
+- 从"最近还有没有真的产出"这个终点往回查，不要只看组件活没活着
+- 找到根因再修，不要凭现象猜
+- 修完回补断档期间的数据
+- 告诉我这次的根因是什么、以后怎么防</pre></div>
+      <div class="why"><span class="tag">防的是</span>组件级检查全绿、日志零 ERROR，产品却已经三天没更新。端到端健康判据就是这次事故的产物。</div>
+    </article>
+
+    <article class="card" data-g="B" data-t="复盘 事故记录 不要再犯 根因 长期记忆">
+      <div class="card-h"><span class="code">B2</span><h3>修完复盘</h3></div>
+      <p class="when">紧接 B1 使用，别等事后补</p>
+      <div class="block"><button class="copy">复制</button><pre>把这次事故记录下来，后面不要再犯。
+要写清楚：现象是什么、根因是什么、为什么之前的检查没发现、以后靠什么防住。
+记进长期记忆，不是写篇文档就完事。</pre></div>
+      <div class="why"><span class="tag">防的是</span>同类事故复发。Mac 单点导致的停摆发生过两次，第二次才根治。</div>
+    </article>
+
+  </div>
+</section>
+
+<section data-g="C">
+  <div class="sec-h"><span class="k">C</span><h2>交付验收</h2><span class="note">最该常用的一组</span></div>
+  <div class="grid">
+
+    <article class="card" data-g="C" data-t="上线前 自检 角色旅程 控件 首屏 肉眼 验收">
+      <div class="card-h"><span class="code">C1</span><h3>上线前自检</h3></div>
+      <p class="when">我说"做完了"之后、你验收之前</p>
+      <div class="block"><button class="copy">复制</button><pre>上线前自己走一遍：
+- 列出所有会用到这个功能的角色，每个角色的完整旅程走通一次
+- 只用界面上真实存在的东西操作，不要用你知道但用户看不到的路径
+- 每个新加的控件真的点一次，看有没有产生预期的副作用
+- 首屏肉眼扫一遍，可疑的数字搜一下
+
+自检通过再告诉我"可以了"。</pre></div>
+      <div class="why"><span class="tag">防的是</span>机制测试 13 项全绿，仍漏了"审批人看不到申请内容"；控件绑了监听但从未触发过；一天被抓三次肉眼可见的问题。</div>
+    </article>
+
+    <article class="card" data-g="C" data-t="完整数据 不要截断 CSV 评测 event id 省略">
+      <div class="card-h"><span class="code">C2</span><h3>要完整数据</h3></div>
+      <p class="when">要拿数据去评测、比对、发给别人时</p>
+      <div class="block"><button class="copy">复制</button><pre>把 &lt;数据&gt; 完整给我，我要拿去评测。
+
+完整的意思是：
+- 所有 ID、标题、字段值一律原样输出，不截断、不省略、不加省略号
+- 行数不够就分批给，不要用"等 N 条"糊弄
+- 同时给一份 CSV，我要能直接拖进表格</pre></div>
+      <div class="why"><span class="tag">防的是</span>我曾输出 8 字符 eventId、48 字符标题的"数据"，你追问了三次。截断的评测数据等于没有。</div>
+    </article>
+
+    <article class="card" data-g="C" data-t="老板 汇报 材料 结论先行 口径 局限">
+      <div class="card-h"><span class="code">C3</span><h3>给老板看的材料</h3></div>
+      <p class="when">汇报、周报、对外说明</p>
+      <div class="block"><button class="copy">复制</button><pre>&lt;主题&gt; 整理成给老板看的材料。
+
+要求：
+- 结论先行，第一段就说清楚"发生了什么 / 该做什么"
+- 数字都要有出处，标明口径和样本范围
+- 局限和没做到的地方如实写，不要粉饰
+- 配图 / 流程图能说清的就别用大段文字</pre></div>
+      <div class="why info"><span class="tag">经验</span>你要求过"方便我老板看"。堆细节没结论的材料等于没写。</div>
+    </article>
+
+  </div>
+</section>
+
+<section data-g="D">
+  <div class="sec-h"><span class="k">D</span><h2>数据与取数</h2><span class="note">Spade 内网大数据平台</span></div>
+  <div class="grid">
+
+    <article class="card" data-g="D" data-t="找表 选表 数据专辑 P0 P1 分区 元数据 字段 ha">
+      <div class="card-h"><span class="code">D1</span><h3>找表</h3></div>
+      <p class="when">需要新数据源时，避免我给你边缘表</p>
+      <div class="block"><button class="copy">复制</button><pre>帮我找 &lt;用途&gt; 的表。
+
+选表标准（别再给我边缘表）：
+- Asset Level 认 P0/P1，收藏数高的优先
+- 必须有中英文描述，bnb_dwd / bnb_dws / bnb_dwm 标准层
+- 不碰 _ha 后缀、bnb_temp / bnb_dtest / ods / _bak_日期
+- 先去「数据专辑」(Data Map → DW Data) 按 板块→数据域→产品线 找，别盲搜关键词
+
+定下来之前必须做两件事：
+1. SELECT MAX(分区) 验数据真的在更新——元数据的"最近更新时间"是假的
+2. 看字段清单，确认能回答我的问题（别拿累计口径的表来答单日问题）</pre></div>
+      <div class="why"><span class="tag">防的是</span><code>fact_main_spot_order_d</code> 元数据写 2026-05 更新、实测数据停在 2021-04-17；<code>dws_main_trade_spot_order_uid_td</code> 全是累计口径没有 symbol。Kevin 和 Maya 都纠正过我的选表。</div>
+    </article>
+
+    <article class="card" data-g="D" data-t="申请权限 access 时长 1year 理由 核对 my request">
+      <div class="card-h"><span class="code">D2</span><h3>申请权限</h3></div>
+      <p class="when">表定下来之后</p>
+      <div class="block"><button class="copy">复制</button><pre>把上面这些表的权限申请了。
+
+- Read Only，时长选最长的（1 year / Permanent，别用默认的 7 days）
+- 申请理由用这段：
+  Apply for data to build a price alert sensitivity model to optimize the smart
+  tooltips strategy in B9 project. As the senior strategy PM and data scientist of
+  B9 recommendation. I will need user journey history, asset price change log, user
+  features especially the marketing and transaction related ones, and other key
+  dataset to build the model.
+  后面补上这张表具体要哪几个字段、用来干什么。
+- 提交完去 Access Center → My Request 核对真的在列表里，别看有没有弹提示</pre></div>
+      <div class="why"><span class="tag">防的是</span>提交成功的提示一闪而过，我曾差点把"没看到提示"当成失败。默认 7 天对建模项目完全不够。</div>
+    </article>
+
+    <article class="card" data-g="D" data-t="跑数 SQL 分区 timestamp 神策 口径 自检">
+      <div class="card-h"><span class="code">D3</span><h3>跑数分析</h3></div>
+      <p class="when">有权限之后的日常取数</p>
+      <div class="block"><button class="copy">复制</button><pre>用 tools/spade/spq.sh 查 &lt;问题&gt;。
+
+- 必须带 date_key 分区过滤，神策表每天 170~210 亿条，裸扫会炸
+- 时间比较用 TIMESTAMP '2026-08-18 12:00:00' 字面量，不能直接给字符串
+- 拿到结果先自检：这个数合理吗？跟我的问题口径对得上吗？
+- 数字反常就先怀疑自己的 SQL，别急着当成发现报给我</pre></div>
+      <div class="why"><span class="tag">防的是</span>390 万条事件看着很足，拆开发现 pageView 只有 77 个用户。大数字最容易骗人。</div>
+    </article>
+
+  </div>
+</section>
+
+<section data-g="E">
+  <div class="sec-h"><span class="k">E</span><h2>沉淀与归档</h2><span class="note">防丢失、防复发</span></div>
+  <div class="grid">
+
+    <article class="card" data-g="E" data-t="记经验 长期记忆 踩坑 不要再犯">
+      <div class="card-h"><span class="code">E1</span><h3>记经验</h3></div>
+      <p class="when">任何一次"这个坑不该踩"之后</p>
+      <div class="block"><button class="copy">复制</button><pre>把这次的经验记进长期记忆，后面不要再犯。
+写清楚：踩的是什么坑、为什么会踩、以后靠什么防住。
+凡是人一看 / 一搜就能发现的问题，你都不该让它流到我这里。</pre></div>
+      <div class="why info"><span class="tag">已沉淀</span>目前 49 条，在仓库 <code>docs/memory/</code>，带分主题导读。</div>
+    </article>
+
+    <article class="card" data-g="E" data-t="归档 备份 github readme 密钥 public">
+      <div class="card-h"><span class="code">E2</span><h3>归档备份</h3></div>
+      <p class="when">阶段性收尾、怕丢失时</p>
+      <div class="block"><button class="copy">复制</button><pre>把 &lt;范围&gt; 全部整理进 GitHub 备份，以防丢失。
+readme 好好写，要能让接手的人看懂这是什么、从哪读起。
+密钥一律不进库，单独存我本机。</pre></div>
+      <div class="why"><span class="tag">防的是</span>仓库是 public。我曾漏过 <code>-p'密码'</code> 这种 shell 参数形式的明文密码，是 pre-commit 闸拦下的，不是我自己的扫描发现的。所以密钥扫描 + 提交闸两层都要在。</div>
+    </article>
+
+  </div>
+</section>
+
+<section data-g="F">
+  <div class="sec-h"><span class="k">F</span><h2>调研</h2><span class="note">要证据，不要我凭记忆编</span></div>
+  <div class="grid">
+
+    <article class="card" data-g="F" data-t="调研 选型 证据 官方文档 不确定 推荐">
+      <div class="card-h"><span class="code">F1</span><h3>技术选型</h3></div>
+      <p class="when">评估外部 API、工具、供应商</p>
+      <div class="block"><button class="copy">复制</button><pre>调研 &lt;问题&gt;。
+
+- 结论要有出处，给我能点开的链接或官方文档原文
+- 分不清的地方明确说"不确定"，不要用听起来合理的话糊过去
+- 涉及产品定位的（是 search API 还是聚合器？有没有这个字段？）必须去官方文档确认
+- 最后给推荐，别只列清单</pre></div>
+      <div class="why"><span class="tag">防的是</span>我曾把 RavenPack 说成 search API，查了文档才发现 News Analytics 是 feed，只有 Bigdata.com 才是 search，且返回 chunk 不是全文。</div>
+    </article>
+
+    <article class="card" data-g="F" data-t="解释 术语 概念 ensemble serper">
+      <div class="card-h"><span class="code">F2</span><h3>快速解释</h3></div>
+      <p class="when">遇到不认识的术语</p>
+      <div class="block"><button class="copy">复制</button><pre>&lt;术语&gt; 是什么意思？结合我们项目的场景说，别讲教科书定义。</pre></div>
+    </article>
+
+  </div>
+</section>
+
+<p class="empty" id="empty">没有匹配的 prompt，换个词试试。</p>
+
+<section data-g="X">
+  <div class="sec-h"><span class="k">∞</span><h2>一直生效的背景约定</h2><span class="note">不用每次重复</span></div>
+  <div class="standing">
+    <table>
+      <thead><tr><th>约定</th><th>出处</th></tr></thead>
+      <tbody>
+        <tr><td>不主动搞服务器安全加固</td><td>你明确说过不碰</td></tr>
+        <tr><td>重活优先用公司 API / LiteLLM 网关省 token，判断力任务我自己做</td><td>降本标准做法</td></tr>
+        <tr><td>需要 Opus 时我主动说，不默默硬扛</td><td>判断权交给我，前提是如实报告</td></tr>
+        <tr><td>独立的活默认并行</td><td>你的通用偏好</td></tr>
+        <tr><td>短需求也必须落 TODO 和留痕</td><td>出过一句话需求整条丢失的事故</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+</main>
+
+<footer class="wrap">
+  完整版在仓库 <code style="font-family:'JetBrains Mono',monospace">docs/playbook/lawrence-prompt-list.md</code>　·　49 条经验教训在 <code style="font-family:'JetBrains Mono',monospace">docs/memory/</code>
+</footer>
+
+<script>
+(function(){
+  // 复制
+  document.addEventListener("click", function(e){
+    var btn = e.target.closest(".copy");
+    if(!btn) return;
+    var pre = btn.parentElement.querySelector("pre");
+    if(!pre) return;
+    var text = pre.innerText;
+    var done = function(){
+      var old = btn.textContent;
+      btn.textContent = "已复制"; btn.classList.add("ok");
+      setTimeout(function(){ btn.textContent = old; btn.classList.remove("ok"); }, 1400);
+    };
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(text).then(done, fallback);
+    } else { fallback(); }
+    function fallback(){
+      var ta = document.createElement("textarea");
+      ta.value = text; ta.style.position="fixed"; ta.style.opacity="0";
+      document.body.appendChild(ta); ta.select();
+      try{ document.execCommand("copy"); done(); }catch(err){ btn.textContent="请手动选择"; }
+      document.body.removeChild(ta);
+    }
+  });
+
+  // 过滤
+  var q = document.getElementById("q");
+  var chips = document.getElementById("chips");
+  var empty = document.getElementById("empty");
+  var active = "all";
+
+  function apply(){
+    var term = (q.value || "").trim().toLowerCase();
+    var shown = 0;
+    document.querySelectorAll("section[data-g]").forEach(function(sec){
+      var g = sec.getAttribute("data-g");
+      if(g === "X"){ sec.style.display = (term === "" && active === "all") ? "" : "none"; return; }
+      var any = 0;
+      sec.querySelectorAll(".card").forEach(function(c){
+        var okG = (active === "all" || c.getAttribute("data-g") === active);
+        var hay = (c.getAttribute("data-t") + " " + c.innerText).toLowerCase();
+        var okT = (term === "" || hay.indexOf(term) > -1);
+        var vis = okG && okT;
+        c.style.display = vis ? "" : "none";
+        if(vis){ any++; shown++; }
+      });
+      sec.style.display = any ? "" : "none";
+    });
+    empty.style.display = shown ? "none" : "block";
+  }
+
+  q.addEventListener("input", apply);
+  chips.addEventListener("click", function(e){
+    var b = e.target.closest(".chip"); if(!b) return;
+    active = b.getAttribute("data-f");
+    chips.querySelectorAll(".chip").forEach(function(c){
+      c.setAttribute("aria-pressed", c === b ? "true" : "false");
+    });
+    apply();
+  });
+})();
+</script>
