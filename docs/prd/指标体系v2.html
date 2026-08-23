@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>B9 指标体系 v2</title>
+<style>
+  :root{
+    --bg:#F4EFE3; --panel:#FDFAF2; --ink:#2E2A20; --ink2:#6B6353;
+    --gold:#B8722C; --gold-soft:#F3E3CC; --g700:#4A6B52; --g-soft:#E4EEE6;
+    --red:#A8442E; --line:#DDD3BE; --mono:'SF Mono',Menlo,Consolas,monospace;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{background:var(--bg);color:var(--ink);font:15px/1.75 -apple-system,'PingFang SC','Microsoft YaHei',sans-serif;padding:48px 20px}
+  .wrap{max-width:940px;margin:0 auto}
+  h1{font-size:30px;letter-spacing:.5px;margin-bottom:6px}
+  .sub{color:var(--ink2);margin-bottom:8px}
+  .kill{background:var(--panel);border:1px solid var(--line);border-left:4px solid var(--gold);
+        padding:14px 18px;border-radius:8px;margin:22px 0 36px;color:var(--ink2)}
+  .kill b{color:var(--ink)}
+  h2{font-size:21px;margin:48px 0 6px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  h2 .no{font-family:var(--mono);font-size:13px;color:var(--gold);border:1px solid var(--gold);
+         border-radius:6px;padding:1px 8px;letter-spacing:1px}
+  .dir{display:inline-block;font-size:12px;font-weight:600;border-radius:20px;padding:2px 12px}
+  .dir.up{background:var(--g-soft);color:var(--g700)}
+  .dir.mon{background:var(--gold-soft);color:var(--gold)}
+  .dir.opt{background:#EDE9DE;color:var(--ink2)}
+  .why{color:var(--ink2);font-size:13.5px;margin:4px 0 16px}
+  table{width:100%;border-collapse:collapse;background:var(--panel);border:1px solid var(--line);
+        border-radius:10px;overflow:hidden;font-size:14px}
+  .tblwrap{overflow-x:auto;margin-bottom:14px}
+  th{background:#EFE7D4;text-align:left;padding:9px 14px;font-size:13px;color:var(--ink2);
+     font-weight:600;letter-spacing:.5px;white-space:nowrap}
+  td{padding:9px 14px;border-top:1px solid var(--line);vertical-align:top}
+  td.m{font-weight:600;white-space:nowrap}
+  .num{font-family:var(--mono);font-size:13px}
+  .note{background:var(--g-soft);border:1px solid #C6D8CA;border-radius:10px;padding:14px 20px;
+        margin:14px 0;font-size:14px}
+  .note b{color:var(--g700)}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  @media(max-width:720px){.grid2{grid-template-columns:1fr}}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px 20px}
+  .card h4{font-size:15px;margin-bottom:8px}
+  .card ul{padding-left:20px;font-size:13.5px;color:var(--ink2)}
+  .card li{margin-bottom:4px}
+  footer{margin-top:52px;padding-top:16px;border-top:1px solid var(--line);
+         color:var(--ink2);font-size:12.5px}
+  .flow{display:flex;gap:0;align-items:stretch;margin:18px 0;flex-wrap:wrap}
+  .stage{flex:1;min-width:150px;background:var(--panel);border:1px solid var(--line);
+         padding:12px 14px;text-align:center}
+  .stage:first-child{border-radius:10px 0 0 10px}
+  .stage:last-child{border-radius:0 10px 10px 0}
+  .stage+.stage{border-left:none}
+  .stage b{display:block;font-size:14px;margin-bottom:2px}
+  .stage span{font-size:12px;color:var(--ink2)}
+  .stage em{display:block;font-style:normal;font-size:11px;margin-top:6px;color:var(--gold)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>B9 指标体系 <span style="color:var(--gold)">v2</span></h1>
+<div class="sub">早午日报 · 宏观新闻 · 相关新闻 —— 按「能否指导动作」分组，每组明确方向</div>
+
+<div class="kill">
+  取代 v1（乘法链 + 北极星 + 制衡）—— v1 <b>太表面、太 fancy</b>，指标间的公式关系是构造出来的。
+  v2：<b>每个数字都能指导一个动作</b>。效果归因走 <b>AB 实验</b>——所有指标支持按
+  <b>AA / AB 实验分组</b>查看，AA 验证分流无偏，AB 差值给因果结论。
+</div>
+
+<div class="flow">
+  <div class="stage"><b>① 召回与稳定生产</b><span>东西够不够</span><em>越高越好</em></div>
+  <div class="stage"><b>② 先验质量</b><span>上屏的对不对</span><em>仅监控</em></div>
+  <div class="stage"><b>③ 后验质量</b><span>用户认不认</span><em>越高越好</em></div>
+  <div class="stage"><b>④ 工程</b><span>管道通不通</span><em>optional</em></div>
+</div>
+
+<!-- ═════ 1 召回 ═════ -->
+<h2><span class="no">01</span>召回与稳定生产 <span class="dir up">越高越好</span></h2>
+<div class="tblwrap"><table>
+<tr><th style="width:32%">指标</th><th>定义</th></tr>
+<tr><td class="m">召回量</td><td>该点位候选池事件数</td></tr>
+<tr><td class="m">S/A 级召回量</td><td>候选池中 S/A 级事件数</td></tr>
+<tr><td class="m">S/A 级展示量</td><td>实际展示给用户的 S/A 级事件数</td></tr>
+<tr><td class="m">站外召回覆盖率</td>
+    <td>CNBC / WSJ 前 10 头条的覆盖率，<b>分两层</b>：<br>
+        · <b>事件库覆盖</b> —— 库里有没有（抓取能力）<br>
+        · <b>TOP10 露出覆盖</b> —— 首屏有没有（排序能力）</td></tr>
+</table></div>
+
+<!-- ═════ 2 先验 ═════ -->
+<h2><span class="no">02</span>先验质量 <span class="dir mon">仅监控 · 非越高越好</span></h2>
+<div class="why">这些指标互相拉扯（权威性拉满→单一信源；时效拉满→挤掉重要慢新闻），
+是<b>约束不是目标</b>，落在合理区间即可。</div>
+<div class="tblwrap"><table>
+<tr><th style="width:28%">指标</th><th>定义</th></tr>
+<tr><td class="m">多样性</td><td>TOP10 的去重事件数、标的数</td></tr>
+<tr><td class="m">权威性</td><td>TOP10 中 A 级事件占比</td></tr>
+<tr><td class="m">质量分</td><td>TOP10 平均打分、最低打分</td></tr>
+<tr><td class="m">时效性</td><td>TOP10 中 8 小时窗口、24 小时窗口内的占比</td></tr>
+<tr><td class="m">实体占比</td><td>TOP10 中含可交易实体（股/币）的占比</td></tr>
+</table></div>
+
+<!-- ═════ 3 后验 ═════ -->
+<h2><span class="no">03</span>后验质量 <span class="dir up">越高越好</span></h2>
+<div class="tblwrap"><table>
+<tr><th style="width:28%">指标</th><th>定义</th></tr>
+<tr><td class="m">人均曝光量</td><td class="num">曝光 PV ÷ 曝光 UV</td></tr>
+<tr><td class="m">UCTR</td><td class="num">点击 UV ÷ 曝光 UV</td></tr>
+<tr><td class="m">CTR</td><td class="num">点击 PV ÷ 曝光 PV</td></tr>
+<tr><td class="m">浏览时长</td><td>人均、次均</td></tr>
+<tr><td class="m">访问率</td><td>浏览后 24h 内访问标的物资产界面</td></tr>
+<tr><td class="m">交易率 / 交易额</td><td>浏览后 24h 内交易标的物、及成交额</td></tr>
+</table></div>
+<div class="note"><b>归因：</b>已有 AB 实验体系。AA 组验证分流与口径无偏；
+访问率 / 交易率等效果结论以 <b>AB 差值</b>为准。</div>
+
+<!-- ═════ 相关新闻 ═════ -->
+<h2><span class="no">04</span>相关新闻 专项 <span class="dir mon">仅监控</span></h2>
+<div class="tblwrap"><table>
+<tr><th style="width:28%">指标</th><th>定义</th></tr>
+<tr><td class="m">Sector 覆盖率</td><td>至少 1 / 2 / 3 条新闻覆盖的 sector 数、占比</td></tr>
+<tr><td class="m">标的覆盖率</td><td>至少 1 / 2 / 3 条覆盖的单标的数；top100 币/股占比</td></tr>
+<tr><td class="m">平均相关性打分</td><td>—</td></tr>
+<tr><td class="m">最低相关性打分</td><td>兜底线</td></tr>
+<tr><td class="m">低相关占比</td><td>相关性打分 <b class="num">&lt; 0.65</b> 的条数占比</td></tr>
+</table></div>
+<div class="why">覆盖率分 ≥1 / ≥2 / ≥3 三档：≥1 看广度（有没有荒漠区），≥3 看厚度（撑不撑得起模块）。</div>
+
+<!-- ═════ 工程 ═════ -->
+<h2><span class="no">05</span>工程指标 <span class="dir opt">optional</span></h2>
+<div class="tblwrap"><table>
+<tr><td class="m" style="width:28%">延迟 P99</td><td>告警线待定</td></tr>
+<tr><td class="m">接口请求失败率</td><td>—</td></tr>
+</table></div>
+
+<!-- ═════ 下钻 ═════ -->
+<h2><span class="no">06</span>下钻维度 与 落地优先级</h2>
+<div class="grid2">
+  <div class="card"><h4>下钻维度（所有指标交叉查看）</h4>
+    <ul><li>点位：早报 / 午报 / 宏观 / 相关新闻</li>
+        <li>时间：过去 1 天 / 3 天 / 1 周 等</li>
+        <li>是否首屏</li>
+        <li>是否未 FTTT 用户</li>
+        <li><b>实验分组：AA / AB</b></li></ul></div>
+  <div class="card"><h4>落地优先级</h4>
+    <ul><li><b>P0</b> 召回 + 先验 —— 现有数据即可算</li>
+        <li><b>P1</b> 后验（AA/AB 分组）—— 依赖埋点回流接入</li>
+        <li><b>P2</b> 相关新闻专项 —— 随模块上线</li></ul></div>
+</div>
+
+<div class="note" style="margin-top:18px"><b>开放问题：</b>
+① FTTT 以哪个字段判定；② 曝光口径（进视口即计 vs 停留时长，首屏/非首屏需同口径）；
+③ 0.65 阈值仅相关新闻还是全点位统一。</div>
+
+<footer>B9 指标体系 v2 · 2026-08-19 · 框架：Lawrence · 需求文档：docs/prd/PRD-06-指标体系v2.md</footer>
+</div>
+</body>
+</html>
