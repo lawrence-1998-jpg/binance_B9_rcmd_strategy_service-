@@ -1,8 +1,26 @@
-# B9 新闻 / 事件推荐策略服务
+# B9 — 新闻/事件推荐策略服务 · 全项目档案
+
+> 这个仓库同时是**运行中的生产系统**和**项目的完整档案**。代码、架构决策、
+> 每一次事故的根因、踩过的坑、以及正在进行的用户价格敏感度研究，全部在这里，
+> 防丢失、可交接。仓库为 public，**不含任何明文密钥**（密钥在开发者本机 `~/.b9/`）。
+
+## 这个仓库装了三件事
+
+| # | 板块 | 一句话 | 从哪读起 |
+|---|---|---|---|
+| **1** | **B9hub 推荐服务** | 全球新闻流 → 按"能不能激发交易"排序的事件列表，站内资源位调用 | 本文件下半部分 + [`docs/HISTORY.md`](docs/HISTORY.md) |
+| **2** | **用户价格敏感度研究** | 用自然行情波动反推每个用户对持仓资产的敏感度，为 0→1 上线 price alert 铺路 | [`docs/spade-access-plan.md`](docs/spade-access-plan.md) |
+| **3** | **Spade 内网取数** | 从 Claude Code 打通币安大数据平台，命令行直接跑 SQL 取数 | [`tools/spade/`](tools/spade/) + 下面「板块 3」 |
+
+另有一整套**跨项目经验教训**沉淀在 [`docs/memory/`](docs/memory/)（49 篇，每篇一个踩过的坑）。
+
+在线演示（B9hub）：<http://34.138.247.158:8080>　·　生产环境每 30 分钟自动跑一轮
+
+---
+
+# 板块 1 · B9hub 新闻/事件推荐服务
 
 把全球市场的新闻流，变成**一条按"能不能激发交易"排好序的事件列表**，供币安站内各资源位调用。
-
-在线演示：<http://34.138.247.158:8080>　·　生产环境每 30 分钟自动跑一轮
 
 ---
 
@@ -150,4 +168,130 @@ python3 scripts/qa_suite.py           # 135 项交付门禁
 
 ---
 
-*本仓库不含任何真实凭据。所有密钥通过 `config/.env` 注入，该文件不进版本库。*
+# 板块 2 · 用户价格敏感度研究
+
+> 完整工作底稿：[`docs/spade-access-plan.md`](docs/spade-access-plan.md)（跨会话续做看那里）
+
+## 课题一句话
+
+**一个用户对多大幅度的持仓资产价格波动才会敏感？** 敏感的人应该高频、低门槛地推 price
+alert；迟钝的人应该高门槛、低频率。目的是把"给谁推、多大波动才推"从拍脑袋变成查表。
+
+## 关键前提（决定了整个方法论）
+
+**目前线上没有 price alert 产品。** 所以这是一个纯观察性研究：
+
+```
+自然价格波动 → 用户自然的访问/交易（针对其持仓标的）→ 反推敏感度 → 0→1 上线产品
+```
+
+三个由此而来的结论：
+
+1. **不需要 alert 点击回流**——没有产品就没有推送，监督信号来自用户对自然行情的自发反应。
+2. **反向因果担忧减轻，但没有实验变异**——上线前只能给相关性证据，不能声称因果。
+   （向老板汇报时必须说清这条，否则会被问穿。）
+3. 主站那些 `price_alert` 表 2024 年就停更了——因为主站根本没上过这功能。它们只是参考口径。
+
+## 建模思路
+
+本质是**每用户一条剂量反应曲线**：
+
+- **横轴**：持仓资产的价格波动幅度分档（±1% / ±3% / ±5% / ±10% …）
+- **纵轴**：该档位下发生「交易或查看」的条件概率
+- **拐点** = 这个人的触发阈值（多大波动才动）
+- **斜率** = 敏感度（越陡越该高频低门槛推）
+
+三个必须绕开的坑（写死在方法论里）：
+
+- **持仓不是静态的**：波动窗口内要用当时的持仓快照，不能用最新持仓回溯。
+- **零暴露用户**：从没持有过波动资产的人估不出参数，单独归入冷启动分群，**不能填默认值**。
+- **口径对齐**：报敏感度结论时必须声明样本范围（如"仅 Web 用户"），不能悄悄外推全体。
+
+## 数据底座（Spade Hive 表，实测确认）
+
+| 用途 | 表 | 状态 |
+|---|---|---|
+| **看 + 交易（主力表）** | `bnb_dwd.dwd_main_user_traffic_sensor_behavior_di` | ✅ 已批 1 年 |
+| 持仓快照 | `bnb_dwd.fact_main_asset_ss_d` | 审批中 |
+| K 线（算波动幅度） | `bnb_dwd.dwd_main_ms_spot_bnb_kline_di` | 待申请 |
+| Web 埋点（对照用） | `bnb_dwd.fact_main_user_behavior_hr_d` | ✅ 已批 |
+
+**关键突破**：神策宽表 `dwd_main_user_traffic_sensor_behavior_di`（175 列，每天 170~210 亿
+事件）里的 `place_order_event` 带 `symbol`，98.5% 覆盖率——**一张表同时给出"谁在何时对哪个
+交易对下单"和"谁看了哪个币的行情"**，"看"和"交易"两半都从这一张出，省掉单独的交易表。
+
+选表踩过的两个坑（都写进了 `docs/spade-access-plan.md`）：
+
+- **元数据的"最近更新时间"不可信**：`fact_main_spot_order_d` 元数据写 2026-05 更新，
+  实测 `SELECT MAX(date_key)` 才发现数据停在 2021-04-17。**申请前必须用 SQL 验分区。**
+- **表名/更新时间对了，字段也可能不对**：`dws_main_trade_spot_order_uid_td` 全是 `_td`
+  累计口径，没有 symbol、没有单日明细，答不了"用户在 D 日是否交易了币 Y"。要看字段。
+
+---
+
+# 板块 3 · Spade 内网取数（从 Claude Code 打通大数据平台）
+
+> 脚本：[`tools/spade/`](tools/spade/)　·　平台使用坑：[`docs/memory/spade-data-platform-access.md`](docs/memory/spade-data-platform-access.md)
+
+## 接入方式（官方通路，不扒浏览器 session）
+
+币安大数据平台 **Spade**（`https://spade.toolsfdg.net`，内网，**必须挂 VPN**）支持个人
+token 换短期 JWT，再调 BFF API：
+
+```
+# 1. 个人 token（Spade 右上角头像 → Personal Token 建）换 JWT
+POST https://bdp-bff.toolsfdg.net/api/personal-token/exchange
+{"token": "<PERSONAL_TOKEN>"}
+
+# 2. 提交 SQL（Trino 引擎）
+POST https://bdp-bff.toolsfdg.net/api/bigdata-bquery/queries
+{"queryEngine":"Trino476","query":"<SQL>","userId":"<OktaID>","storedVars":{},"limit":100}
+
+# 3. 轮询 queryResponseDto.state，Successful 后取 /queries/<id>/results
+```
+
+## 两个脚本
+
+| 脚本 | 作用 |
+|---|---|
+| [`tools/spade/spade.sh`](tools/spade/spade.sh) | 通用 BFF 调用；token→JWT 自动换、缓存、11h 自动刷新 |
+| [`tools/spade/spq.sh`](tools/spade/spq.sh) | 跑 SQL：提交 / 轮询 / 取结果一条龙，输出 TSV 或 `-j` JSON |
+
+```bash
+# 一次性配置（凭据放本机，不入库）
+printf '<你的 Personal Token>' > ~/.b9/spade_token && chmod 600 ~/.b9/spade_token
+printf '<你的 Okta UID>'       > ~/.b9/okta_uid    && chmod 600 ~/.b9/okta_uid
+
+# 然后直接跑数
+tools/spade/spq.sh "SELECT COUNT(*) AS c FROM hive.bnb_dwd.fact_main_user_behavior_hr_d WHERE date_key=20260818"
+```
+
+## 三个会坑人的地方（每个都栽过一次）
+
+1. **`information_schema` 无权限** → `SHOW TABLES` 一律 Access Denied。摸表只能用平台的
+   Data Map 搜索或「数据专辑」(DW Data)，不能用 SQL 遍历元数据。
+2. **成功判据必须看 `queryResponseDto.state`**：平台对无权限查询返回的是 `content:[]`
+   （空数组）而不是 HTTP 错误——**把"返回了"当成"成功了"会把没权限误报成有权限**。
+   真状态是 `Unauthorized` / `Successful` / `Failed`。
+3. **Data Map 搜索结果表名被高亮拆成多个 `<span>`**，按叶子节点抽取会得到 0 条，
+   看起来像"这类表不存在"。**抽取器返回 0 时先看屏幕截图，别信代码。**
+
+安全边界（一直遵守）：只跑只读查询；不碰密码/2FA（登录那步用户来）；申请表权限前把
+清单给用户过目；共享文档等多人协作面写入前先确认焦点。
+
+---
+
+## 板块间的目录导航
+
+| 路径 | 属于 | 内容 |
+|---|---|---|
+| `crawler/` `api/` `web/` `scripts/` | 板块 1 | B9hub 生产代码 |
+| `docs/HISTORY.md` `docs/WORKLOG.md` `docs/adr/` `docs/prd/` | 板块 1 | 演进史 / 开发日志 / 架构决策 / 需求文档 |
+| `docs/spade-access-plan.md` | 板块 2 | 敏感度研究完整工作底稿 |
+| `tools/spade/` | 板块 3 | Spade 取数脚本 |
+| `docs/memory/` | 全局 | 49 篇经验教训（踩坑、历史、纪律） |
+
+---
+
+*本仓库不含任何真实凭据。密钥集中备份在开发者本机 `~/.b9/`（仓库外，600 权限）；
+服务运行时通过 `config/.env` 注入，该文件不进版本库。提交前有密钥闸（`.githooks/pre-commit`）拦截。*

@@ -29,3 +29,9 @@ config/cache/
 # 所有人的克隆）——旧 key 已失效，风险已随之消除；但**新 key 绝不能再进
 # 仓库**，这是这条规则存在的全部意义。
 config/.env
+
+# 本地虚拟环境 / 系统垃圾
+.venv-mac/
+.venv/
+venv/
+.DS_Store

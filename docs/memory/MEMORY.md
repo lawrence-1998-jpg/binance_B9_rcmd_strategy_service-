@@ -1,0 +1,50 @@
+- [B9 运行环境在云主机](b9-vm-access.md) — 代码跑在 GCP VM 上，`ssh manus-vm` 免密进
+- [B9 项目在做什么、分几步](b9-project-shape.md) — 数据底座+排序策略+API+前端网站，核心功能已完备
+- [B9 去重重构与阈值标定](b9-dedup-gap.md) — 曾 48.7% 冗余；文档的 0.65 是错的，实测该取 0.82
+- [X API 按推文条数计费](b9-x-api-capacity.md) — 曾因误判计费模型两天烧穿额度402停摆；现按条数预算150/轮控制
+- [不要主动搞安全加固](no-security-hardening.md) — Lawrence 明确说过不碰服务器安全配置
+- [并行 agent 会打爆 SSH 连接槽位](parallel-agents-ssh-limit.md) — 已配 ControlMaster 复用，refused 别误判成宕机
+- [任务跟踪与记录纪律](task-tracking-discipline.md) — TODO要全、原始prompt留痕、决策点记录、定期做memory提取
+- [短需求也必须落TODO和留痕](short-requests-need-tracking.md) — 真出过事故：一句话的需求整条丢失，UI需求要给截图自证
+- [完工标准=用户界面上验证过](definition-of-done-user-surface.md) — 六次事故换来的铁律：落表≠交付、部署后浏览器过全站、孤儿数据审计、承诺即TODO、界面正常≠数据对
+- [缺失数据绝不填默认值](never-default-missing-data.md) — 严重事故：无日期当成"现在"，2024年新闻顶着今天日期上前端，过滤器永远拦不住
+- [报数字前先对齐口径](verify-metric-matches-claim.md) — 严重事故：把"SQL取到400行"当成"缓存可用400条"报成果，实际可用0条
+- [Flask 直接跑文件时 sys.path 不含项目根](flask-blueprint-syspath-gotcha.md) — 跨包 import 会 ModuleNotFoundError，通用坑不限于本项目
+- [模型切换：需要 Opus 时要主动说](model-switch-preference.md) — 他把判断权交给我，前提是如实报告，别自己默默扛
+- [成本/市值统计不用较真](b9-estimates-good-enough.md) — 预估级别就够，已完成的不用回头再打磨精度
+- [能并行就并行](parallelize-when-possible.md) — 通用偏好，独立任务默认并发做，冲突任务才串行
+- [跨项目playbook（B9复盘）](project-playbook-retrospective.md) — 用户指定所有新项目开工前参考的12条降本增效checklist
+- [B9本地Claude预处理桥](b9-enrich-bridge.md) — Mac闲时算/VM兜底，遗留一个待用户解锁的CLI认证
+- [B9每个blueprint各自复制鉴权表](b9-blueprint-auth-duplication.md) — 改token必须五处一起改，已咬过两次401
+- [能用Claude做的坚决不调OpenAI API](prefer-claude-over-openai-api.md) — 降本标准做法，分析/评测/复核/成文默认自己做
+- [B9评测Agent系统的设计取舍](b9-eval-agent-system.md) — 人设拆五要素防漂移、校准两段式生效、版本号是对比的前提
+- [B9 LiteLLM网关现状](b9-litellm-gateway-blocked.md) — VM连不通(内网专用)已回退；Mac挂VPN能连通，本地worker已切过去，注意30req/min硬限
+- [重活优先用公司API省Claude token](prefer-company-api-for-heavy-compute.md) — subagent/批量任务优先公司网关，判断力任务仍用Claude自己做
+- [B9扩展到全球市场新闻](b9-market-expansion.md) — market_scope标签+情绪排序+dxFeed机构新闻源，防误杀规则要随范围扩大重新检查
+- [关键词黑名单靠不住](keyword-blocklist-unreliable.md) — 一天漏三次，语义排除必须配LLM语义闸
+- [改公式必查存量版本一致性](verify-formula-version-consistency.md) — 曾87%的分是旧公式，不修则效果测试是假的
+- [验证召回用URL不用关键词](verify-recall-by-url-not-keyword.md) — 曾因LLM意译标题，关键词反查把70%报成45%
+- [聚合器时间戳不可信](aggregator-timestamps-untrusted.md) — GoogleNews给的是分发时间且不给正文，下游日期校验结构性失效
+- [人眼/一搜能看出的问题是我的底线](human-eyeball-test-is-my-floor.md) — 一天被抓三次，QA全绿≠没问题，交付前必须肉眼扫首屏+搜可疑数字
+- [批量回填的三重坑](backfill-three-traps.md) — "最近N条"语义污染/同优先级FIFO饿死新数据/成本旁路预处理桥，回填前过三关
+- [实验工具必须与生产同公式同取数轴](lab-prod-must-share-formula.md) — 一天踩两次：加因子要grep全部排序路径，QA断言钉住一致性
+- [全库改写三护栏](mass-rewrite-guardrails.md) — 默认预演+写前快照+差异门+互斥锁；restore别信UPDATE rowcount、备份表collation要对齐主表
+- [LLM名单必须由配置表渲染进prompt](config-must-render-into-prompt.md) — 两处手写必然漂移且不报错；渲染注入+QA断言钉死，注意跨档去重
+- [文件存在≠agent完成](agent-file-exists-not-agent-done.md) — 只信task-notification；曾把中途写入态当终稿装库发用户，判例集整节缺失
+- [关键词正则判语义有结构性天花板](punch-regex-structural-ceiling.md) — 长距离分句/开放式短语/跨语言歧义三种模式加词也堵不住，该升级LLM语义字段
+- [审计结论写报告前要重新核实](stale-audit-finding-reverify-before-report.md) — "从未X过"类绝对陈述会过期，曾备份P0在核实过程中自己被打破
+- [做成本开关先收敛付费闸口](cost-gate-needs-single-chokepoint.md) — 9个付费点散在4处就不可能加总开关；fail-closed+自动失效；"跳过"与"故意丢弃"记账必须分开
+- [聚合覆盖率会掩盖首屏](aggregate-number-hides-first-screen.md) — 曾报"美股涨18倍"而首屏0/10有标签；报覆盖率必须同时报Top10实际命中
+- [加列会打破按*复制的备份脚本](schema-drift-breaks-star-select.md) — purge脚本`SELECT *`进旧备份表，每次加列都在"要删数据"那步炸
+- [功能优化必须覆盖全部消费面](feature-must-cover-all-surfaces.md) — 用户明确要求；曾主站做了tag但实验室没有、加分项没调节器，先列消费面清单再逐个核对
+- [语义判断该交给LLM而非规则表](semantic-judgment-needs-llm-not-rules.md) — 补到第三轮词表就该停手换LLM字段；实测规则误判60%，LLM 12/12
+- [加列后务必验证写库真的成功](verify-write-not-just-return-code.md) — 占位符少一个导致全部写入静默失败，只打warning返回0，差点当成'没新数据'
+- [导出副本会盖住线上的缺陷](export-copy-can-mask-defects.md) — 为自包含补的依赖，正好是线上缺的那个；断言要跑在真环境且要覆盖"依赖接没接上"
+- [定时任务装完必须验证真跑过](scheduled-job-never-ran.md) — launchd读不了~/Desktop，软链永远EPERM；"按设计延后"与"下游死了"日志长得一样
+- [控件加了监听≠它能用](control-shipped-but-never-fired.md) — window.X兜底/init时序/只用颜色表状态，三种失效全静默；交付前逐个触发看真实副作用
+- [交付前按角色走完整旅程](walk-each-role-journey-before-ship.md) — 机制测试13项全绿仍漏了"审批人看不到申请内容"；列出全部角色、只用屏幕上有的东西走通每条旅程
+- [B9新课题：用户价格敏感度建模](b9-price-sensitivity-study.md) — 观察性研究，线上没有price alert产品，只能给相关性不能给因果
+- [Spade大数据平台怎么用](spade-data-platform-access.md) — 接入/查表/申请权限，三个坑：无information_schema权限、搜索结果高亮拆节点、提交提示一闪而过
+- [七夕恋爱网站「蒜蓉与彩虹」](qixi-love-site-artifact.md) — Lawrence×Eddie纪念站，页面自发布存故事，URL固定
+- [TaskHub任务管理网页](taskhub-project.md) — 已交付待BYC认证；用户说"配置任务系统认证"时按文内步骤走，认证后必须核对真实payload字段
+- [B9策略已上线+指标体系](b9-strategy-live-metrics.md) — 三个位置上线；指标体系=乘法链+北极星+制衡，Confluence页可匿名curl
