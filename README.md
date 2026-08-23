@@ -1,298 +1,80 @@
-# B9 — 新闻/事件推荐策略服务 · 全项目档案
+# B9 新闻事件推荐策略服务
 
-> 这个仓库同时是**运行中的生产系统**和**项目的完整档案**。代码、架构决策、
-> 每一次事故的根因、踩过的坑、以及正在进行的用户价格敏感度研究，全部在这里，
-> 防丢失、可交接。仓库为 public，**不含任何明文密钥**（密钥在开发者本机 `~/.b9/`）。
+把市场上发生的重要事，及时、准确、按对的顺序，送到会在意的人眼前。
+这是 B9 推荐策略的**数据底座 + 排序策略 + API + 展示站**原型，供产品验证与研发交接。
+线上化后的策略已落地币安产品三个位置：早午日报 / Macro Insight / Sector Insight。
 
-## 这个仓库装了三件事
+> ⚠️ **当前为应急运行态（2026-08-23 起）**：原 GCP VM 整机丢失，服务临时跑在一台 Mac 上。
+> 详情与重建方法：[docs/incidents/2026-08-23-vm-loss-and-mac-recovery.md](docs/incidents/2026-08-23-vm-loss-and-mac-recovery.md)。
+> 接手的人**先读那份事故报告**，再回来看这里。
 
-| # | 板块 | 一句话 | 从哪读起 |
-|---|---|---|---|
-| **1** | **B9hub 推荐服务** | 全球新闻流 → 按"能不能激发交易"排序的事件列表，站内资源位调用 | 本文件下半部分 + [`docs/HISTORY.md`](docs/HISTORY.md) |
-| **2** | **用户价格敏感度研究** | 用自然行情波动反推每个用户对持仓资产的敏感度，为 0→1 上线 price alert 铺路 | [`docs/spade-access-plan.md`](docs/spade-access-plan.md) |
-| **3** | **Spade 内网取数** | 从 Claude Code 打通币安大数据平台，命令行直接跑 SQL 取数 | [`tools/spade/`](tools/spade/) + 下面「板块 3」 |
+## 这个系统做什么
 
-另有一整套**跨项目经验教训**沉淀在 [`docs/memory/`](docs/memory/)（49 篇，每篇一个踩过的坑）。
+每 30 分钟一轮：30 个 RSS 信源 + dxFeed 机构快讯 + Benzinga →
+向量去重（跨轮归并，阈值 0.82）→ LLM 结构化（中英标题/摘要、实体、事件三元组、情绪）→
+多信源真实性交叉校验 → 可交易实体标注 + 市值分档 → 七因子加权打分入库 →
+API 出口再套情绪/市场/新鲜度倍率 → 65 字段 JSON。
 
-在线演示（B9hub）：<http://34.138.247.158:8080>　·　生产环境每 30 分钟自动跑一轮
+排序公式（v6）：`0.26·冲击面 + 0.16·广度 + 0.16·时效 + 0.14·冲击力 + 0.10·热度 + 0.10·权威 + 0.08·质量`
+——本注释同款公式在 4 处镜像（scoring.py / rescore 脚本 / QA / lab_tools），改动必须四处同步。
 
----
+## 从哪读起（按你是谁）
 
-# 板块 1 · B9hub 新闻/事件推荐服务
-
-把全球市场的新闻流，变成**一条按"能不能激发交易"排好序的事件列表**，供币安站内各资源位调用。
-
----
-
-## 这个服务解决什么问题
-
-用户打开行情页，看到的资讯往往是"按时间倒序"的一堆标题：既没有轻重之分，也看不出
-"这件事跟我能买的东西有什么关系"。结果是**信息很多、行动为零**。
-
-本服务做三件事：
-
-1. **把散落的资讯变成"事件"** —— 多家媒体报同一件事聚合成一条，标注可信度与信源数量。
-2. **给每个事件打分排序** —— 七因子加权，回答"这条值不值得放在第一屏"。
-3. **把事件接到可交易标的上** —— 抽取新闻对应的币 / 股票 / 板块指数并对其加权，
-   让"看到新闻"和"能下单"之间只隔一步。
-
-> 定位从"新闻 agent"升级为"**事件 agent**"：目的不是把新闻搬运得更快，
-> 而是通过大事件调动情绪、引导交易动作。
-
----
-
-## 当前规模（真实数据，非估算）
-
-| 指标 | 数值 |
+| 你是 | 读这些 |
 |---|---|
-| 事件库总量 | 17,742 条 |
-| 近 7 天入库 | 10,551 条 |
-| 接入信源 | 1,744 个（RSS / Twitter / 币安广场 / dxFeed / Massive） |
-| 已完成生产轮次 | 250 轮 |
-| 调度频率 | 每 30 分钟一轮 |
-| Python 代码量 | 约 22,300 行 |
-| 开发周期 | 2026-07-26 → 2026-08-05（83 次提交） |
+| **接手运维/要把它跑起来** | 事故报告里的 Runbook → `config/env.example`（配出你的 .env）→ 本页「常用命令」 |
+| **接手策略/产品** | `docs/HISTORY.md`（九个阶段的演化与教训）→ `docs/PROJECT_PLAN.md` → Confluence《B9 内容推荐策略 All in One》 |
+| **接手研发/要接 API** | `docs/api-integration-guide.md` → `docs/prd/`（两份交接 PRD） |
+| **接手数据分析** | `docs/spade-access-plan.md`（Spade 平台接入全记录）→ `docs/analysis/`（价格敏感度研究 + 指标体系） |
+| **想知道踩过什么坑** | `docs/WORKLOG.md`（100+ 条带教训的流水）→ `docs/incidents/` |
 
----
-
-## 系统怎么运转
+## 目录结构
 
 ```
-01 数据源           02 聚合         03 聚类 & 理解        04 排序与分支       05 服务链路
-──────────────     ──────────     ────────────────     ──────────────     ─────────────────
-站外 RSS（爬虫）  ┐               ① LLM 结构化        ┌ 分支1 事件流直出   数据出库（算法）
-Twitter API      │  接口统一      ② 内容理解打标+RAG  │   不打分            └ 只给 id + meta
-币安广场 API      ├→ 字段归一  →  ③ 语义聚合去重   → ┤                     数据服务提供(Scout)
-新闻媒体 API      │  URL 轻去重    ④ 跨轮归并         └ 分支2 排序流         └ 按 id 补全内容
-指数 API（建设中）┘               ⑤ 真实性校验           三段 skill 串行            ↓
-                                                                          服务端按 id 关联
-                                                                                  ↓
-                            ┌──── 曝光/点击回流为后验标签 ←──────── 客户端展示
+crawler/    抓取、去重、打分、校验、市值——数据生产全链路
+api/        Flask API + 各业务 blueprint（server.py 是入口）
+web/        展示站（index.html 单页，多 tab）
+scripts/    enrich worker、QA 套件（135+ 断言）、密钥轮换、回填工具
+config/     .env 模板、22 个数据库 migrations（幂等，按序执行）
+docs/       全部文档；analysis/ 是研究报告；incidents/ 是事故档案
+backups/    数据库备份（⚠️ 见事故报告：备份必须异地，别只放本机）
 ```
 
-**排序分由三段独立 skill 串行产生**，每段职责单一、可单独回归：
-
-| skill | 做什么 | 产出 |
-|---|---|---|
-| ① 基础排序 | 七因子加权：新鲜度 / 权威 / 情绪 / 冲击力 / 广度 / 相关性 / 热度 | 0–1 基础分 |
-| ② 业务调控 | 市场倍率、交易实体加成、情绪同向 / 反转信号 | ×倍率 +加分 |
-| ③ 混排 | 同源打散、实体配额 N/10、Top1/Top3 置顶 | 最终序列 |
-
-**召回池退热**：S/A 级与高点击事件生命周期 7 天，其余 2 天。
-
----
-
-## 几个刻意的设计选择
-
-这些不是实现细节，是踩过坑之后的结构性决定：
-
-- **成本硬闸单一收费口**（`crawler/llm_gate.py`）
-  9 个付费调用点全部收敛到一个 `acquire()`。开关默认关闭且 **fail-closed**——
-  任何异常都当作"不允许花钱"。开启必须带自动失效时间。断供时条目原样留在队列，
-  给了新额度自动回补，数据一条不丢。
-
-- **语义判断交给 LLM，不靠规则表**
-  典型例子：判断标题里的百分数是不是"价格涨跌幅"。正则 + 排除词表补到第四轮仍在漏
-  （"份额升至 67.4%"、"支持率降到 33%"），因为"这个数字度量什么"是语义不是模式。
-  改由 LLM 输出结构化字段后实测 12/12，存量回填发现**原本 60% 被误判**。
-
-- **实验室与生产共用同一套公式**
-  策略实验室调完参数点"存为基线"，改的就是生产排序用的那份配置——两条路径共用
-  `rank_pool()`，从结构上杜绝"实验室好看、线上没生效"。
-
-- **端到端健康判据**
-  监控判的不是"组件活着吗"，而是"**最近还有没有真的产出事件**"。
-  这来自一次三天停摆：所有组件级检查全绿、日志零 ERROR，产品却已经三天没更新。
-
-- **凭据零硬编码**
-  代码与文档不含任何明文密钥，全部走环境变量；取不到就拒绝服务，而不是回落到内置默认值
-  （"忘了配"必须表现为"谁都进不来"，而不是"谁都能进来"）。提交前有密钥闸拦截。
-
----
-
-## 快速开始
+## 常用命令
 
 ```bash
-cp config/env.example config/.env     # 填入自己的凭据
-pip3 install -r requirements.txt
-mysql -uroot -p < config/schema.sql
-for f in config/migrations/*.sql; do mysql -uroot -p crypto_news < "$f"; done
+# 起 API（先按事故报告 Runbook 配好 MySQL 与 .env）
+./.venv-mac/bin/python api/server.py
 
-python3 run_pipeline.py               # 跑一轮：抓取 → 结构化 → 打分 → 入库
-python3 api/server.py                 # 起 API 与前端（默认 :8080）
-python3 scripts/qa_suite.py           # 135 项交付门禁
+# 跑一轮抓取管线（小批量）
+B9_PIPELINE_BATCH=300 ./.venv-mac/bin/python run_pipeline.py
+
+# enrich worker（吃掉抓取队列；API_BASE 指向当前 API 所在机器）
+B9_API_BASE=http://127.0.0.1:8080 B9_API_TOKEN=<你的token> ./.venv-mac/bin/python scripts/local_enrich_worker.py
+
+# QA 全量（135+ 断言，改核心逻辑后必跑）
+./.venv-mac/bin/python scripts/qa_suite.py
+
+# 查看新闻（数据老于5天必须带 max_age_days=0）
+curl "http://127.0.0.1:8080/api/news?limit=5&max_age_days=0&token=<你的token>"
 ```
 
-> 需自备：MySQL 8、一个 OpenAI 兼容的 LLM 端点、各数据源 API key。
-> 全部通过 `config/.env` 配置，**仓库内不含任何真实凭据**。
+## 密钥清单（值不在库里，向 Lawrence 索取）
 
----
+本仓库**公开**，任何密钥值一律不入库。运行所需：
 
-## 目录导航
-
-| 路径 | 内容 |
-|---|---|
-| `crawler/` | 抓取、结构化、去重、打分、成本闸 |
-| `api/` | Flask 服务 + 策略实验室 / 评测工具 / 桥接端点 |
-| `web/` | 前端工作台（生成流程、真实数据、API 接入、策略实验室、监控） |
-| `scripts/` | QA 门禁、批量重算、key 管理、本地 enrich worker |
-| `docs/HISTORY.md` | **项目演进史 —— 建议从这里开始读** |
-| `docs/prd/` · `docs/adr/` | 产品需求文档 · 架构决策记录 |
-| `docs/WORKLOG.md` | 逐需求开发日志（含每次事故的根因与修复） |
-
----
-
-## 文档入口
-
-- **快速了解项目怎么长成今天这样** → [`docs/HISTORY.md`](docs/HISTORY.md)
-- **接入 API** → [`docs/api-integration-guide.md`](docs/api-integration-guide.md)
-  （非技术同事看 [`docs/API快速上手-非技术版.md`](docs/API快速上手-非技术版.md)）
-- **理解排序策略** → [`docs/prd/rcmd-r2/`](docs/prd/rcmd-r2/)（含 7 份因子 skill 说明）
-- **架构取舍** → [`docs/adr/`](docs/adr/)
-
----
-
-## 状态与已知限制
-
-**在跑**：抓取、结构化、打分、排序、混排、前端工作台、评测工具、监控看板、每日备份。
-
-**已知限制**（如实列出，不粉饰）：
-
-- **没有效果度量**。至今没有 CTR / 停留 / 点击位次数据，所有策略调整都停留在
-  "我认为更好"的层面。这是当前最大的盲区，也是下一步优先级最高的事。
-- **指数数据一手 API 尚未接入**（建设中，ETA 未定）。
-- **强情绪内容与可交易标的存在品类错配**：实测情绪最强的内容集中在韩股与地缘冲突，
-  而这两类币安用户都买不到。已有方案（受益标的传导），尚未落地。
-- 服务当前为 HTTP + 静态 token，安全模型是"内部可信网络"；生产化需连同 HTTPS 与
-  分级鉴权一起改造。
-
----
-
-# 板块 2 · 用户价格敏感度研究
-
-> 完整工作底稿：[`docs/spade-access-plan.md`](docs/spade-access-plan.md)（跨会话续做看那里）
-
-## 课题一句话
-
-**一个用户对多大幅度的持仓资产价格波动才会敏感？** 敏感的人应该高频、低门槛地推 price
-alert；迟钝的人应该高门槛、低频率。目的是把"给谁推、多大波动才推"从拍脑袋变成查表。
-
-## 关键前提（决定了整个方法论）
-
-**目前线上没有 price alert 产品。** 所以这是一个纯观察性研究：
-
-```
-自然价格波动 → 用户自然的访问/交易（针对其持仓标的）→ 反推敏感度 → 0→1 上线产品
-```
-
-三个由此而来的结论：
-
-1. **不需要 alert 点击回流**——没有产品就没有推送，监督信号来自用户对自然行情的自发反应。
-2. **反向因果担忧减轻，但没有实验变异**——上线前只能给相关性证据，不能声称因果。
-   （向老板汇报时必须说清这条，否则会被问穿。）
-3. 主站那些 `price_alert` 表 2024 年就停更了——因为主站根本没上过这功能。它们只是参考口径。
-
-## 建模思路
-
-本质是**每用户一条剂量反应曲线**：
-
-- **横轴**：持仓资产的价格波动幅度分档（±1% / ±3% / ±5% / ±10% …）
-- **纵轴**：该档位下发生「交易或查看」的条件概率
-- **拐点** = 这个人的触发阈值（多大波动才动）
-- **斜率** = 敏感度（越陡越该高频低门槛推）
-
-三个必须绕开的坑（写死在方法论里）：
-
-- **持仓不是静态的**：波动窗口内要用当时的持仓快照，不能用最新持仓回溯。
-- **零暴露用户**：从没持有过波动资产的人估不出参数，单独归入冷启动分群，**不能填默认值**。
-- **口径对齐**：报敏感度结论时必须声明样本范围（如"仅 Web 用户"），不能悄悄外推全体。
-
-## 数据底座（Spade Hive 表，实测确认）
-
-| 用途 | 表 | 状态 |
+| 密钥 | 位置（Lawrence 本机） | 用途 |
 |---|---|---|
-| **看 + 交易（主力表）** | `bnb_dwd.dwd_main_user_traffic_sensor_behavior_di` | ✅ 已批 1 年 |
-| 持仓快照 | `bnb_dwd.fact_main_asset_ss_d` | 审批中 |
-| K 线（算波动幅度） | `bnb_dwd.dwd_main_ms_spot_bnb_kline_di` | 待申请 |
-| Web 埋点（对照用） | `bnb_dwd.fact_main_user_behavior_hr_d` | ✅ 已批 |
+| `config/.env` 整份 | 仓库目录下（已 gitignore），模板见 `config/env.example` | MySQL 密码、7 档 API token、X Bearer 等 21 项 |
+| 公司 LiteLLM key | `~/.b9/credentials.json`（`scripts/b9key.py` 管理） | LLM enrich（走公司网关，需 VPN devfdg zone） |
+| Spade personal token | `~/.b9/spade_token` | 大数据平台取数（内网） |
 
-**关键突破**：神策宽表 `dwd_main_user_traffic_sensor_behavior_di`（175 列，每天 170~210 亿
-事件）里的 `place_order_event` 带 `symbol`，98.5% 覆盖率——**一张表同时给出"谁在何时对哪个
-交易对下单"和"谁看了哪个币的行情"**，"看"和"交易"两半都从这一张出，省掉单独的交易表。
+历史上曾因公开化做过一次 git-filter-repo 全历史密钥清洗（2026-08-05），
+`.githooks/pre-commit` 有密钥格式拦截——**不要绕过它提交**。
 
-选表踩过的两个坑（都写进了 `docs/spade-access-plan.md`）：
+## 已知约束
 
-- **元数据的"最近更新时间"不可信**：`fact_main_spot_order_d` 元数据写 2026-05 更新，
-  实测 `SELECT MAX(date_key)` 才发现数据停在 2021-04-17。**申请前必须用 SQL 验分区。**
-- **表名/更新时间对了，字段也可能不对**：`dws_main_trade_spot_order_uid_td` 全是 `_td`
-  累计口径，没有 symbol、没有单日明细，答不了"用户在 D 日是否交易了币 Y"。要看字段。
-
----
-
-# 板块 3 · Spade 内网取数（从 Claude Code 打通大数据平台）
-
-> 脚本：[`tools/spade/`](tools/spade/)　·　平台使用坑：[`docs/memory/spade-data-platform-access.md`](docs/memory/spade-data-platform-access.md)
-
-## 接入方式（官方通路，不扒浏览器 session）
-
-币安大数据平台 **Spade**（`https://spade.toolsfdg.net`，内网，**必须挂 VPN**）支持个人
-token 换短期 JWT，再调 BFF API：
-
-```
-# 1. 个人 token（Spade 右上角头像 → Personal Token 建）换 JWT
-POST https://bdp-bff.toolsfdg.net/api/personal-token/exchange
-{"token": "<PERSONAL_TOKEN>"}
-
-# 2. 提交 SQL（Trino 引擎）
-POST https://bdp-bff.toolsfdg.net/api/bigdata-bquery/queries
-{"queryEngine":"Trino476","query":"<SQL>","userId":"<OktaID>","storedVars":{},"limit":100}
-
-# 3. 轮询 queryResponseDto.state，Successful 后取 /queries/<id>/results
-```
-
-## 两个脚本
-
-| 脚本 | 作用 |
-|---|---|
-| [`tools/spade/spade.sh`](tools/spade/spade.sh) | 通用 BFF 调用；token→JWT 自动换、缓存、11h 自动刷新 |
-| [`tools/spade/spq.sh`](tools/spade/spq.sh) | 跑 SQL：提交 / 轮询 / 取结果一条龙，输出 TSV 或 `-j` JSON |
-
-```bash
-# 一次性配置（凭据放本机，不入库）
-printf '<你的 Personal Token>' > ~/.b9/spade_token && chmod 600 ~/.b9/spade_token
-printf '<你的 Okta UID>'       > ~/.b9/okta_uid    && chmod 600 ~/.b9/okta_uid
-
-# 然后直接跑数
-tools/spade/spq.sh "SELECT COUNT(*) AS c FROM hive.bnb_dwd.fact_main_user_behavior_hr_d WHERE date_key=20260818"
-```
-
-## 三个会坑人的地方（每个都栽过一次）
-
-1. **`information_schema` 无权限** → `SHOW TABLES` 一律 Access Denied。摸表只能用平台的
-   Data Map 搜索或「数据专辑」(DW Data)，不能用 SQL 遍历元数据。
-2. **成功判据必须看 `queryResponseDto.state`**：平台对无权限查询返回的是 `content:[]`
-   （空数组）而不是 HTTP 错误——**把"返回了"当成"成功了"会把没权限误报成有权限**。
-   真状态是 `Unauthorized` / `Successful` / `Failed`。
-3. **Data Map 搜索结果表名被高亮拆成多个 `<span>`**，按叶子节点抽取会得到 0 条，
-   看起来像"这类表不存在"。**抽取器返回 0 时先看屏幕截图，别信代码。**
-
-安全边界（一直遵守）：只跑只读查询；不碰密码/2FA（登录那步用户来）；申请表权限前把
-清单给用户过目；共享文档等多人协作面写入前先确认焦点。
-
----
-
-## 板块间的目录导航
-
-| 路径 | 属于 | 内容 |
-|---|---|---|
-| `crawler/` `api/` `web/` `scripts/` | 板块 1 | B9hub 生产代码 |
-| `docs/HISTORY.md` `docs/WORKLOG.md` `docs/adr/` `docs/prd/` | 板块 1 | 演进史 / 开发日志 / 架构决策 / 需求文档 |
-| `docs/spade-access-plan.md` | 板块 2 | 敏感度研究完整工作底稿 |
-| `tools/spade/` | 板块 3 | Spade 取数脚本 |
-| `docs/memory/` | 全局 | 49 篇经验教训（踩坑、历史、纪律） |
-| `docs/playbook/` | 全局 | Lawrence 常用 Prompt List（15 条，可一键复制的网页版同目录） |
-
----
-
-*本仓库不含任何真实凭据。密钥集中备份在开发者本机 `~/.b9/`（仓库外，600 权限）；
-服务运行时通过 `config/.env` 注入，该文件不进版本库。提交前有密钥闸（`.githooks/pre-commit`）拦截。*
+- **数据缺口**：2026-07-26 → 08-22 的事件数据随 VM 丢失，不可恢复
+- **LLM 网关**：`litellm.devfdg.net` 需公司 VPN 对应 zone；不通时抓取队列安全积压，通了自动消化
+- **X 信源**：按条计费，默认关闭（`X_FETCH_ENABLED`）
+- 时间口径全链路 UTC+8；`importance_score` 是持久化派生值，带 `scoring_version` 标记
