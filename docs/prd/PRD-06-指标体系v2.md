@@ -1,5 +1,9 @@
 # PRD-06 · 指标体系 v2
 
+> **正式发布版**（团队协作入口）：
+> https://confluence.toolsfdg.net/pages/viewpage.action?pageId=614121200
+> Confluence 版不含「开放问题」「落地优先级」两节（Lawrence 定）；本文件为完整存档版。
+
 > **框架**：Lawrence 2026-08-19 定稿。取代 v1（乘法链 + 北极星 + 制衡）——v1 太表面、
 > 太 fancy，指标间的公式关系是构造出来的。
 > **v2 原则**：按「能否指导动作」分组，每组明确方向（越高越好 / 仅监控）。
