@@ -8,8 +8,8 @@
 
 | 项 | 值 |
 |---|---|
-| Base URL（HTTPS，推荐分享用） | `https://currencies-granted-delight-lou.trycloudflare.com` |
-| Base URL（HTTP 直连，稳定不变） | `http://34.138.247.158:8080` |
+| Base URL（HTTPS，推荐分享用） | `https://final-terms-beatles-waiting.trycloudflare.com` |
+| Base URL（HTTP 直连，稳定不变） | `http://127.0.0.1:8080`（临时：Mac 本地，原 GCP VM 已宕机） |
 | 协议 | HTTPS 走 Cloudflare Tunnel（证书有效，任何人可直接打开）；HTTP 为 VM 直连 |
 | 鉴权 | HTTP Header：`Authorization: Bearer <你的 token>`；也支持 `?token=<你的 token>` 查询参数，见下方「鉴权」 |
 | 响应格式 | JSON，UTF-8 |
