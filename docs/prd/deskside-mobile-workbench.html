@@ -1,0 +1,2012 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="description" content="案头 Deskside — 移动个人工作台设计文档：调研、PRD、UI 规范、高保真原型、实施计划。">
+<style>
+  :root{color-scheme:light dark}
+  html,body{margin:0}
+  img{max-width:100%}
+  [hidden]{display:none!important}
+</style>
+<title>案头 Deskside</title>
+</head>
+<body>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Caprasimo&family=Figtree:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+
+/* ============================================================
+   案头 Deskside — 移动个人工作台 PRD / UI 规范
+   文档视觉沿用仓库既有 Organic 设计系统，按移动端重构
+   ============================================================ */
+
+:root{
+  --ground:#f5ead8;
+  --ground-2:#efe2cb;
+  --surface:#fdf8ef;
+  --well:#ebddc5;
+  --ink:#201e1d;
+  --ink-2:#645c50;
+  --ink-3:#8b8171;
+  --line:rgba(32,30,29,.12);
+  --line-2:rgba(32,30,29,.06);
+  --terra:#c67139;
+  --terra-deep:#8c491a;
+  --terra-tint:#ffe1d0;
+  --sage:#7a8a5e;
+  --sage-deep:#56633f;
+  --sage-tint:#e1eecc;
+  --alert:#b3402c;
+  --on-accent:#fdf8ef;
+  --night:#2e2b25;
+  --code-bg:#2e2b25;
+  --code-ink:#e1eecc;
+  --shadow-s:0 1px 2px rgba(46,43,37,.10);
+  --shadow-m:0 3px 12px rgba(46,43,37,.10);
+  --shadow-l:0 16px 40px rgba(46,43,37,.16);
+
+  --f-display:"Caprasimo",Georgia,serif;
+  --f-body:"Figtree","PingFang SC","Hiragino Sans GB","Microsoft YaHei",system-ui,sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  --f-cjk:"PingFang SC","Hiragino Sans GB","Source Han Sans SC","Microsoft YaHei",system-ui,sans-serif;
+}
+
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --ground:#1b1917;
+    --ground-2:#211e1b;
+    --surface:#272420;
+    --well:#312d27;
+    --ink:#f2e8d8;
+    --ink-2:#b5aa98;
+    --ink-3:#8a8171;
+    --line:rgba(245,234,216,.14);
+    --line-2:rgba(245,234,216,.07);
+    --terra:#e59459;
+    --terra-deep:#f6a06b;
+    --terra-tint:#4a2c17;
+    --sage:#a6b889;
+    --sage-deep:#c3d2a5;
+    --sage-tint:#31391f;
+    --alert:#e07a63;
+    --on-accent:#1b1917;
+    --night:#141311;
+    --code-bg:#141311;
+    --shadow-s:0 1px 2px rgba(0,0,0,.4);
+    --shadow-m:0 3px 12px rgba(0,0,0,.4);
+    --shadow-l:0 16px 40px rgba(0,0,0,.55);
+  }
+}
+:root[data-theme="dark"]{
+  --ground:#1b1917;
+  --ground-2:#211e1b;
+  --surface:#272420;
+  --well:#312d27;
+  --ink:#f2e8d8;
+  --ink-2:#b5aa98;
+  --ink-3:#8a8171;
+  --line:rgba(245,234,216,.14);
+  --line-2:rgba(245,234,216,.07);
+  --terra:#e59459;
+  --terra-deep:#f6a06b;
+  --terra-tint:#4a2c17;
+  --sage:#a6b889;
+  --sage-deep:#c3d2a5;
+  --sage-tint:#31391f;
+  --alert:#e07a63;
+  --on-accent:#1b1917;
+  --night:#141311;
+  --code-bg:#141311;
+  --shadow-s:0 1px 2px rgba(0,0,0,.4);
+  --shadow-m:0 3px 12px rgba(0,0,0,.4);
+  --shadow-l:0 16px 40px rgba(0,0,0,.55);
+}
+
+*{box-sizing:border-box}
+body{
+  background:var(--ground);
+  color:var(--ink);
+  font-family:var(--f-body);
+  font-size:15.5px;
+  line-height:1.68;
+  -webkit-font-smoothing:antialiased;
+  overflow-x:hidden;
+}
+.wrap{width:min(100% - 40px,760px);margin-inline:auto}
+.narrow{width:min(100% - 40px,660px);margin-inline:auto}
+
+/* ---------- nav ---------- */
+.topnav{
+  position:sticky;top:0;z-index:60;
+  background:var(--ground);
+  border-bottom:1px solid var(--line);
+}
+.navrail{
+  display:flex;gap:6px;overflow-x:auto;
+  padding:9px max(20px,calc((100vw - 760px)/2));
+  scrollbar-width:none;-webkit-overflow-scrolling:touch;
+}
+.navrail::-webkit-scrollbar{display:none}
+.navpill{
+  flex:0 0 auto;display:flex;align-items:center;gap:6px;
+  height:32px;padding:0 13px;border-radius:999px;
+  font-size:12.5px;font-weight:600;color:var(--ink-2);
+  text-decoration:none;border:1px solid transparent;
+  white-space:nowrap;transition:background .16s,color .16s;
+}
+.navpill em{font-family:var(--f-mono);font-style:normal;font-size:10px;opacity:.6}
+.navpill:hover{background:var(--well)}
+.navpill.on{background:var(--terra);color:var(--on-accent);border-color:transparent}
+.navpill.on em{opacity:.75}
+
+/* ---------- hero ---------- */
+.hero{padding:52px 0 44px;position:relative;overflow:hidden}
+.hero::after{
+  content:"";position:absolute;left:0;right:0;bottom:0;height:1px;background:var(--line);
+}
+.kick{
+  display:inline-flex;align-items:center;gap:7px;
+  font-family:var(--f-mono);font-size:10.5px;font-weight:500;
+  letter-spacing:.15em;text-transform:uppercase;color:var(--sage-deep);
+  background:var(--sage-tint);border-radius:999px;padding:5px 12px 5px 9px;
+}
+.kick .d{width:6px;height:6px;border-radius:50%;background:var(--sage);animation:pulse 2.4s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.45;transform:scale(.8)}}
+.hero h1{
+  font-family:var(--f-cjk);font-weight:700;
+  font-size:clamp(31px,8.4vw,48px);line-height:1.16;
+  letter-spacing:-.02em;margin:20px 0 0;text-wrap:balance;
+}
+.hero h1 .en{font-family:var(--f-display);font-weight:400;letter-spacing:0;color:var(--terra)}
+.hero .sub{
+  font-size:17px;line-height:1.6;color:var(--ink-2);margin:16px 0 0;max-width:34em;
+}
+.hero .sub b{color:var(--ink);font-weight:600}
+.decide{
+  display:grid;gap:1px;background:var(--line);
+  border:1px solid var(--line);border-radius:18px;overflow:hidden;margin-top:30px;
+}
+.decide > div{background:var(--surface);padding:14px 16px}
+.decide dt{
+  font-family:var(--f-mono);font-size:10px;letter-spacing:.13em;
+  text-transform:uppercase;color:var(--ink-3);margin-bottom:4px;
+}
+.decide dd{margin:0;font-size:14.5px;font-weight:600;line-height:1.45}
+.decide dd span{display:block;font-weight:400;font-size:12.5px;color:var(--ink-2);margin-top:3px}
+@media (min-width:620px){.decide{grid-template-columns:1fr 1fr 1fr}}
+.metaline{
+  margin-top:22px;font-family:var(--f-mono);font-size:11px;color:var(--ink-3);
+  display:flex;flex-wrap:wrap;gap:6px 14px;
+}
+
+/* ---------- sections ---------- */
+.sec{padding:52px 0;border-bottom:1px solid var(--line)}
+.sec:last-of-type{border-bottom:0}
+.sechead{margin-bottom:26px}
+.eyebrow{
+  font-family:var(--f-mono);font-size:10px;font-weight:500;letter-spacing:.18em;
+  text-transform:uppercase;color:var(--terra-deep);display:block;margin-bottom:9px;
+}
+h2{
+  font-family:var(--f-cjk);font-weight:700;font-size:clamp(23px,5.6vw,30px);
+  line-height:1.25;letter-spacing:-.015em;margin:0;text-wrap:balance;
+}
+h2 .n{
+  font-family:var(--f-display);font-weight:400;color:var(--terra);
+  margin-right:10px;font-size:.86em;
+}
+h3{
+  font-family:var(--f-cjk);font-weight:700;font-size:18px;line-height:1.4;
+  margin:34px 0 10px;letter-spacing:-.01em;text-wrap:balance;
+}
+h4{
+  font-family:var(--f-body);font-weight:700;font-size:14px;margin:22px 0 8px;
+  color:var(--ink);letter-spacing:.01em;
+}
+p{margin:0 0 14px}
+p.lead{font-size:16.5px;line-height:1.62;color:var(--ink-2)}
+p.lead b{color:var(--ink);font-weight:600}
+a{color:var(--terra-deep);text-underline-offset:3px}
+strong{font-weight:700}
+em.m{font-family:var(--f-mono);font-style:normal;font-size:.92em;background:var(--well);padding:1px 6px;border-radius:5px}
+:focus-visible{outline:2px solid var(--terra);outline-offset:2px;border-radius:4px}
+
+ul,ol{margin:0 0 16px;padding-left:1.25em}
+li{margin-bottom:7px}
+li::marker{color:var(--terra)}
+
+.card{
+  background:var(--surface);border:1px solid var(--line);
+  border-radius:20px;padding:20px;box-shadow:var(--shadow-s);
+}
+.card + .card{margin-top:14px}
+.card h4:first-child,.card h3:first-child{margin-top:0}
+
+.note{
+  border-left:3px solid var(--terra);background:var(--terra-tint);
+  border-radius:0 14px 14px 0;padding:15px 17px;margin:18px 0;font-size:14.5px;
+}
+.note.sage{border-left-color:var(--sage);background:var(--sage-tint)}
+.note .t{font-weight:700;display:block;margin-bottom:5px;font-size:13px;letter-spacing:.01em}
+.note p:last-child{margin-bottom:0}
+
+.scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;margin:18px 0;border-radius:14px;border:1px solid var(--line)}
+table{border-collapse:collapse;width:100%;min-width:520px;font-size:13.5px;background:var(--surface)}
+th,td{padding:10px 13px;text-align:left;border-bottom:1px solid var(--line-2);vertical-align:top}
+th{
+  font-family:var(--f-mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--ink-3);background:var(--well);font-weight:500;white-space:nowrap;
+}
+tbody tr:last-child td{border-bottom:0}
+td.num{font-family:var(--f-mono);font-variant-numeric:tabular-nums;white-space:nowrap}
+.tag{
+  display:inline-block;font-family:var(--f-mono);font-size:10px;font-weight:500;
+  padding:2px 8px;border-radius:999px;white-space:nowrap;letter-spacing:.04em;
+}
+.tag.p0{background:var(--terra);color:var(--on-accent)}
+.tag.p1{background:var(--terra-tint);color:var(--terra-deep)}
+.tag.p2{background:var(--well);color:var(--ink-2)}
+.tag.ok{background:var(--sage-tint);color:var(--sage-deep)}
+
+pre{
+  background:var(--code-bg);color:var(--code-ink);border-radius:14px;
+  padding:16px;overflow-x:auto;font-family:var(--f-mono);font-size:12px;
+  line-height:1.6;margin:16px 0;-webkit-overflow-scrolling:touch;
+}
+pre .c{color:rgba(225,238,204,.42)}
+code{font-family:var(--f-mono);font-size:.9em}
+</style>
+<style>
+/* ============================================================
+   高保真原型：手机外壳与屏幕内部（固定光稿配色，不随文档主题反转
+   —— 原型展示的是产品本身的样子，产品 v1 只发浅色）
+   ============================================================ */
+.rail{
+  display:flex;gap:16px;overflow-x:auto;scroll-snap-type:x mandatory;
+  -webkit-overflow-scrolling:touch;padding:4px 0 16px;
+  scrollbar-width:thin;
+}
+.rail::-webkit-scrollbar{height:5px}
+.rail::-webkit-scrollbar-thumb{background:var(--line);border-radius:9px}
+.railitem{flex:0 0 auto;width:min(84vw,332px);scroll-snap-align:start}
+.railitem figcaption{
+  margin-top:11px;font-size:12.5px;line-height:1.5;color:var(--ink-2);
+}
+.railitem figcaption b{
+  display:block;color:var(--ink);font-weight:700;font-size:13.5px;margin-bottom:2px;
+}
+.railhint{
+  font-family:var(--f-mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;
+  color:var(--ink-3);display:flex;align-items:center;gap:7px;margin-bottom:10px;
+}
+.railhint::after{content:"";flex:1;height:1px;background:var(--line)}
+
+.phone{
+  --p:#f5ead8;      /* 底 paper */
+  --s:#fdf8ef;      /* 卡片，比底色亮：户外强光下更清晰 */
+  --w:#ebddc5;      /* 内嵌槽 well */
+  --i:#201e1d;      /* 主文字 */
+  --i2:#6b6255;     /* 次文字 */
+  --i3:#9a9083;     /* 三级文字 */
+  --ln:rgba(32,30,29,.10);
+  --tr:#c67139;     /* 赤陶 */
+  --trd:#8c491a;
+  --trt:#ffe1d0;
+  --sg:#7a8a5e;     /* 鼠尾草 */
+  --sgd:#56633f;
+  --sgt:#e1eecc;
+  --al:#b3402c;     /* 唯一新增语义色：故障/破坏 */
+  --nt:#2e2b25;
+  width:100%;background:var(--nt);border-radius:40px;padding:8px;
+  box-shadow:var(--shadow-l);position:relative;
+}
+.phone.dark{--p:#1b1917;--s:#272420;--w:#312d27;--i:#f2e8d8;--i2:#b5aa98;--i3:#8a8171;
+  --ln:rgba(245,234,216,.13);--tr:#e59459;--trd:#f6a06b;--trt:#4a2c17;
+  --sg:#a6b889;--sgd:#c3d2a5;--sgt:#31391f;--al:#e07a63}
+.scr{
+  background:var(--p);border-radius:33px;overflow:hidden;
+  color:var(--i);font-family:var(--f-body);font-size:13px;line-height:1.5;
+}
+
+/* 状态栏 */
+.mstat{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:11px 20px 5px;font-family:var(--f-mono);font-size:11px;font-weight:600;color:var(--i);
+}
+.mstat .sig{display:flex;align-items:flex-end;gap:2px}
+.mstat .sig i{width:3px;background:var(--i);border-radius:1px;display:block}
+.mstat .sig i:nth-child(1){height:4px}.mstat .sig i:nth-child(2){height:6px}
+.mstat .sig i:nth-child(3){height:8px}.mstat .sig i:nth-child(4){height:10px;opacity:.3}
+.mstat .bat{width:20px;height:10px;border:1px solid var(--i);border-radius:3px;position:relative;padding:1px}
+.mstat .bat b{display:block;height:100%;width:62%;background:var(--i);border-radius:1px}
+.mstat .bat::after{content:"";position:absolute;right:-3px;top:3px;width:2px;height:4px;background:var(--i);border-radius:0 1px 1px 0}
+
+/* 屏幕主体 */
+.mbody{padding:6px 15px 15px}
+.mbody.pad0{padding-bottom:0}
+.mhome{height:5px;width:96px;background:var(--i);opacity:.22;border-radius:9px;margin:8px auto 8px}
+
+/* 通用小件 */
+.meyebrow{font-family:var(--f-mono);font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--i3)}
+.mh1{font-family:var(--f-cjk);font-weight:700;font-size:23px;line-height:1.2;letter-spacing:-.02em;margin:5px 0 0}
+.mh2{font-family:var(--f-cjk);font-weight:700;font-size:15px;line-height:1.3;margin:0}
+.msec{display:flex;align-items:center;justify-content:space-between;margin:18px 0 8px}
+.msec .l{font-family:var(--f-mono);font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--i3)}
+.msec .r{font-family:var(--f-mono);font-size:10px;color:var(--i3)}
+.mcard{background:var(--s);border-radius:18px;padding:14px;border:1px solid var(--ln)}
+.mcard + .mcard{margin-top:9px}
+.mmuted{color:var(--i2);font-size:11.5px;line-height:1.5}
+.mmono{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.mdot{width:7px;height:7px;border-radius:50%;flex:0 0 auto}
+.mdot.ok{background:var(--sg);animation:pulse 2.4s ease-in-out infinite}
+.mdot.warn{background:transparent;border:2px solid var(--tr);width:9px;height:9px}
+.mdot.bad{background:var(--al);border-radius:2px;width:8px;height:8px}
+.mpill{
+  display:inline-flex;align-items:center;gap:5px;height:24px;padding:0 10px;
+  border-radius:999px;font-size:11px;font-weight:600;background:var(--w);color:var(--i2);
+}
+.mpill.tr{background:var(--tr);color:var(--p)}
+.mpill.trt{background:var(--trt);color:var(--trd)}
+.mpill.sgt{background:var(--sgt);color:var(--sgd)}
+.mbtn{
+  display:flex;align-items:center;justify-content:center;gap:7px;height:44px;
+  border-radius:999px;background:var(--tr);color:#fdf8ef;font-weight:700;font-size:14px;
+}
+.mbtn.ghost{background:transparent;border:1px solid var(--ln);color:var(--i2)}
+.mnum{
+  display:inline-flex;align-items:center;justify-content:center;
+  width:16px;height:16px;border-radius:50%;background:var(--nt);color:#f5ead8;
+  font-family:var(--f-mono);font-size:9.5px;font-weight:600;flex:0 0 auto;
+}
+.phone.dark .mnum{background:var(--tr);color:#1b1917}
+
+/* 焦点行 / 今日重心 */
+.mfocus{
+  margin-top:14px;padding:13px 15px;border-radius:18px;
+  background:var(--nt);color:#f5ead8;
+}
+.phone.dark .mfocus{background:var(--w)}
+.mfocus .k{font-family:var(--f-mono);font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;opacity:.55}
+.mfocus .v{font-family:var(--f-cjk);font-weight:700;font-size:16px;margin-top:4px;line-height:1.35}
+.mfocus .v u{text-decoration:none;box-shadow:inset 0 -7px 0 rgba(198,113,57,.55)}
+
+/* 脉搏卡 */
+.mpulse{background:var(--sgt);border:1px solid rgba(122,138,94,.25);border-radius:18px;padding:13px 14px}
+.phone.dark .mpulse{border-color:rgba(166,184,137,.28)}
+.mpulse .top{display:flex;align-items:center;gap:7px}
+.mpulse .top b{font-size:13px;font-weight:700}
+.mpulse .top .st{margin-left:auto;font-family:var(--f-mono);font-size:10px;color:var(--sgd);font-weight:600}
+.mspark{display:flex;gap:3px;align-items:flex-end;height:26px;margin-top:10px}
+.mspark i{flex:1;background:var(--sg);border-radius:2px;display:block;opacity:.45}
+.mspark i.hi{opacity:1}
+.mspark i.miss{background:var(--al);opacity:.75}
+.mpulse .foot{display:flex;justify-content:space-between;margin-top:8px;font-family:var(--f-mono);font-size:10px;color:var(--sgd)}
+
+/* 三件事 */
+.mtask{display:flex;gap:10px;align-items:flex-start;padding:11px 0;border-bottom:1px solid var(--ln)}
+.mtask:last-child{border-bottom:0}
+.mbox{width:19px;height:19px;border-radius:6px;border:1.5px solid var(--i3);flex:0 0 auto;margin-top:1px;position:relative}
+.mbox.on{background:var(--sg);border-color:var(--sg)}
+.mbox.on::after{content:"";position:absolute;left:5.5px;top:2px;width:5px;height:9px;border:solid #fdf8ef;border-width:0 2px 2px 0;transform:rotate(42deg)}
+.mtask .tx{flex:1;min-width:0}
+.mtask .tx b{font-weight:600;font-size:13px;display:block;line-height:1.4}
+.mtask.done .tx b{color:var(--i3);text-decoration:line-through}
+.mtask .est{font-family:var(--f-mono);font-size:10px;color:var(--i3);flex:0 0 auto;margin-top:2px}
+
+/* 行 / 列表 */
+.mrow{display:flex;align-items:center;gap:10px}
+.mrow + .mrow{margin-top:12px;padding-top:12px;border-top:1px solid var(--ln)}
+.mrow .grow{flex:1;min-width:0}
+.mrow .grow b{display:block;font-size:13px;font-weight:600;line-height:1.35}
+.mrow .grow span{display:block;font-size:11px;color:var(--i3);font-family:var(--f-mono);margin-top:2px}
+.mtrunc{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* 进度 */
+.mprog{height:5px;border-radius:99px;background:var(--w);overflow:hidden;margin-top:8px}
+.mprog i{display:block;height:100%;background:var(--tr);border-radius:99px}
+.mprog.sg i{background:var(--sg)}
+
+/* 底部 tab bar */
+.mtabs{
+  display:flex;align-items:flex-end;justify-content:space-around;
+  background:var(--s);border-top:1px solid var(--ln);padding:9px 6px 4px;position:relative;
+}
+.mtab{display:flex;flex-direction:column;align-items:center;gap:4px;width:52px}
+.mtab .ic{width:22px;height:22px;display:block;color:var(--i3)}
+.mtab span{font-size:9.5px;font-weight:600;color:var(--i3)}
+.mtab.on .ic,.mtab.on span{color:var(--tr)}
+.mcap{
+  width:50px;height:50px;border-radius:50%;background:var(--tr);
+  display:flex;align-items:center;justify-content:center;color:#fdf8ef;
+  margin-top:-22px;box-shadow:0 6px 16px rgba(198,113,57,.42);flex:0 0 auto;
+}
+.mcap svg{width:24px;height:24px}
+
+/* 首屏折线 */
+.mfold{
+  position:relative;margin:14px 0 2px;border-top:1px dashed var(--tr);
+}
+.mfold span{
+  position:absolute;right:0;top:-8px;background:var(--p);padding:0 6px;
+  font-family:var(--f-mono);font-size:9px;letter-spacing:.1em;color:var(--tr);text-transform:uppercase;
+}
+
+/* 骨架屏 */
+.msk{background:var(--w);border-radius:6px;display:block;overflow:hidden;position:relative}
+.msk::after{
+  content:"";position:absolute;inset:0;
+  background:linear-gradient(90deg,transparent,rgba(253,248,239,.65),transparent);
+  animation:shim 1.4s linear infinite;
+}
+@keyframes shim{from{transform:translateX(-100%)}to{transform:translateX(100%)}}
+
+/* 空状态插图 */
+.mempty{display:flex;flex-direction:column;align-items:center;text-align:center;padding:34px 20px}
+.mempty svg{width:64px;height:64px;color:var(--tr);opacity:.55}
+
+@media (prefers-reduced-motion:reduce){
+  *{animation-duration:.001ms !important;animation-iteration-count:1 !important;transition-duration:.001ms !important}
+}
+</style>
+<style>
+/* ---------- 文档专用组件 ---------- */
+.swatches{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:9px;margin:16px 0}
+.sw{border:1px solid var(--line);border-radius:13px;overflow:hidden;background:var(--surface)}
+.sw .chip{height:46px}
+.sw .meta{padding:7px 9px}
+.sw .meta b{display:block;font-size:11.5px;font-weight:700;line-height:1.3}
+.sw .meta span{display:block;font-family:var(--f-mono);font-size:9.5px;color:var(--ink-3);margin-top:1px}
+
+.steps{counter-reset:s;display:grid;gap:12px;margin:18px 0}
+.step{
+  background:var(--surface);border:1px solid var(--line);border-radius:16px;
+  padding:16px 18px 16px 52px;position:relative;
+}
+.step::before{
+  counter-increment:s;content:counter(s);
+  position:absolute;left:16px;top:16px;
+  width:24px;height:24px;border-radius:50%;background:var(--terra);color:var(--on-accent);
+  font-family:var(--f-mono);font-size:11px;font-weight:600;
+  display:flex;align-items:center;justify-content:center;
+}
+.step b{display:block;font-size:14.5px;margin-bottom:4px}
+.step p{margin:0;font-size:13.5px;color:var(--ink-2);line-height:1.55}
+
+.chk{list-style:none;padding:0;margin:16px 0}
+.chk li{
+  display:flex;gap:10px;align-items:flex-start;padding:11px 0;
+  border-bottom:1px solid var(--line-2);font-size:14px;line-height:1.5;margin:0;
+}
+.chk li:last-child{border-bottom:0}
+.chk li::before{
+  content:"";width:17px;height:17px;border-radius:5px;border:1.5px solid var(--terra);
+  flex:0 0 auto;margin-top:3px;
+}
+.chk li b{font-weight:700}
+
+.vs{display:grid;gap:14px;margin:18px 0}
+@media (min-width:640px){.vs{grid-template-columns:1fr 1fr}}
+.vsbox{border:1px solid var(--line);border-radius:16px;overflow:hidden;background:var(--surface)}
+.vsbox .hd{
+  padding:9px 14px;font-family:var(--f-mono);font-size:10px;letter-spacing:.12em;
+  text-transform:uppercase;font-weight:600;
+}
+.vsbox.bad .hd{background:var(--alert);color:var(--on-accent)}
+.vsbox.good .hd{background:var(--sage);color:var(--on-accent)}
+.vsbox .bd{padding:14px;font-size:13.5px;line-height:1.55;color:var(--ink-2)}
+.vsbox .bd b{color:var(--ink)}
+
+.fid{display:grid;gap:12px;margin:18px 0}
+@media (min-width:600px){.fid{grid-template-columns:repeat(3,1fr)}}
+.fidcol .lab{
+  font-family:var(--f-mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;
+  color:var(--ink-3);margin-bottom:8px;display:flex;gap:7px;align-items:center;
+}
+.fidcol .lab b{color:var(--terra-deep);font-weight:600}
+.fidbox{border-radius:16px;padding:12px;height:230px;border:1px solid var(--line);overflow:hidden}
+.fidbox.wire{background:var(--surface)}
+.fidbox.gray{background:#e9e6e0}
+.fidbox.color{background:#f5ead8}
+.wl{background:transparent;border:1.5px dashed var(--ink-3);border-radius:7px;opacity:.75}
+.gl{background:#c9c4bb;border-radius:7px}
+.gl.dk{background:#8f887e}
+.gl.lt{background:#dcd8d2}
+.stack{display:flex;flex-direction:column;gap:7px;height:100%}
+.stack .r{display:flex;gap:6px}
+
+.metricrow{display:grid;gap:10px;margin:16px 0}
+@media (min-width:560px){.metricrow{grid-template-columns:repeat(2,1fr)}}
+.metric{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:14px 16px}
+.metric .v{font-family:var(--f-display);font-size:27px;line-height:1.1;color:var(--terra);letter-spacing:0}
+.metric .k{font-size:12.5px;font-weight:600;margin-top:5px}
+.metric .d{font-size:11.5px;color:var(--ink-2);margin-top:3px;line-height:1.45}
+.metric.counter .v{color:var(--alert)}
+
+.foot{padding:40px 0 60px;font-size:12.5px;color:var(--ink-3);line-height:1.7}
+.foot a{color:var(--ink-2)}
+.srclist{font-size:12px;line-height:1.8;color:var(--ink-3)}
+.srclist a{display:inline-block}
+</style>
+<nav class="topnav">
+  <div class="navrail">
+    <a class="navpill on" href="#top"><em>00</em>结论</a>
+    <a class="navpill" href="#research"><em>01</em>调研</a>
+    <a class="navpill" href="#prd"><em>02</em>PRD</a>
+    <a class="navpill" href="#ui"><em>03</em>UI 规范</a>
+    <a class="navpill" href="#screens"><em>04</em>原型逐屏</a>
+    <a class="navpill" href="#plan"><em>05</em>实施 Plan</a>
+    <a class="navpill" href="#teach"><em>06</em>怎么设计</a>
+    <a class="navpill" href="#review"><em>07</em>验收单</a>
+  </div>
+</nav>
+
+<header class="hero wrap" id="top">
+  <span class="kick"><i class="d"></i>Product Design Doc · v1 草案</span>
+  <h1>案头 <span class="en">Deskside</span><br>你的移动个人工作台</h1>
+  <p class="sub">这不是把桌面工作台缩小塞进手机。它只解决<b>你离开工位的那六个瞬间</b>——通勤、会前两分钟、灵光一闪、等咖啡、想不起那条 prompt、睡前收尾。视觉沿用你仓库里已有的 <b>Organic 设计系统</b>，按手机重构。</p>
+
+  <div class="decide">
+    <div>
+      <dt>Scope</dt>
+      <dd>个人全域工作台<span>跨项目中枢，B9 只是其中一张卡</span></dd>
+    </div>
+    <div>
+      <dt>Visual</dt>
+      <dd>Organic 移动重构<span>米白 / 赤陶 / 鼠尾草，token 有增删</span></dd>
+    </div>
+    <div>
+      <dt>Stack</dt>
+      <dd>Vite + React + TS<span>PWA 加到主屏，8 天可上线</span></dd>
+    </div>
+  </div>
+
+  <div class="metaline">
+    <span>2026-08-31</span><span>·</span><span>作者：Claude Code</span><span>·</span>
+    <span>给 Lawrence review</span><span>·</span><span>阅读约 18 分钟</span>
+  </div>
+</header>
+
+<main class="wrap">
+
+<!-- ========== 00 结论先行 ========== -->
+<section class="sec" id="summary">
+  <div class="sechead">
+    <span class="eyebrow">Executive Summary</span>
+    <h2><span class="n">00</span>结论先行</h2>
+  </div>
+
+  <p class="lead">如果你只看一屏，看这一段。</p>
+
+  <div class="card">
+    <h4>一句话定义</h4>
+    <p style="margin-bottom:18px">案头是一个<strong>单用户、单人手机端的工作中枢</strong>：打开五秒内知道「服务活着吗、今天干什么、有什么要记的」，其余一切都是这三件事的延伸。</p>
+
+    <h4>四个 tab + 一个速记键</h4>
+    <p style="margin-bottom:18px"><em class="m">今日</em> · <em class="m">项目</em> · <em class="m">⊕ 速记</em> · <em class="m">剧本</em> · <em class="m">复盘</em>。速记在正中央凸起——这是拇指最省力的位置，也是手机相对电脑唯一的绝对优势。</p>
+
+    <h4>三个 P0，两周内可用</h4>
+    <p style="margin-bottom:18px">今日屏（三件事 + B9 脉搏）、速记、剧本速查。项目下钻、复盘、Agent 任务列为 P1/P2。<strong>先把三个模块做到你每天愿意开，再谈其它。</strong></p>
+
+    <h4>最大的设计赌注</h4>
+    <p style="margin-bottom:0">「平静优先于完整」。不显示逾期计数、不做红点轰炸、不猜你想干什么。同类工具死于让人焦虑，而不是死于功能少。</p>
+  </div>
+
+  <div class="note">
+    <span class="t">这份文档本身就是设计稿的一部分</span>
+    <p>你现在看到的排版、配色、卡片、圆角、字体分工，用的就是案头要用的那套 token。文档读起来舒服，说明这套系统在手机上立得住；读起来别扭，说明 token 要改——先在这里改。</p>
+  </div>
+</section>
+
+<!-- ========== 01 调研 ========== -->
+<section class="sec" id="research">
+  <div class="sechead">
+    <span class="eyebrow">Research</span>
+    <h2><span class="n">01</span>调研：先搞清楚什么会失败</h2>
+  </div>
+
+  <p class="lead">做工作台最容易犯的错，不是功能少，是<b>把桌面看板等比缩小</b>：模块一个不删，字号一路缩到 11px，最后自己都不打开。下面四条是这次调研里对我们最有约束力的结论。</p>
+
+  <h3>A. 信息密度有硬上限</h3>
+  <p>一份覆盖 75 项研究的综述里，<strong>信息过载是仪表盘的头号问题，影响 46.7% 的用户</strong>；实验显示模块数量到 <strong>9 个以上</strong> 人就开始被压垮，而人的工作记忆一次只能拿住 <strong>3–5 项</strong>。</p>
+  <div class="note sage">
+    <span class="t">落到设计上</span>
+    <p>首页模块数 <b>≤ 6</b>；首屏（不滚动）里需要你做决定的东西 <b>≤ 3 条</b>。今日三件事就是三条，不是三十条——多出来的沉到「稍后」。</p>
+  </div>
+
+  <h3>B. 拇指决定了导航长什么样</h3>
+  <p>单手握持时，拇指的舒适弧区大约是屏幕<strong>下方 40%</strong>。底部导航建议 <strong>3–5 项，4 项是甜点</strong>；触控目标不小于 <strong>44–48px</strong>；<strong>正中央那一格最省力</strong>（这也是 iOS 相机把快门放中间的原因）。</p>
+  <div class="note sage">
+    <span class="t">落到设计上</span>
+    <p>4 个 tab + 正中央一个凸起的速记键。所有高频操作（勾选、速记、复制 prompt）全部落在屏幕下半部；标题和状态可以放上面，因为那些是<b>读</b>的，不是<b>点</b>的。</p>
+  </div>
+
+  <h3>C. 「智能」在 2026 仍然不值得赌</h3>
+  <p>上下文感知（根据时间 / 会议 / 最近访问自动换内容）在 2026 年多数仍是实验性的：<strong>系统猜错的频率高到用户干脆把功能关掉</strong>。</p>
+  <div class="note sage">
+    <span class="t">落到设计上</span>
+    <p>只做<b>确定性</b>的时间切换：18:00 后首页底部把「晚间收尾」提上来，仅此而已。不做智能排序、不做「猜你想看」。你自己定的今日重心，永远压过任何算法。</p>
+  </div>
+
+  <h3>D. 好用的日程工具赢在「情绪」而不是功能</h3>
+  <p>Sunsama 这类产品被反复称赞的点是：<strong>它让你感到平静，而不是让你感到落后</strong>——会在你排太满时警告你、有明确的每日收尾仪式、界面极简。而不是列出你欠了多少。</p>
+  <div class="note sage">
+    <span class="t">落到设计上</span>
+    <p>三条硬规矩：<b>不显示逾期总数</b>；<b>不用红点角标</b>；<b>今日三件事的上限就是三件</b>，想加第四件必须先挪走一件。稀缺感由界面来强制。</p>
+  </div>
+
+  <h3>E. 视觉趋势正好站在 Organic 这边</h3>
+  <p>2026 的主流方向是<strong>编辑设计（editorial / print）影响下的柔和界面</strong>：低饱和中性色打底、小面积强调色、用<strong>层次和阴影而不是颜色</strong>做层级，排版占更大权重。你仓库里那套米白纸感 + 赤陶 + 鼠尾草，本来就在这条线上——<strong>这次不需要换风格，只需要换尺度。</strong></p>
+  <p>唯一一条与趋势相悖的选择：<strong>v1 不做深色模式</strong>（82% 的用户偏好深色）。理由见 PRD 的「非目标」，v2 再补，本文档 03 节给了深色 token 和一张深色原型作为储备。</p>
+
+  <div class="scroll">
+    <table>
+      <thead><tr><th>调研结论</th><th>它禁止我们做什么</th><th>对应设计</th></tr></thead>
+      <tbody>
+        <tr><td>模块 ≥9 会过载</td><td>禁止首页堆 10 个卡片</td><td>首页固定 6 模块</td></tr>
+        <tr><td>工作记忆 3–5 项</td><td>禁止首屏放长列表</td><td>今日三件事，硬上限</td></tr>
+        <tr><td>拇指区在下 40%</td><td>禁止把主按钮放右上角</td><td>底 tab + 中央速记键</td></tr>
+        <tr><td>触控 ≥44px</td><td>禁止密排小图标行</td><td>所有可点行高 ≥48px</td></tr>
+        <tr><td>上下文感知易猜错</td><td>禁止智能排序 / 猜意图</td><td>只按时间做确定切换</td></tr>
+        <tr><td>焦虑感杀死留存</td><td>禁止红点、逾期计数</td><td>平静优先原则</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+<!-- ========== 02 PRD ========== -->
+<section class="sec" id="prd">
+  <div class="sechead">
+    <span class="eyebrow">Product Requirements</span>
+    <h2><span class="n">02</span>PRD</h2>
+  </div>
+
+  <h3>2.1 用户只有一个人，这是特权</h3>
+  <p class="lead">使用者是<b>你自己</b>。这意味着可以做通用产品不敢做的强假设：不做权限、不做多人协作、不做引导教程、不做偏好设置、不考虑首次使用体验、不做数据迁移。<b>每砍掉一个通用性，就换来一份锋利。</b></p>
+  <p>但也带来一个真实风险：自建工具的死法通常不是「不好用」，而是「三周后没人维护」。所以 P0 范围必须小到<strong>两周内能上线并且你真的每天开</strong>。</p>
+
+  <h3>2.2 六个瞬间：功能是从场景里长出来的</h3>
+  <p>手机不是电脑的替代品，它是<strong>你不在工位时的那几分钟</strong>。这六个瞬间就是全部需求来源，每个瞬间对应一个入口：</p>
+
+  <div class="scroll">
+    <table>
+      <thead><tr><th>#</th><th>瞬间</th><th>你的原话大概是</th><th>入口</th><th>优先级</th></tr></thead>
+      <tbody>
+        <tr><td class="num">1</td><td>早上通勤</td><td>今天最重要的是哪件事</td><td>今日 · 重心 + 三件事</td><td><span class="tag p0">P0</span></td></tr>
+        <tr><td class="num">2</td><td>会前两分钟</td><td>B9 还活着吗，昨晚跑了几轮</td><td>今日 · 脉搏卡</td><td><span class="tag p0">P0</span></td></tr>
+        <tr><td class="num">3</td><td>灵光一闪</td><td>这个想法赶紧记下来</td><td>⊕ 速记</td><td><span class="tag p0">P0</span></td></tr>
+        <tr><td class="num">4</td><td>想不起来</td><td>上次那条评测 prompt 怎么写的</td><td>剧本 · 搜索</td><td><span class="tag p0">P0</span></td></tr>
+        <tr><td class="num">5</td><td>等咖啡</td><td>那几个 agent 跑完没</td><td>今日 · Agent 任务</td><td><span class="tag p1">P1</span></td></tr>
+        <tr><td class="num">6</td><td>睡前</td><td>今天干了啥，明天先做什么</td><td>复盘 · 晚间收尾</td><td><span class="tag p1">P1</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="note">
+    <span class="t">这张表是整份 PRD 的地基</span>
+    <p>后面任何一个功能，如果不能被指回上面某个瞬间，就不做。这是防止工作台长成四不像的唯一有效办法——包括未来你自己想加功能的时候，先回来看这张表。</p>
+  </div>
+
+  <h3>2.3 目标与非目标</h3>
+  <h4>目标</h4>
+  <ul>
+    <li><strong>五秒定位</strong>：打开到知道「现在该干嘛」，不超过五秒、不需要滚动。</li>
+    <li><strong>零摩擦捕捉</strong>：从想记一件事到记完，不超过三次点击、不需要选分类。</li>
+    <li><strong>服务可感</strong>：B9 的健康状态在首屏，不用打开电脑、不用翻日志。</li>
+    <li><strong>知识可取</strong>：仓库里 49 篇经验 + 15 条 prompt，在手机上能搜到并一键复制。</li>
+  </ul>
+
+  <h4>非目标（明确不做，写下来是为了以后不反悔）</h4>
+  <ul>
+    <li><strong>不做全功能编辑器。</strong>手机上只写「一句话」，长文永远回电脑。</li>
+    <li><strong>不做多人 / 分享 / 评论。</strong>单用户就是单用户。</li>
+    <li><strong>不在手机上改策略参数。</strong>权重、阈值这类改了会影响线上的东西，手机只读。危险操作降级为「标记，回桌面处理」。</li>
+    <li><strong>不做推送通知（v1）。</strong>通知是留存的毒药也是解药，先证明你自己会主动打开，再谈推送。</li>
+    <li><strong>不做深色模式（v1）。</strong>理由：这套 Organic 是纸感体系，深色版需要重调整套色阶对比度，属于一整轮设计工作，不该挤占 P0。token 和原型已备好，v2 一天能上。</li>
+    <li><strong>不做智能推荐 / 自动排序。</strong>见调研 C。</li>
+  </ul>
+
+  <h3>2.4 信息架构</h3>
+  <p>四个 tab，每个 tab 回答<strong>一个问句</strong>。如果一个 tab 说不出它回答的是哪个问句，它就不该存在。</p>
+
+  <div class="scroll">
+    <table>
+      <thead><tr><th>Tab</th><th>它回答的问句</th><th>首屏内容</th><th>下钻</th></tr></thead>
+      <tbody>
+        <tr><td><strong>今日</strong></td><td>现在该干嘛？出事了吗？</td><td>重心 · 脉搏 · 三件事 · 下一场会 · Agent</td><td>任务详情</td></tr>
+        <tr><td><strong>项目</strong></td><td>我手上几摊事，各卡在哪？</td><td>项目卡列表（B9 / 价格敏感度 / 指标体系）</td><td>B9 详情：数据 / 告警</td></tr>
+        <tr><td><strong>⊕ 速记</strong></td><td>（不是问句，是动作）</td><td>全屏输入 + 四类快捷芯片</td><td>—</td></tr>
+        <tr><td><strong>剧本</strong></td><td>我以前是怎么做的？</td><td>搜索 + Prompt 15 / 经验 49 / 文档</td><td>条目详情 + 复制</td></tr>
+        <tr><td><strong>复盘</strong></td><td>今天干了什么？明天先做什么？</td><td>今日完成 · 一句话日志 · 明日三件事</td><td>周报</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>2.5 功能清单</h3>
+  <div class="scroll">
+    <table>
+      <thead><tr><th>模块</th><th>功能</th><th>说明</th><th>优先级</th></tr></thead>
+      <tbody>
+        <tr><td rowspan="5"><strong>今日</strong></td><td>今日重心</td><td>一句话，手动设定，当天置顶不可折叠</td><td><span class="tag p0">P0</span></td></tr>
+        <tr><td>今日三件事</td><td>硬上限 3，可勾选，带预估时长</td><td><span class="tag p0">P0</span></td></tr>
+        <tr><td>B9 脉搏卡</td><td>上轮结果 / 下轮倒计时 / 近 7 轮条形</td><td><span class="tag p0">P0</span></td></tr>
+        <tr><td>下一场会议</td><td>只显示下一场 + 倒计时</td><td><span class="tag p1">P1</span></td></tr>
+        <tr><td>Agent 任务</td><td>在跑 / 已完成，点开看结果摘要</td><td><span class="tag p1">P1</span></td></tr>
+        <tr><td rowspan="3"><strong>速记</strong></td><td>一句话捕捉</td><td>打开即聚焦键盘，回车即存</td><td><span class="tag p0">P0</span></td></tr>
+        <tr><td>四类芯片</td><td>想法 / 待办 / 教训 / prompt，可后补</td><td><span class="tag p0">P0</span></td></tr>
+        <tr><td>语音转写</td><td>走系统听写，不自建</td><td><span class="tag p2">P2</span></td></tr>
+        <tr><td rowspan="3"><strong>剧本</strong></td><td>全文搜索</td><td>本地索引，无网也能搜</td><td><span class="tag p0">P0</span></td></tr>
+        <tr><td>一键复制</td><td>大按钮，复制后 toast 反馈</td><td><span class="tag p0">P0</span></td></tr>
+        <tr><td>最近使用</td><td>按你实际复制次数排</td><td><span class="tag p1">P1</span></td></tr>
+        <tr><td rowspan="2"><strong>项目</strong></td><td>项目卡列表</td><td>状态点 + 一行「卡在哪」+ 进度</td><td><span class="tag p1">P1</span></td></tr>
+        <tr><td>B9 下钻</td><td>今日 Top 事件 / 7 日指标 / 告警</td><td><span class="tag p1">P1</span></td></tr>
+        <tr><td rowspan="2"><strong>复盘</strong></td><td>晚间收尾</td><td>今日完成 + 一句话日志 + 定明日三件事</td><td><span class="tag p1">P1</span></td></tr>
+        <tr><td>周报生成</td><td>汇总七天日志，导出 markdown</td><td><span class="tag p2">P2</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>2.6 数据从哪来（这一节决定工程量）</h3>
+  <p>关键判断：<strong>能不建后端就不建后端。</strong>三类数据三种拿法：</p>
+
+  <div class="steps">
+    <div class="step">
+      <b>剧本内容 —— 构建时从仓库生成，零后端</b>
+      <p>Vite 构建时扫 <em class="m">docs/playbook/*.md</em> 和 <em class="m">docs/memory/*.md</em>，生成一份 <em class="m">playbook.json</em> 打进包里。好处：内容永远等于仓库，不会有第二份副本要维护；离线可搜；改文档 → 重新 build → 自动更新。</p>
+    </div>
+    <div class="step">
+      <b>B9 脉搏 —— 直接调现有 Flask API</b>
+      <p>复用 <em class="m">/api/runs</em> 与 <em class="m">/api/news</em>，只读。token 走环境变量注入，不硬编码进包。注意现网数据可能偏旧，脉搏卡要显式显示「数据时间」，别默认成当前时间（这条正是你 <em class="m">docs/memory/never-default-missing-data.md</em> 里的教训）。</p>
+    </div>
+    <div class="step">
+      <b>待办 / 速记 / 日志 —— 先本地，后同步</b>
+      <p>P0 用 <em class="m">localStorage</em> + 手动导出 JSON，零后端、当天可用。P1 再在现有 Flask 上加一个 <em class="m">/api/desk/*</em> blueprint（一张表就够），前端换个适配器即可，UI 不动。<strong>不要为了「优雅」在第一天就建后端。</strong></p>
+    </div>
+  </div>
+
+  <div class="note">
+    <span class="t">一个来自你自己事故报告的约束</span>
+    <p>B9 刚经历过整机丢失。所以案头的本地数据<strong>必须能一键导出</strong>，且默认每周提醒导出一次。不要让这个工作台变成第二个「只存在一台机器上」的东西。</p>
+  </div>
+
+  <h3>2.7 怎么算成功（含反指标）</h3>
+  <div class="metricrow">
+    <div class="metric">
+      <div class="v">≥5 天</div>
+      <div class="k">周主动打开天数</div>
+      <div class="d">一周七天里主动打开五天以上，才算进了日常</div>
+    </div>
+    <div class="metric">
+      <div class="v">&lt;5 秒</div>
+      <div class="k">首屏决策时间</div>
+      <div class="d">打开到知道「现在该干嘛」，自己掐表测</div>
+    </div>
+    <div class="metric">
+      <div class="v">≥70%</div>
+      <div class="k">速记 7 日处理率</div>
+      <div class="d">记下的东西有没有被真的消化，低于此说明速记变垃圾桶</div>
+    </div>
+    <div class="metric counter">
+      <div class="v">&gt;15 次</div>
+      <div class="k">反指标 · 日均打开次数</div>
+      <div class="d">超过就是设计失败：它变成了另一个让你刷的 app，而不是工具</div>
+    </div>
+  </div>
+
+  <h3>2.8 风险与缓解</h3>
+  <div class="scroll">
+    <table>
+      <thead><tr><th>风险</th><th>为什么会发生</th><th>缓解</th></tr></thead>
+      <tbody>
+        <tr><td>三周后弃用</td><td>自建工具的常态：功能铺太大，做不完就凉</td><td>P0 砍到三个模块，两周上线，先用起来</td></tr>
+        <tr><td>速记变垃圾桶</td><td>只进不出，越积越焦虑</td><td>复盘屏强制清理未处理项；监控 7 日处理率</td></tr>
+        <tr><td>数据两份不一致</td><td>把 prompt / 经验复制进 app</td><td>构建时从仓库读，绝不复制</td></tr>
+        <tr><td>手机误触改线上</td><td>手滑</td><td>手机端全部只读；破坏性操作只允许「标记」</td></tr>
+        <tr><td>token 泄漏</td><td>API token 打进前端包</td><td>只在构建期注入，且用只读 token；仓库不提交 .env</td></tr>
+        <tr><td>数据丢失</td><td>localStorage 被清 / 换机</td><td>一键导出 JSON + 每周提醒；P1 上后端同步</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+<!-- ========== 03 UI 规范 ========== -->
+<section class="sec" id="ui">
+  <div class="sechead">
+    <span class="eyebrow">Design System</span>
+    <h2><span class="n">03</span>UI 规范：Organic 的移动重构</h2>
+  </div>
+
+  <p class="lead">不换风格，换尺度。桌面那套 Organic 的<b>色相、字体、药丸形态全部保留</b>；改的是三件事：卡片的明度关系、字号阶梯、以及排版的中西分工。</p>
+
+  <h3>3.1 六条设计原则</h3>
+  <div class="steps">
+    <div class="step"><b>一屏一问句</b><p>每个页面必须能一句话说出「它回答什么」。说不出来的页面砍掉，说得出但答得慢的页面重排。</p></div>
+    <div class="step"><b>先摘要，后细节</b><p>状态先用<b>形态</b>表达（点 / 环 / 方块），数字是第二眼的事。一眼扫过去应该只看到「绿了还是没绿」。</p></div>
+    <div class="step"><b>拇指优先</b><p>可点的东西尽量往下放，读的东西可以往上放。行高 ≥48px，图标热区 ≥44px，相邻可点元素间距 ≥8px。</p></div>
+    <div class="step"><b>平静优先于完整</b><p>宁可少显示，不制造焦虑。没有红点、没有逾期计数、没有"你还有 27 项未完成"。</p></div>
+    <div class="step"><b>捕捉与整理分离</b><p>记的时候不要求分类，分类是复盘时的事。任何在捕捉环节加一步的设计都是错的。</p></div>
+    <div class="step"><b>手机不做危险事</b><p>破坏性 / 影响线上的操作，在手机上一律降级成「标记」，回桌面再执行。</p></div>
+  </div>
+
+  <h3>3.2 色板</h3>
+  <p>色相不变：纸感米白打底，赤陶是唯一强调色，鼠尾草承担「正向 / 已核实」。<strong>新增一个语义色 <em class="m">--alert</em> 砖红</strong>，只用于服务故障和破坏性操作，全站出现频率应低于 1%——它一出现就该扎眼。</p>
+
+  <div class="swatches">
+    <div class="sw"><div class="chip" style="background:#f5ead8"></div><div class="meta"><b>纸 Paper</b><span>#f5ead8</span></div></div>
+    <div class="sw"><div class="chip" style="background:#fdf8ef"></div><div class="meta"><b>卡片 Card</b><span>#fdf8ef</span></div></div>
+    <div class="sw"><div class="chip" style="background:#ebddc5"></div><div class="meta"><b>内嵌 Well</b><span>#ebddc5</span></div></div>
+    <div class="sw"><div class="chip" style="background:#c67139"></div><div class="meta"><b>赤陶 Accent</b><span>#c67139</span></div></div>
+    <div class="sw"><div class="chip" style="background:#8c491a"></div><div class="meta"><b>赤陶深 Ink</b><span>#8c491a</span></div></div>
+    <div class="sw"><div class="chip" style="background:#7a8a5e"></div><div class="meta"><b>鼠尾草 OK</b><span>#7a8a5e</span></div></div>
+    <div class="sw"><div class="chip" style="background:#b3402c"></div><div class="meta"><b>砖红 Alert</b><span>#b3402c</span></div></div>
+    <div class="sw"><div class="chip" style="background:#2e2b25"></div><div class="meta"><b>夜 Night</b><span>#2e2b25</span></div></div>
+  </div>
+
+  <h4>与桌面版的关键差异：卡片比底色亮，不是暗</h4>
+  <p>桌面 Organic 里卡片 <em class="m">#ebddc5</em> 比页面底 <em class="m">#f5ead8</em> <strong>暗</strong>。手机上必须反过来——<strong>卡片 <em class="m">#fdf8ef</em> 比底色亮</strong>，<em class="m">#ebddc5</em> 降级为「内嵌槽」（进度条底、输入框底）。</p>
+  <div class="note">
+    <span class="t">为什么改</span>
+    <p>手机会在户外强光下用。屏幕反光会整体抬高黑场，暗卡片和暗底色会糊成一片，层级消失。让卡片<b>比底色亮</b>，在阳光下依然能看出「这是一块」。这是移动端特有的物理约束，不是审美偏好。</p>
+  </div>
+
+  <div class="scroll">
+    <table>
+      <thead><tr><th>角色</th><th>桌面 Organic</th><th>案头（移动）</th><th>改的原因</th></tr></thead>
+      <tbody>
+        <tr><td>页面底</td><td class="num">#f5ead8</td><td class="num">#f5ead8</td><td>不变</td></tr>
+        <tr><td>卡片</td><td class="num">#ebddc5</td><td class="num">#fdf8ef</td><td>强光下保住层级</td></tr>
+        <tr><td>内嵌槽</td><td>—</td><td class="num">#ebddc5</td><td>原卡片色降级复用</td></tr>
+        <tr><td>卡片圆角</td><td class="num">32px</td><td class="num">18–20px</td><td>窄屏上大圆角吃掉可用宽度</td></tr>
+        <tr><td>正文</td><td class="num">15px</td><td class="num">13px（屏内）</td><td>屏内密度；文档正文仍 15.5px</td></tr>
+        <tr><td>语义色</td><td>赤陶 + 鼠尾草</td><td>+ 砖红 <span class="num">#b3402c</span></td><td>故障必须有独立色相</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>3.3 排版：中西分工规则</h3>
+  <p>Caprasimo <strong>只有拉丁字形</strong>。中文标题用它会静默回退到系统黑体——桌面站上这是「刻意如此」，但手机上标题占比高，回退会让整个界面失去性格。所以定一条硬规则：</p>
+
+  <div class="scroll">
+    <table>
+      <thead><tr><th>字体</th><th>只用在</th><th>绝不用在</th></tr></thead>
+      <tbody>
+        <tr><td><strong style="font-family:var(--f-display);font-weight:400">Caprasimo</strong></td><td>大数字、英文标题、品牌名、指标数值</td><td>中文标题、正文</td></tr>
+        <tr><td><strong style="font-family:var(--f-cjk)">PingFang SC</strong> 700</td><td>所有中文标题、卡片标题</td><td>英文数字（会出现难看的等宽差异）</td></tr>
+        <tr><td><strong style="font-family:var(--f-body)">Figtree</strong> 400/600</td><td>中英混排正文、按钮文字</td><td>需要对齐的数字列</td></tr>
+        <tr><td><strong style="font-family:var(--f-mono)">IBM Plex Mono</strong></td><td>时间、ID、耗时、eyebrow 小标签、代码</td><td>正文长句</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>所有数字列加 <em class="m">font-variant-numeric: tabular-nums</em>，否则「11:30」和「12:00」在列表里会左右跳。</p>
+
+  <h4>屏内字号阶梯（8 级，只用这 8 个）</h4>
+  <div class="scroll">
+    <table>
+      <thead><tr><th>名称</th><th>字号 / 行高</th><th>字重</th><th>用在</th></tr></thead>
+      <tbody>
+        <tr><td>display</td><td class="num">23 / 1.2</td><td>700</td><td>屏标题「早安，Lawrence」</td></tr>
+        <tr><td>focus</td><td class="num">16 / 1.35</td><td>700</td><td>今日重心那一句</td></tr>
+        <tr><td>title</td><td class="num">15 / 1.3</td><td>700</td><td>卡片标题</td></tr>
+        <tr><td>body</td><td class="num">13 / 1.5</td><td>600</td><td>列表主文案</td></tr>
+        <tr><td>sub</td><td class="num">11.5 / 1.5</td><td>400</td><td>次要说明</td></tr>
+        <tr><td>meta</td><td class="num">10 / 1.4</td><td>500 mono</td><td>时间、耗时、计数</td></tr>
+        <tr><td>eyebrow</td><td class="num">9.5 / 1</td><td>500 mono</td><td>分区标签，大写 +.14em</td></tr>
+        <tr><td>tab</td><td class="num">9.5 / 1</td><td>600</td><td>底部 tab 文字</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>3.4 间距与网格</h3>
+  <p>4pt 基准，只用 <em class="m">4 / 8 / 12 / 14 / 18 / 24 / 32</em> 七个值。屏幕左右安全边距 <strong>15px</strong>（在 iPhone 上让 344 宽的内容区左右各留一指），卡片内边距 <strong>14px</strong>，卡片间距 <strong>9px</strong>，分区间距 <strong>18px</strong>。</p>
+  <p>底部必须处理刘海机安全区：</p>
+  <pre><span class="c">/* index.html 的 viewport 必须带 viewport-fit=cover */</span>
+&lt;meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"&gt;
+
+<span class="c">/* tab bar 垫上系统 home indicator 的高度 */</span>
+.tabbar{ padding-bottom: calc(6px + env(safe-area-inset-bottom)); }
+<span class="c">/* 顶部同理，standalone 模式下状态栏会压上来 */</span>
+.appbar{ padding-top: calc(10px + env(safe-area-inset-top)); }</pre>
+
+  <h3>3.5 状态编码：不靠颜色单打独斗</h3>
+  <p>色盲用户、强光、截图转灰——任何一种情况下颜色都可能失效。所以三种状态<strong>同时用形状区分</strong>：</p>
+  <div class="card">
+    <div style="display:flex;flex-wrap:wrap;gap:22px;align-items:center;font-size:13.5px">
+      <span style="display:flex;align-items:center;gap:9px"><i style="width:8px;height:8px;border-radius:50%;background:#7a8a5e;display:block"></i><b>正常</b> 实心圆 · 鼠尾草</span>
+      <span style="display:flex;align-items:center;gap:9px"><i style="width:10px;height:10px;border-radius:50%;border:2px solid #c67139;display:block"></i><b>注意</b> 空心环 · 赤陶</span>
+      <span style="display:flex;align-items:center;gap:9px"><i style="width:9px;height:9px;border-radius:2px;background:#b3402c;display:block"></i><b>故障</b> 方块 · 砖红</span>
+    </div>
+  </div>
+  <p style="margin-top:14px">另外：只有「正常」有脉动动画。故障状态<strong>静止不动</strong>——反直觉但正确，动的东西看起来像还在运转，静止的方块才像死掉的进程。</p>
+
+  <h3>3.6 组件清单</h3>
+  <div class="scroll">
+    <table>
+      <thead><tr><th>组件</th><th>规格</th><th>状态</th></tr></thead>
+      <tbody>
+        <tr><td>卡片 Card</td><td>bg 卡片色 · radius 18 · 1px 描边 · padding 14</td><td>默认 / 可点（按下缩放 .98）</td></tr>
+        <tr><td>主按钮 Button</td><td>h44 · radius 999 · 赤陶底 · 700</td><td>默认 / 按下 / 禁用 / loading</td></tr>
+        <tr><td>幽灵按钮</td><td>h44 · radius 999 · 描边 · 无底色</td><td>默认 / 按下</td></tr>
+        <tr><td>芯片 Chip</td><td>h24 · radius 999 · 11px/600</td><td>中性 / 赤陶 / 鼠尾草 / 选中</td></tr>
+        <tr><td>勾选框</td><td>19×19 · radius 6 · 1.5px 描边</td><td>未选 / 已选（鼠尾草填充）</td></tr>
+        <tr><td>状态点</td><td>见 3.5</td><td>正常 / 注意 / 故障</td></tr>
+        <tr><td>条形图 Spark</td><td>h26 · 3px 间隙 · 未达标条用砖红</td><td>—</td></tr>
+        <tr><td>进度条</td><td>h5 · radius 99 · 内嵌槽底</td><td>—</td></tr>
+        <tr><td>Tab bar</td><td>4 项 + 中央凸起 50px 圆钮</td><td>选中 / 未选</td></tr>
+        <tr><td>Toast</td><td>底部浮起 · 1.8s 自动消失</td><td>成功 / 失败</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>3.7 动效</h3>
+  <div class="scroll">
+    <table>
+      <thead><tr><th>场景</th><th>时长</th><th>缓动</th></tr></thead>
+      <tbody>
+        <tr><td>微交互（按下、勾选）</td><td class="num">120ms</td><td class="num">ease-out</td></tr>
+        <tr><td>元素进出（toast、展开）</td><td class="num">200ms</td><td class="num">cubic-bezier(.2,.8,.2,1)</td></tr>
+        <tr><td>页面转场</td><td class="num">280ms</td><td class="num">cubic-bezier(.2,.8,.2,1)</td></tr>
+        <tr><td>脉动点</td><td class="num">2.4s 循环</td><td class="num">ease-in-out</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="note">
+    <span class="t">两条来自你自己踩坑记录的红线，这次照抄</span>
+    <p><b>一、不要用毛玻璃 <em class="m">backdrop-filter</em></b>，尤其不要用在含无限循环动画的容器上——脉动绿点 + 高斯模糊会让浏览器每帧重算，整页闪烁。案头的顶栏和 tab bar 一律<b>不透明纯色</b>。<br>
+    <b>二、固定定位的 tab bar 加 <em class="m">transform:translateZ(0)</em> + <em class="m">contain:layout paint</em></b>，防止部分机型滚动撕裂。<br>
+    另外全局加 <em class="m">@media (prefers-reduced-motion:reduce)</em> 兜底。</p>
+  </div>
+
+  <h3>3.8 无障碍与手感底线</h3>
+  <ul>
+    <li>正文对比度 ≥ 4.5:1，大字 ≥ 3:1。<em class="m">#6b6255</em> 在纸底上是 5.9:1，<em class="m">#9a9083</em> 只有 2.9:1——<strong>三级文字只能用于装饰性信息，不能承载唯一信息</strong>。</li>
+    <li>触控目标 ≥ 44×44，相邻间隙 ≥ 8px。</li>
+    <li>状态不只用颜色表达（见 3.5）。</li>
+    <li><em class="m">:focus-visible</em> 用赤陶 2px 描边，不留浏览器默认蓝框。</li>
+    <li>所有图标按钮带 <em class="m">aria-label</em>；勾选框用真的 <em class="m">&lt;input type="checkbox"&gt;</em> 而不是 div。</li>
+    <li>动态字号：用 <em class="m">rem</em> 而不是 <em class="m">px</em> 定字号，尊重系统放大设置。</li>
+  </ul>
+</section>
+<style>
+.mnav{background:var(--s);border-top:1px solid var(--ln)}
+.mnav .mtabs{border-top:0;background:transparent}
+.annot{list-style:none;padding:0;margin:16px 0 0;counter-reset:a}
+.annot li{
+  display:flex;gap:11px;align-items:flex-start;padding:10px 0;
+  border-bottom:1px solid var(--line-2);font-size:13.5px;line-height:1.55;margin:0;
+}
+.annot li:last-child{border-bottom:0}
+.annot li::before{
+  counter-increment:a;content:counter(a);
+  width:19px;height:19px;border-radius:50%;background:var(--night);color:#f5ead8;
+  font-family:var(--f-mono);font-size:10px;font-weight:600;
+  display:flex;align-items:center;justify-content:center;flex:0 0 auto;margin-top:2px;
+}
+.annot li b{font-weight:700}
+.annot li span{color:var(--ink-2)}
+.screenblock{margin:34px 0 0}
+.screenblock > .sbhead{display:flex;align-items:baseline;gap:10px;margin-bottom:14px;flex-wrap:wrap}
+.screenblock > .sbhead h3{margin:0}
+.screenblock > .sbhead .moment{
+  font-family:var(--f-mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;
+  background:var(--terra-tint);color:var(--terra-deep);padding:3px 9px;border-radius:999px;
+}
+.solo{display:flex;justify-content:center;margin:0 0 4px}
+.solo .phone{max-width:332px}
+</style>
+
+<!-- ========== 04 原型逐屏 ========== -->
+<section class="sec" id="screens">
+  <div class="sechead">
+    <span class="eyebrow">High-fidelity Prototype</span>
+    <h2><span class="n">04</span>原型逐屏，带标注</h2>
+  </div>
+
+  <p class="lead">下面每一屏都是<b>真的 HTML/CSS 画的</b>，不是图片——你在手机上看到的间距、字号、圆角，就是实现时要照着做的数值。左右滑动可以看更多屏。</p>
+
+  <!-- ---- 屏 1 今日 ---- -->
+  <div class="screenblock">
+    <div class="sbhead">
+      <h3>屏 1 · 今日</h3>
+      <span class="moment">瞬间 1 + 2 · 通勤 / 会前</span>
+    </div>
+    <p>整个产品的门面。一屏之内回答两个问题：<strong>服务活着吗</strong>、<strong>今天干什么</strong>。虚线是首屏折线——线以上的内容必须在不滚动时就说完话。</p>
+
+    <div class="solo">
+      <div class="phone">
+        <div class="scr">
+          <div class="mstat">
+            <span class="mmono">8:12</span>
+            <span style="display:flex;align-items:center;gap:5px">
+              <span class="sig"><i></i><i></i><i></i><i></i></span>
+              <span class="bat"><b></b></span>
+            </span>
+          </div>
+          <div class="mbody">
+            <div class="meyebrow">八月三十一日 · 周一</div>
+            <div class="mh1">早安，Lawrence</div>
+
+            <div class="mfocus">
+              <div class="k">今天的重心 <span class="mnum" style="margin-left:4px">1</span></div>
+              <div class="v">把 B9 <u>迁回云上</u>，别再跑在那台 Mac 上</div>
+            </div>
+
+            <div class="msec"><span class="l">服务脉搏</span><span class="r">B9 · 30 min/轮</span></div>
+            <div class="mpulse">
+              <div class="top">
+                <i class="mdot ok"></i>
+                <b>抓取管线正常</b>
+                <span class="st">上轮 11:30 <span class="mnum">2</span></span>
+              </div>
+              <div class="mspark">
+                <i style="height:62%"></i><i style="height:78%"></i><i style="height:54%"></i>
+                <i class="miss" style="height:18%"></i><i style="height:70%"></i>
+                <i style="height:86%"></i><i class="hi" style="height:100%"></i>
+              </div>
+              <div class="foot"><span>近 7 轮 · 1 轮空跑</span><span>下轮 12:00 · 18 分后</span></div>
+            </div>
+
+            <div class="msec"><span class="l">今日三件事 <span class="mnum">3</span></span><span class="r">1 / 3 完成</span></div>
+            <div class="mcard" style="padding:4px 14px">
+              <div class="mtask">
+                <span class="mbox"></span>
+                <span class="tx"><b>复核 VM 重建 runbook</b><span class="mmuted">事故报告第 4 节，Alex 等着</span></span>
+                <span class="est">45m</span>
+              </div>
+              <div class="mtask">
+                <span class="mbox"></span>
+                <span class="tx"><b>回 Alex 的 API 字段问题</b></span>
+                <span class="est">10m</span>
+              </div>
+              <div class="mtask done">
+                <span class="mbox on"></span>
+                <span class="tx"><b>指标体系 v2 发 Confluence</b></span>
+                <span class="est">—</span>
+              </div>
+            </div>
+
+            <div class="mfold"><span>首屏折线</span></div>
+
+            <div class="msec"><span class="l">下一场 <span class="mnum">4</span></span><span class="r">2 小时后</span></div>
+            <div class="mcard">
+              <div class="mrow">
+                <i class="mdot warn"></i>
+                <span class="grow"><b>策略周会</b><span>14:00–15:00 · 需要带 v2 指标</span></span>
+              </div>
+            </div>
+
+            <div class="msec"><span class="l">Agent 在跑 <span class="mnum">5</span></span><span class="r">2</span></div>
+            <div class="mcard">
+              <div class="mrow">
+                <span class="grow"><b class="mtrunc">回填 7 月事件分数</b><span>已跑 22 分 · 12,840 / 18,900</span>
+                  <span class="mprog"><i style="width:68%"></i></span>
+                </span>
+              </div>
+              <div class="mrow">
+                <span class="grow"><b class="mtrunc">竞品事件覆盖对比</b><span>完成于 07:56</span></span>
+                <span class="mpill sgt">看结果</span>
+              </div>
+            </div>
+          </div>
+          <div class="mnav">
+            <div class="mtabs">
+              <div class="mtab on">
+                <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3.5l9 7"/><path d="M5.5 9.5V20.5h13V9.5"/></svg>
+                <span>今日</span>
+              </div>
+              <div class="mtab">
+                <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 21 8l-9 5-9-5 9-5Z"/><path d="M3 16l9 5 9-5"/></svg>
+                <span>项目</span>
+              </div>
+              <div class="mcap"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5.5v13M5.5 12h13"/></svg></div>
+              <div class="mtab">
+                <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4.5h9a3 3 0 0 1 3 3v12a2.5 2.5 0 0 0-2.5-2.5H4Z"/><path d="M20 4.5h-2.5a3 3 0 0 0-1.5.4V19a2.5 2.5 0 0 1 2.5-2h1.5Z"/></svg>
+                <span>剧本</span>
+              </div>
+              <div class="mtab">
+                <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.5 14.5A8.5 8.5 0 0 1 9.5 3.5a8.5 8.5 0 1 0 11 11Z"/></svg>
+                <span>复盘</span>
+              </div>
+            </div>
+            <div class="mhome"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <ol class="annot">
+      <li><b>今日重心用深色反底。</b><span>全屏唯一的深色块，视觉上一锤定音。一天只允许一句，改它需要一次刻意的点击——稀缺感由交互制造。</span></li>
+      <li><b>状态先形态、后数字。</b><span>脉动实心点 + 「正常」二字先到眼睛，「上轮 11:30」是第二眼的信息。七根条形里那根砖红的空跑，不看数字也能发现。</span></li>
+      <li><b>三件事就是三件。</b><span>没有「+ 添加」按钮悬在这里勾引你加第四件。要加，得先去掉一件——这个摩擦是故意的。</span></li>
+      <li><b>会议只显示下一场。</b><span>不是今天全部日程。空心环表示「需要准备」，一行副文案直接写清要带什么。</span></li>
+      <li><b>Agent 卡承接「等咖啡」瞬间。</b><span>在跑的给进度条，跑完的给一个明确动作（看结果）。不给通知，你想起来才看。</span></li>
+    </ol>
+  </div>
+<style>
+.mkbd{background:var(--w);padding:7px 4px 4px;border-top:1px solid var(--ln)}
+.mkbd .kr{display:flex;gap:4px;justify-content:center;margin-bottom:5px}
+.mkbd .k{
+  flex:1;height:26px;background:var(--s);border-radius:5px;
+  box-shadow:0 1px 0 rgba(32,30,29,.18);
+}
+.mkbd .k.w{flex:1.6}.mkbd .k.dk{background:var(--i3);opacity:.5;box-shadow:none}
+.mkbd .k.go{background:var(--tr);flex:2.2}
+.mchips{display:flex;gap:6px;flex-wrap:wrap;margin-top:12px}
+.msearch{
+  display:flex;align-items:center;gap:8px;height:38px;padding:0 13px;
+  background:var(--w);border-radius:999px;color:var(--i3);font-size:12.5px;
+}
+.msearch svg{width:14px;height:14px;flex:0 0 auto}
+.mgrp{display:flex;gap:7px;margin-top:12px}
+.mgrp .g{flex:1;background:var(--s);border:1px solid var(--ln);border-radius:14px;padding:10px 11px;text-align:left}
+.mgrp .g .n{font-family:var(--f-display);font-size:19px;color:var(--tr);line-height:1}
+.mgrp .g .t{font-size:10.5px;color:var(--i2);margin-top:3px;font-weight:600}
+.mquote{
+  background:var(--w);border-radius:12px;padding:11px 12px;font-family:var(--f-mono);
+  font-size:10.5px;line-height:1.65;color:var(--i2);white-space:pre-wrap;
+}
+.mbig{font-family:var(--f-display);font-size:34px;color:var(--tr);line-height:1}
+</style>
+
+<div class="screenblock">
+  <div class="sbhead">
+    <h3>屏 2–4 · 项目 / B9 下钻 / 速记</h3>
+    <span class="moment">左右滑动</span>
+  </div>
+  <div class="railhint">Swipe</div>
+  <div class="rail">
+
+    <!-- 屏 2 项目 -->
+    <figure class="railitem" style="margin:0">
+      <div class="phone">
+        <div class="scr">
+          <div class="mstat"><span class="mmono">13:58</span><span style="display:flex;align-items:center;gap:5px"><span class="sig"><i></i><i></i><i></i><i></i></span><span class="bat"><b></b></span></span></div>
+          <div class="mbody">
+            <div class="meyebrow">三摊事</div>
+            <div class="mh1">项目</div>
+
+            <div class="mcard" style="margin-top:16px">
+              <div class="mrow">
+                <i class="mdot warn"></i>
+                <span class="grow"><b>B9 推荐策略</b><span>卡在：等 GCP 配额审批</span></span>
+                <span class="mpill trt">主线</span>
+              </div>
+              <span class="mprog"><i style="width:74%"></i></span>
+              <div class="mmuted" style="margin-top:8px;display:flex;justify-content:space-between">
+                <span>阶段 9 / 12</span><span class="mmono">更新于 2 小时前</span>
+              </div>
+            </div>
+
+            <div class="mcard">
+              <div class="mrow">
+                <i class="mdot ok"></i>
+                <span class="grow"><b>价格敏感度研究</b><span>卡在：无，等评审排期</span></span>
+              </div>
+              <span class="mprog sg"><i style="width:92%"></i></span>
+              <div class="mmuted" style="margin-top:8px;display:flex;justify-content:space-between">
+                <span>报告已交付</span><span class="mmono">更新于 3 天前</span>
+              </div>
+            </div>
+
+            <div class="mcard">
+              <div class="mrow">
+                <i class="mdot bad"></i>
+                <span class="grow"><b>指标体系 v2</b><span>卡在：口径和数据部门没对齐</span></span>
+              </div>
+              <span class="mprog"><i style="width:38%"></i></span>
+              <div class="mmuted" style="margin-top:8px;display:flex;justify-content:space-between">
+                <span>阻塞 6 天</span><span class="mmono">更新于 6 天前</span>
+              </div>
+            </div>
+
+            <div class="msec"><span class="l">归档</span><span class="r">4</span></div>
+          </div>
+          <div class="mnav">
+            <div class="mtabs">
+              <div class="mtab"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3.5l9 7"/><path d="M5.5 9.5V20.5h13V9.5"/></svg><span>今日</span></div>
+              <div class="mtab on"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 21 8l-9 5-9-5 9-5Z"/><path d="M3 16l9 5 9-5"/></svg><span>项目</span></div>
+              <div class="mcap"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5.5v13M5.5 12h13"/></svg></div>
+              <div class="mtab"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4.5h9a3 3 0 0 1 3 3v12a2.5 2.5 0 0 0-2.5-2.5H4Z"/><path d="M20 4.5h-2.5a3 3 0 0 0-1.5.4V19a2.5 2.5 0 0 1 2.5-2h1.5Z"/></svg><span>剧本</span></div>
+              <div class="mtab"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.5 14.5A8.5 8.5 0 0 1 9.5 3.5a8.5 8.5 0 1 0 11 11Z"/></svg><span>复盘</span></div>
+            </div>
+            <div class="mhome"></div>
+          </div>
+        </div>
+      </div>
+      <figcaption><b>屏 2 · 项目</b>每张卡只回答一句话：<strong>现在卡在哪</strong>。进度条是次要信息，"卡点"才是你手机上真正想看的东西。</figcaption>
+    </figure>
+
+    <!-- 屏 3 B9 下钻 -->
+    <figure class="railitem" style="margin:0">
+      <div class="phone">
+        <div class="scr">
+          <div class="mstat"><span class="mmono">13:59</span><span style="display:flex;align-items:center;gap:5px"><span class="sig"><i></i><i></i><i></i><i></i></span><span class="bat"><b></b></span></span></div>
+          <div class="mbody">
+            <div style="display:flex;align-items:center;gap:9px">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--i2)"><path d="M15 5l-7 7 7 7"/></svg>
+              <span class="meyebrow">项目 / B9</span>
+            </div>
+            <div class="mh1" style="margin-top:6px">推荐策略服务</div>
+            <div class="mchips">
+              <span class="mpill tr">概览</span><span class="mpill">数据</span><span class="mpill">告警 1</span>
+            </div>
+
+            <div class="msec"><span class="l">今日入库</span><span class="r">截至 13:30</span></div>
+            <div class="mcard">
+              <div style="display:flex;gap:14px;align-items:flex-end">
+                <div><div class="mbig">312</div><div class="mmuted" style="margin-top:2px">抓取</div></div>
+                <div><div class="mbig">47</div><div class="mmuted" style="margin-top:2px">入库</div></div>
+                <div><div class="mbig" style="color:var(--sg)">S 3</div><div class="mmuted" style="margin-top:2px">高分事件</div></div>
+              </div>
+            </div>
+
+            <div class="msec"><span class="l">今日 Top 事件</span><span class="r">按 v6 排序</span></div>
+            <div class="mcard">
+              <div class="mrow">
+                <span style="width:21px;height:21px;border-radius:6px;background:#ffe1d0;color:#402310;display:flex;align-items:center;justify-content:center;font-family:var(--f-mono);font-size:10.5px;font-weight:700;flex:0 0 auto">S</span>
+                <span class="grow"><b>SEC 批准现货 SOL ETF</b><span>92.4 · CoinDesk · 11:04</span></span>
+              </div>
+              <div class="mrow">
+                <span style="width:21px;height:21px;border-radius:6px;background:#fff2eb;color:#643312;display:flex;align-items:center;justify-content:center;font-family:var(--f-mono);font-size:10.5px;font-weight:700;flex:0 0 auto">A</span>
+                <span class="grow"><b>某交易所暂停提现</b><span>81.7 · 吴说 · 09:38</span></span>
+              </div>
+              <div class="mrow">
+                <span style="width:21px;height:21px;border-radius:6px;background:#e1eecc;color:#272e1b;display:flex;align-items:center;justify-content:center;font-family:var(--f-mono);font-size:10.5px;font-weight:700;flex:0 0 auto">B</span>
+                <span class="grow"><b>美联储纪要偏鹰</b><span>68.2 · CNBC · 07:15</span></span>
+              </div>
+            </div>
+
+            <div class="msec"><span class="l">告警</span><span class="r">1 条未读</span></div>
+            <div class="mcard" style="border-color:rgba(179,64,44,.4)">
+              <div class="mrow">
+                <i class="mdot bad"></i>
+                <span class="grow"><b>03:30 那轮空跑</b><span>enrich worker 掉线 11 分钟</span></span>
+              </div>
+              <div style="display:flex;gap:7px;margin-top:11px">
+                <span class="mpill" style="flex:1;justify-content:center;height:34px">标记待处理</span>
+                <span class="mpill" style="flex:1;justify-content:center;height:34px">已知晓</span>
+              </div>
+            </div>
+          </div>
+          <div class="mnav"><div class="mtabs">
+            <div class="mtab"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3.5l9 7"/><path d="M5.5 9.5V20.5h13V9.5"/></svg><span>今日</span></div>
+            <div class="mtab on"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 21 8l-9 5-9-5 9-5Z"/><path d="M3 16l9 5 9-5"/></svg><span>项目</span></div>
+            <div class="mcap"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5.5v13M5.5 12h13"/></svg></div>
+            <div class="mtab"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4.5h9a3 3 0 0 1 3 3v12a2.5 2.5 0 0 0-2.5-2.5H4Z"/><path d="M20 4.5h-2.5a3 3 0 0 0-1.5.4V19a2.5 2.5 0 0 1 2.5-2h1.5Z"/></svg><span>剧本</span></div>
+            <div class="mtab"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.5 14.5A8.5 8.5 0 0 1 9.5 3.5a8.5 8.5 0 1 0 11 11Z"/></svg><span>复盘</span></div>
+          </div><div class="mhome"></div></div>
+        </div>
+      </div>
+      <figcaption><b>屏 3 · B9 下钻</b>手机上<strong>只读</strong>。告警的两个动作是「标记待处理」和「已知晓」——都不改线上任何东西。</figcaption>
+    </figure>
+
+    <!-- 屏 4 速记 -->
+    <figure class="railitem" style="margin:0">
+      <div class="phone">
+        <div class="scr">
+          <div class="mstat"><span class="mmono">21:07</span><span style="display:flex;align-items:center;gap:5px"><span class="sig"><i></i><i></i><i></i><i></i></span><span class="bat"><b></b></span></span></div>
+          <div class="mbody" style="padding-bottom:0">
+            <div style="display:flex;align-items:center;justify-content:space-between">
+              <span class="meyebrow">记一笔</span>
+              <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="color:var(--i3)"><path d="M6 6l12 12M18 6 6 18"/></svg>
+            </div>
+            <div style="font-family:var(--f-cjk);font-weight:700;font-size:17px;line-height:1.45;margin-top:16px">
+              去重阈值 0.82 对宏观类事件偏松，同一件事换个说法就漏了<span style="display:inline-block;width:2px;height:19px;background:var(--tr);vertical-align:-3px;margin-left:2px;animation:pulse 1.1s ease-in-out infinite"></span>
+            </div>
+            <div class="mchips">
+              <span class="mpill">💡 想法</span>
+              <span class="mpill">✓ 待办</span>
+              <span class="mpill trt">⚑ 教训</span>
+              <span class="mpill">⌘ prompt</span>
+            </div>
+            <div class="mmuted" style="margin-top:12px">分类可以现在选，也可以晚上复盘时再补。</div>
+            <div style="margin-top:14px"><div class="mbtn">存下来</div></div>
+            <div class="mmuted" style="text-align:center;margin-top:9px">今天已记 3 条 · 未处理 5 条</div>
+          </div>
+          <div class="mkbd">
+            <div class="kr"><span class="k"></span><span class="k"></span><span class="k"></span><span class="k"></span><span class="k"></span><span class="k"></span><span class="k"></span><span class="k"></span><span class="k"></span><span class="k"></span></div>
+            <div class="kr"><span class="k"></span><span class="k"></span><span class="k"></span><span class="k"></span><span class="k"></span><span class="k"></span><span class="k"></span><span class="k"></span><span class="k"></span></div>
+            <div class="kr"><span class="k dk w"></span><span class="k"></span><span class="k"></span><span class="k"></span><span class="k"></span><span class="k"></span><span class="k"></span><span class="k dk w"></span></div>
+            <div class="kr"><span class="k dk"></span><span class="k dk"></span><span class="k" style="flex:4"></span><span class="k go"></span></div>
+            <div class="mhome" style="margin-bottom:2px"></div>
+          </div>
+        </div>
+      </div>
+      <figcaption><b>屏 4 · 速记</b>键盘吃掉了 45% 的屏幕——所以输入框必须<strong>顶在最上面</strong>。分类芯片放在输入下方且<strong>全部可跳过</strong>：捕捉与整理分离。</figcaption>
+    </figure>
+  </div>
+
+  <ol class="annot">
+    <li><b>项目卡的主角是「卡点」不是「进度」。</b><span>进度条谁都会做，但你在手机上真正想知道的是这摊事现在被什么堵住了。所以那行字用主字号，进度条降级成 5px 细线。</span></li>
+    <li><b>三种状态点在同一屏出现，形状差异一眼可辨。</b><span>实心圆 / 空心环 / 方块。截成灰度图依然分得清——这是 3.5 节规则的实际检验。</span></li>
+    <li><b>下钻页保留返回箭头 + 面包屑。</b><span>「项目 / B9」，因为 tab 切换会重置栈，用户需要知道自己在哪一层。</span></li>
+    <li><b>速记页没有底部 tab。</b><span>它是一个覆盖全屏的 sheet，不是第五个 tab。进来只能存或关，没有第三条路——这是它零摩擦的来源。</span></li>
+    <li><b>光标是活的。</b><span>进入速记页自动聚焦并唤起键盘，省掉一次点击。这一次点击的价值，比这一屏其它所有设计加起来都大。</span></li>
+  </ol>
+</div>
+<div class="screenblock">
+  <div class="sbhead">
+    <h3>屏 5–7 · 剧本 / 条目详情 / 复盘</h3>
+    <span class="moment">瞬间 4 + 6 · 想不起来 / 睡前</span>
+  </div>
+  <div class="railhint">Swipe</div>
+  <div class="rail">
+
+    <!-- 屏 5 剧本 -->
+    <figure class="railitem" style="margin:0">
+      <div class="phone">
+        <div class="scr">
+          <div class="mstat"><span class="mmono">10:23</span><span style="display:flex;align-items:center;gap:5px"><span class="sig"><i></i><i></i><i></i><i></i></span><span class="bat"><b></b></span></span></div>
+          <div class="mbody">
+            <div class="meyebrow">仓库直读 · 离线可搜</div>
+            <div class="mh1">剧本</div>
+            <div style="margin-top:14px">
+              <div class="msearch">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M16.5 16.5 21 21"/></svg>
+                搜 prompt、经验、文档
+              </div>
+            </div>
+            <div class="mgrp">
+              <div class="g"><div class="n">15</div><div class="t">Prompt</div></div>
+              <div class="g"><div class="n">49</div><div class="t">经验</div></div>
+              <div class="g"><div class="n">28</div><div class="t">文档</div></div>
+            </div>
+
+            <div class="msec"><span class="l">最近用过</span><span class="r">按复制次数</span></div>
+            <div class="mcard">
+              <div class="mrow">
+                <span class="mpill trt" style="height:20px;font-size:10px">PROMPT</span>
+                <span class="grow"><b class="mtrunc">五角色评测提示词</b><span>复制 14 次</span></span>
+              </div>
+              <div class="mrow">
+                <span class="mpill sgt" style="height:20px;font-size:10px">经验</span>
+                <span class="grow"><b class="mtrunc">缺数据绝不给默认值</b><span>never-default-missing-data</span></span>
+              </div>
+              <div class="mrow">
+                <span class="mpill sgt" style="height:20px;font-size:10px">经验</span>
+                <span class="grow"><b class="mtrunc">公式版本四处必须同步</b><span>verify-formula-version</span></span>
+              </div>
+              <div class="mrow">
+                <span class="mpill trt" style="height:20px;font-size:10px">PROMPT</span>
+                <span class="grow"><b class="mtrunc">一次性交付验收清单</b><span>复制 9 次</span></span>
+              </div>
+            </div>
+
+            <div class="msec"><span class="l">按主题</span><span class="r">—</span></div>
+            <div class="mchips">
+              <span class="mpill">交付纪律</span><span class="mpill">数据校验</span>
+              <span class="mpill">Agent 协作</span><span class="mpill">评测</span><span class="mpill">事故</span>
+            </div>
+          </div>
+          <div class="mnav"><div class="mtabs">
+            <div class="mtab"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3.5l9 7"/><path d="M5.5 9.5V20.5h13V9.5"/></svg><span>今日</span></div>
+            <div class="mtab"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 21 8l-9 5-9-5 9-5Z"/><path d="M3 16l9 5 9-5"/></svg><span>项目</span></div>
+            <div class="mcap"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5.5v13M5.5 12h13"/></svg></div>
+            <div class="mtab on"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4.5h9a3 3 0 0 1 3 3v12a2.5 2.5 0 0 0-2.5-2.5H4Z"/><path d="M20 4.5h-2.5a3 3 0 0 0-1.5.4V19a2.5 2.5 0 0 1 2.5-2h1.5Z"/></svg><span>剧本</span></div>
+            <div class="mtab"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.5 14.5A8.5 8.5 0 0 1 9.5 3.5a8.5 8.5 0 1 0 11 11Z"/></svg><span>复盘</span></div>
+          </div><div class="mhome"></div></div>
+        </div>
+      </div>
+      <figcaption><b>屏 5 · 剧本</b>三个计数格既是概览也是入口。「最近用过」按你实际复制次数排——不是按时间，因为常用的东西才是你手机上会找的。</figcaption>
+    </figure>
+
+    <!-- 屏 6 条目详情 -->
+    <figure class="railitem" style="margin:0">
+      <div class="phone">
+        <div class="scr">
+          <div class="mstat"><span class="mmono">10:24</span><span style="display:flex;align-items:center;gap:5px"><span class="sig"><i></i><i></i><i></i><i></i></span><span class="bat"><b></b></span></span></div>
+          <div class="mbody">
+            <div style="display:flex;align-items:center;gap:9px">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--i2)"><path d="M15 5l-7 7 7 7"/></svg>
+              <span class="meyebrow">剧本 / Prompt</span>
+            </div>
+            <div style="font-family:var(--f-cjk);font-weight:700;font-size:19px;line-height:1.3;margin-top:9px">五角色评测提示词</div>
+            <div class="mmuted" style="margin-top:5px">docs/playbook/lawrence-prompt-list.md · 第 7 条</div>
+
+            <div style="margin-top:14px">
+              <div class="mquote">你现在同时扮演五个角色评估这条新闻：
+散户 / 高频交易者 / 机构研究员 /
+媒体编辑 / 完全不懂币的路人。
+
+每个角色给出 0–100 分与一句评语，
+最后给一个综合判断与理由…</div>
+            </div>
+
+            <div style="display:flex;gap:8px;margin-top:14px">
+              <div class="mbtn" style="flex:2">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2.5"/><path d="M5.5 15H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v.5"/></svg>
+                复制全文
+              </div>
+              <div class="mbtn ghost" style="flex:1">在仓库看</div>
+            </div>
+
+            <div class="msec"><span class="l">相关</span><span class="r">3</span></div>
+            <div class="mcard">
+              <div class="mrow"><span class="grow"><b class="mtrunc">LLM 评测室使用说明</b><span>docs · 评测工具</span></span></div>
+              <div class="mrow"><span class="grow"><b class="mtrunc">语义判断要用 LLM 不用规则</b><span>经验 · semantic-judgment</span></span></div>
+              <div class="mrow"><span class="grow"><b class="mtrunc">AB 对比的三种填充模式</b><span>docs · 评测工具</span></span></div>
+            </div>
+          </div>
+          <div class="mnav"><div class="mtabs">
+            <div class="mtab"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3.5l9 7"/><path d="M5.5 9.5V20.5h13V9.5"/></svg><span>今日</span></div>
+            <div class="mtab"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 21 8l-9 5-9-5 9-5Z"/><path d="M3 16l9 5 9-5"/></svg><span>项目</span></div>
+            <div class="mcap"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5.5v13M5.5 12h13"/></svg></div>
+            <div class="mtab on"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4.5h9a3 3 0 0 1 3 3v12a2.5 2.5 0 0 0-2.5-2.5H4Z"/><path d="M20 4.5h-2.5a3 3 0 0 0-1.5.4V19a2.5 2.5 0 0 1 2.5-2h1.5Z"/></svg><span>剧本</span></div>
+            <div class="mtab"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.5 14.5A8.5 8.5 0 0 1 9.5 3.5a8.5 8.5 0 1 0 11 11Z"/></svg><span>复盘</span></div>
+          </div><div class="mhome"></div></div>
+        </div>
+      </div>
+      <figcaption><b>屏 6 · 条目详情</b>「复制全文」是这一屏唯一的主按钮，宽度是次按钮的两倍。你来这里只有一个目的，界面就只强调那一件事。</figcaption>
+    </figure>
+
+    <!-- 屏 7 复盘 -->
+    <figure class="railitem" style="margin:0">
+      <div class="phone">
+        <div class="scr">
+          <div class="mstat"><span class="mmono">22:41</span><span style="display:flex;align-items:center;gap:5px"><span class="sig"><i></i><i></i><i></i><i></i></span><span class="bat"><b></b></span></span></div>
+          <div class="mbody">
+            <div class="meyebrow">八月三十一日 · 收尾</div>
+            <div class="mh1">今天挺好</div>
+            <div class="mmuted" style="margin-top:6px">完成 2 件，记了 3 条，服务跑了 47 轮。</div>
+
+            <div class="msec"><span class="l">完成</span><span class="r">2 / 3</span></div>
+            <div class="mcard" style="padding:4px 14px">
+              <div class="mtask done"><span class="mbox on"></span><span class="tx"><b>回 Alex 的 API 字段问题</b></span></div>
+              <div class="mtask done"><span class="mbox on"></span><span class="tx"><b>指标体系 v2 发 Confluence</b></span></div>
+              <div class="mtask"><span class="mbox"></span><span class="tx"><b>复核 VM 重建 runbook</b><span class="mmuted">顺延到明天</span></span></div>
+            </div>
+
+            <div class="msec"><span class="l">待归类</span><span class="r">5 条</span></div>
+            <div class="mcard">
+              <div class="mrow">
+                <span class="grow"><b class="mtrunc">去重阈值 0.82 对宏观偏松</b><span>21:07</span></span>
+                <span class="mpill trt">⚑ 教训</span>
+              </div>
+              <div class="mmuted" style="margin-top:10px">左滑归档，右滑变成明天的事。</div>
+            </div>
+
+            <div class="msec"><span class="l">一句话日志</span><span class="r">选填</span></div>
+            <div class="mcard" style="background:var(--w);border-style:dashed">
+              <div class="mmuted">今天最大的收获是……</div>
+            </div>
+
+            <div style="margin-top:14px"><div class="mbtn">定明天的三件事</div></div>
+          </div>
+          <div class="mnav"><div class="mtabs">
+            <div class="mtab"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3.5l9 7"/><path d="M5.5 9.5V20.5h13V9.5"/></svg><span>今日</span></div>
+            <div class="mtab"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 21 8l-9 5-9-5 9-5Z"/><path d="M3 16l9 5 9-5"/></svg><span>项目</span></div>
+            <div class="mcap"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5.5v13M5.5 12h13"/></svg></div>
+            <div class="mtab"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4.5h9a3 3 0 0 1 3 3v12a2.5 2.5 0 0 0-2.5-2.5H4Z"/><path d="M20 4.5h-2.5a3 3 0 0 0-1.5.4V19a2.5 2.5 0 0 1 2.5-2h1.5Z"/></svg><span>剧本</span></div>
+            <div class="mtab on"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.5 14.5A8.5 8.5 0 0 1 9.5 3.5a8.5 8.5 0 1 0 11 11Z"/></svg><span>复盘</span></div>
+          </div><div class="mhome"></div></div>
+        </div>
+      </div>
+      <figcaption><b>屏 7 · 复盘</b>标题写「今天挺好」而不是「你还差 1 件」。没做完的那件放在完成项<strong>之后</strong>，并且已经自动顺延——不制造亏欠感。</figcaption>
+    </figure>
+  </div>
+
+  <ol class="annot">
+    <li><b>复盘屏是速记的出口。</b><span>「待归类 5 条」在这里被清掉，速记才不会变成垃圾桶。这也是 2.7 里那条 70% 处理率指标的落点。</span></li>
+    <li><b>文案就是设计。</b><span>「今天挺好」「顺延到明天」「今天最大的收获是……」——同样的数据，换套说法就是另一个产品。这是「平静优先」原则唯一真正的实现方式。</span></li>
+    <li><b>剧本页的数字用 Caprasimo。</b><span>15 / 49 / 28 三个数字是全屏最有性格的地方，正好落在拉丁字形上，不触发中文回退。</span></li>
+  </ol>
+</div>
+
+<div class="screenblock">
+  <div class="sbhead">
+    <h3>屏 8 · 三种状态，和深色储备</h3>
+    <span class="moment">最容易被跳过的一节</span>
+  </div>
+  <p>加载、空、错误——这三态做不好，界面在真实网络下就是崩的。<strong>设计稿只画理想态是最常见的偷懒。</strong></p>
+  <div class="railhint">Swipe</div>
+  <div class="rail">
+
+    <figure class="railitem" style="margin:0">
+      <div class="phone">
+        <div class="scr">
+          <div class="mstat"><span class="mmono">8:12</span><span style="display:flex;align-items:center;gap:5px"><span class="sig"><i></i><i></i><i></i><i></i></span><span class="bat"><b></b></span></span></div>
+          <div class="mbody" style="min-height:392px">
+            <div class="meyebrow">八月三十一日 · 周一</div>
+            <div class="mh1">早安，Lawrence</div>
+            <div style="margin-top:16px"><span class="msk" style="height:62px;border-radius:18px"></span></div>
+            <div class="msec"><span class="l">服务脉搏</span><span class="r"></span></div>
+            <span class="msk" style="height:96px;border-radius:18px"></span>
+            <div class="msec"><span class="l">今日三件事</span><span class="r"></span></div>
+            <span class="msk" style="height:128px;border-radius:18px"></span>
+          </div>
+          <div class="mnav"><div class="mtabs">
+            <div class="mtab on"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3.5l9 7"/><path d="M5.5 9.5V20.5h13V9.5"/></svg><span>今日</span></div>
+            <div class="mtab"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 21 8l-9 5-9-5 9-5Z"/><path d="M3 16l9 5 9-5"/></svg><span>项目</span></div>
+            <div class="mcap"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5.5v13M5.5 12h13"/></svg></div>
+            <div class="mtab"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4.5h9a3 3 0 0 1 3 3v12a2.5 2.5 0 0 0-2.5-2.5H4Z"/><path d="M20 4.5h-2.5a3 3 0 0 0-1.5.4V19a2.5 2.5 0 0 1 2.5-2h1.5Z"/></svg><span>剧本</span></div>
+            <div class="mtab"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.5 14.5A8.5 8.5 0 0 1 9.5 3.5a8.5 8.5 0 1 0 11 11Z"/></svg><span>复盘</span></div>
+          </div><div class="mhome"></div></div>
+        </div>
+      </div>
+      <figcaption><b>加载态</b>骨架屏保持真实布局的高度，避免内容到位时页面跳动。标题和日期<strong>不用骨架</strong>——本地就有的东西立刻显示。</figcaption>
+    </figure>
+
+    <figure class="railitem" style="margin:0">
+      <div class="phone">
+        <div class="scr">
+          <div class="mstat"><span class="mmono">8:12</span><span style="display:flex;align-items:center;gap:5px"><span class="sig"><i></i><i></i><i></i><i></i></span><span class="bat"><b></b></span></span></div>
+          <div class="mbody" style="min-height:392px">
+            <div class="meyebrow">今日三件事</div>
+            <div class="mempty">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5.5h11l5 5V19a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 19Z"/><path d="M14.5 5.5v5.5H20"/><path d="M8 14.5h7"/></svg>
+              <div style="font-family:var(--f-cjk);font-weight:700;font-size:15px;margin-top:14px">今天还没定</div>
+              <div class="mmuted" style="margin-top:6px;max-width:210px">先写一件最想推进的事。剩下两件可以晚点补。</div>
+              <div class="mbtn" style="margin-top:16px;width:170px">写第一件</div>
+            </div>
+            <div class="msec"><span class="l">昨天没做完</span><span class="r">1</span></div>
+            <div class="mcard">
+              <div class="mrow"><span class="grow"><b>复核 VM 重建 runbook</b><span>顺延 1 天</span></span><span class="mpill trt">今天做</span></div>
+            </div>
+          </div>
+          <div class="mnav"><div class="mtabs">
+            <div class="mtab on"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3.5l9 7"/><path d="M5.5 9.5V20.5h13V9.5"/></svg><span>今日</span></div>
+            <div class="mtab"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 21 8l-9 5-9-5 9-5Z"/><path d="M3 16l9 5 9-5"/></svg><span>项目</span></div>
+            <div class="mcap"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5.5v13M5.5 12h13"/></svg></div>
+            <div class="mtab"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4.5h9a3 3 0 0 1 3 3v12a2.5 2.5 0 0 0-2.5-2.5H4Z"/><path d="M20 4.5h-2.5a3 3 0 0 0-1.5.4V19a2.5 2.5 0 0 1 2.5-2h1.5Z"/></svg><span>剧本</span></div>
+            <div class="mtab"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.5 14.5A8.5 8.5 0 0 1 9.5 3.5a8.5 8.5 0 1 0 11 11Z"/></svg><span>复盘</span></div>
+          </div><div class="mhome"></div></div>
+        </div>
+      </div>
+      <figcaption><b>空态</b>空态是最好的引导位。给一个动作（写第一件），并降低门槛（「剩下两件可以晚点补」）。</figcaption>
+    </figure>
+
+    <figure class="railitem" style="margin:0">
+      <div class="phone">
+        <div class="scr">
+          <div class="mstat"><span class="mmono">8:13</span><span style="display:flex;align-items:center;gap:5px"><span class="sig"><i></i><i></i><i></i><i></i></span><span class="bat"><b></b></span></span></div>
+          <div class="mbody" style="min-height:392px">
+            <div class="meyebrow">服务脉搏</div>
+            <div class="mcard" style="margin-top:10px;border-color:rgba(179,64,44,.4)">
+              <div class="mrow">
+                <i class="mdot bad"></i>
+                <span class="grow"><b>连不上 B9 API</b><span>最后一次成功：今天 07:58</span></span>
+              </div>
+              <div class="mmuted" style="margin-top:10px">下面显示的是 07:58 的缓存数据，不是现在的状态。</div>
+              <div style="display:flex;gap:7px;margin-top:12px">
+                <span class="mpill" style="flex:1;justify-content:center;height:34px">重试</span>
+                <span class="mpill" style="flex:1;justify-content:center;height:34px">看缓存</span>
+              </div>
+            </div>
+            <div class="mpulse" style="margin-top:12px;opacity:.5">
+              <div class="top"><i class="mdot" style="background:var(--i3)"></i><b>抓取管线</b><span class="st" style="color:var(--i3)">07:58 缓存</span></div>
+              <div class="mspark">
+                <i style="height:62%"></i><i style="height:78%"></i><i style="height:54%"></i>
+                <i style="height:40%"></i><i style="height:70%"></i><i style="height:86%"></i><i style="height:66%"></i>
+              </div>
+            </div>
+            <div class="mmuted" style="margin-top:14px;text-align:center">其它模块不受影响，可继续使用</div>
+          </div>
+          <div class="mnav"><div class="mtabs">
+            <div class="mtab on"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3.5l9 7"/><path d="M5.5 9.5V20.5h13V9.5"/></svg><span>今日</span></div>
+            <div class="mtab"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 21 8l-9 5-9-5 9-5Z"/><path d="M3 16l9 5 9-5"/></svg><span>项目</span></div>
+            <div class="mcap"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5.5v13M5.5 12h13"/></svg></div>
+            <div class="mtab"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4.5h9a3 3 0 0 1 3 3v12a2.5 2.5 0 0 0-2.5-2.5H4Z"/><path d="M20 4.5h-2.5a3 3 0 0 0-1.5.4V19a2.5 2.5 0 0 1 2.5-2h1.5Z"/></svg><span>剧本</span></div>
+            <div class="mtab"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.5 14.5A8.5 8.5 0 0 1 9.5 3.5a8.5 8.5 0 1 0 11 11Z"/></svg><span>复盘</span></div>
+          </div><div class="mhome"></div></div>
+        </div>
+      </div>
+      <figcaption><b>错误态</b>关键：<strong>明确标出数据是旧的</strong>，并且降低不透明度让它「看起来就是旧的」。绝不把缓存冒充成实时——这正是你写过的那条教训。</figcaption>
+    </figure>
+
+    <figure class="railitem" style="margin:0">
+      <div class="phone dark">
+        <div class="scr">
+          <div class="mstat"><span class="mmono">23:04</span><span style="display:flex;align-items:center;gap:5px"><span class="sig"><i></i><i></i><i></i><i></i></span><span class="bat"><b></b></span></span></div>
+          <div class="mbody" style="min-height:392px">
+            <div class="meyebrow">八月三十一日 · 周一</div>
+            <div class="mh1">晚上好，Lawrence</div>
+            <div class="mfocus">
+              <div class="k">今天的重心</div>
+              <div class="v">把 B9 迁回云上</div>
+            </div>
+            <div class="msec"><span class="l">服务脉搏</span><span class="r">B9</span></div>
+            <div class="mpulse">
+              <div class="top"><i class="mdot ok"></i><b>抓取管线正常</b><span class="st">上轮 22:30</span></div>
+              <div class="mspark">
+                <i style="height:62%"></i><i style="height:78%"></i><i style="height:54%"></i>
+                <i style="height:44%"></i><i style="height:70%"></i><i style="height:86%"></i><i class="hi" style="height:100%"></i>
+              </div>
+              <div class="foot"><span>近 7 轮全绿</span><span>下轮 23:00</span></div>
+            </div>
+            <div class="msec"><span class="l">今日三件事</span><span class="r">2 / 3</span></div>
+            <div class="mcard" style="padding:4px 14px">
+              <div class="mtask done"><span class="mbox on"></span><span class="tx"><b>回 Alex 的 API 字段问题</b></span></div>
+              <div class="mtask done"><span class="mbox on"></span><span class="tx"><b>指标体系 v2 发 Confluence</b></span></div>
+              <div class="mtask"><span class="mbox"></span><span class="tx"><b>复核 VM 重建 runbook</b></span><span class="est">45m</span></div>
+            </div>
+          </div>
+          <div class="mnav"><div class="mtabs">
+            <div class="mtab on"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3.5l9 7"/><path d="M5.5 9.5V20.5h13V9.5"/></svg><span>今日</span></div>
+            <div class="mtab"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 21 8l-9 5-9-5 9-5Z"/><path d="M3 16l9 5 9-5"/></svg><span>项目</span></div>
+            <div class="mcap"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5.5v13M5.5 12h13"/></svg></div>
+            <div class="mtab"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4.5h9a3 3 0 0 1 3 3v12a2.5 2.5 0 0 0-2.5-2.5H4Z"/><path d="M20 4.5h-2.5a3 3 0 0 0-1.5.4V19a2.5 2.5 0 0 1 2.5-2h1.5Z"/></svg><span>剧本</span></div>
+            <div class="mtab"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.5 14.5A8.5 8.5 0 0 1 9.5 3.5a8.5 8.5 0 1 0 11 11Z"/></svg><span>复盘</span></div>
+          </div><div class="mhome"></div></div>
+        </div>
+      </div>
+      <figcaption><b>深色储备（v2）</b>同一套结构，只换 token。赤陶提亮到 <span class="mmono">#e59459</span>、鼠尾草提到 <span class="mmono">#a6b889</span>，否则在深底上会闷掉。</figcaption>
+    </figure>
+  </div>
+</div>
+</section>
+<!-- ========== 05 实施 Plan ========== -->
+<section class="sec" id="plan">
+  <div class="sechead">
+    <span class="eyebrow">Implementation Plan</span>
+    <h2><span class="n">05</span>实施 Plan：八个工作日</h2>
+  </div>
+
+  <p class="lead">技术栈按你选的 <b>Vite + React + TypeScript</b>。不引 UI 组件库——这套 Organic 的形态（药丸、大圆角、纸感）跟任何现成库都对不上，<b>改库比自己写还慢</b>。图表也自己写 SVG，脉搏卡那七根条形不值得引一个 chart 库。</p>
+
+  <h3>5.1 依赖清单（少即是快）</h3>
+  <div class="scroll">
+    <table>
+      <thead><tr><th>包</th><th>干什么</th><th>为什么是它</th></tr></thead>
+      <tbody>
+        <tr><td class="num">react / react-dom</td><td>UI</td><td>—</td></tr>
+        <tr><td class="num">typescript</td><td>类型</td><td>数据结构会长，早点上类型省调试</td></tr>
+        <tr><td class="num">vite</td><td>构建</td><td>快，且构建期插件正好用来生成剧本索引</td></tr>
+        <tr><td class="num">react-router-dom</td><td>路由</td><td>四个 tab 需要真实 URL，PWA 恢复时能回到原页</td></tr>
+        <tr><td class="num">vite-plugin-pwa</td><td>PWA</td><td>manifest + service worker 一步到位</td></tr>
+        <tr><td class="num">zustand</td><td>状态</td><td>比 Redux 轻十倍，够用；不想加也可以纯 Context</td></tr>
+        <tr><td class="num">gray-matter</td><td>解析 md</td><td>构建期读 docs/ 的 frontmatter</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>不要装：UI 组件库、CSS-in-JS、图表库、日期库（<em class="m">Intl.DateTimeFormat</em> 够用）、图标库（需要的十个图标手写 SVG，总共不到 2KB）。</p>
+
+  <h3>5.2 工程结构</h3>
+  <pre>desk/
+├─ index.html              <span class="c">viewport-fit=cover 在这里</span>
+├─ vite.config.ts          <span class="c">PWA 插件 + 剧本索引生成插件</span>
+├─ scripts/
+│  └─ build-playbook.ts    <span class="c">扫 ../docs/{playbook,memory} → playbook.json</span>
+├─ public/
+│  ├─ manifest.webmanifest
+│  └─ icons/               <span class="c">192 / 512 / apple-touch-icon 180</span>
+└─ src/
+   ├─ styles/
+   │  ├─ tokens.css        <span class="c">← 本文档 3.2/3.3/3.4 的所有变量</span>
+   │  └─ base.css
+   ├─ components/          <span class="c">Card Button Chip Dot Spark Progress Toast Tabbar</span>
+   ├─ screens/
+   │  ├─ Today.tsx  Projects.tsx  ProjectB9.tsx
+   │  └─ Capture.tsx  Playbook.tsx  PlaybookItem.tsx  Review.tsx
+   ├─ data/
+   │  ├─ store.ts          <span class="c">zustand + localStorage 持久化</span>
+   │  ├─ b9.ts             <span class="c">/api/runs /api/news 适配器</span>
+   │  └─ playbook.ts       <span class="c">读构建期生成的 json + 本地搜索</span>
+   └─ App.tsx</pre>
+
+  <div class="note">
+    <span class="t">一个决定长期成本的细节</span>
+    <p><em class="m">data/</em> 下三个文件是<b>唯一</b>接触外部数据的地方，screens 只跟它们打交道。P1 把 localStorage 换成后端 API 时，只改 <em class="m">store.ts</em> 一个文件，七个屏一行不动。<b>先分层，再写界面。</b></p>
+  </div>
+
+  <h3>5.3 里程碑</h3>
+
+  <h4>M0 · 骨架（0.5 天）</h4>
+  <ul>
+    <li>Vite + React + TS + PWA 起工程；<em class="m">tokens.css</em> 落本文档 3.2–3.4 全部变量</li>
+    <li>四 tab + 中央速记键的 tab bar，五个空白屏能切</li>
+    <li>安全区处理（<em class="m">env(safe-area-inset-*)</em>），deploy 一次</li>
+  </ul>
+  <p><strong>完成的定义：</strong>手机 Safari 打开 → 分享 → 添加到主屏幕 → 从主屏图标启动，无浏览器地址栏，tab 能切，底部不被 home indicator 挡住。<strong>这一步必须当天做完并真机验证</strong>，因为它是唯一有平台风险的环节。</p>
+
+  <h4>M1 · 今日屏（2 天）</h4>
+  <ul>
+    <li>今日重心 + 三件事（本地存储、勾选、硬上限 3）</li>
+    <li>B9 脉搏卡接真 <em class="m">/api/runs</em>，含加载 / 空 / 错误三态</li>
+    <li>Card / Button / Chip / Dot / Spark / Progress 六个基础组件成型</li>
+  </ul>
+  <p><strong>完成的定义：</strong>断网打开 app，今日屏仍能用（三件事来自本地），脉搏卡明确显示「缓存 + 时间」。用你 <em class="m">scripts/qa_suite.py</em> 的思路，人工过一遍三态。</p>
+
+  <h4>M2 · 速记 + 剧本（2 天）</h4>
+  <ul>
+    <li>速记全屏 sheet，自动聚焦，四类芯片可跳过</li>
+    <li>构建期脚本扫 <em class="m">docs/playbook/*.md</em> + <em class="m">docs/memory/*.md</em> 生成索引</li>
+    <li>剧本搜索（本地，无网可用）+ 详情 + 一键复制 + toast</li>
+  </ul>
+  <p><strong>完成的定义：</strong>飞行模式下能搜到「never-default」并复制全文；<em class="m">docs/memory</em> 新加一个 md 文件，重新 build 后能搜到。</p>
+
+  <h4>M3 · 项目 + 复盘（2 天）</h4>
+  <ul>
+    <li>项目卡列表（数据先手写在一个 json 里，不值得为三个项目建后端）</li>
+    <li>B9 下钻：今日 Top 事件接 <em class="m">/api/news</em>，告警只读</li>
+    <li>复盘屏：完成清单 + 待归类滑动处理 + 一句话日志 + 定明日三件事</li>
+  </ul>
+  <p><strong>完成的定义：</strong>连续用三天，每天晚上真的走一遍复盘流程。走不下去就是设计有问题，改设计不要改人。</p>
+
+  <h4>M4 · 打磨（1.5 天）</h4>
+  <ul>
+    <li>三态全屏覆盖检查、动效时长统一、<em class="m">prefers-reduced-motion</em></li>
+    <li>无障碍：对比度实测、触控热区实测、focus-visible</li>
+    <li>性能：首屏 &lt; 1.5s（4G），包体 &lt; 200KB gzip</li>
+    <li>数据导出 JSON + 每周提醒</li>
+  </ul>
+
+  <div class="scroll">
+    <table>
+      <thead><tr><th>里程碑</th><th>工作量</th><th>产出</th><th>可上线？</th></tr></thead>
+      <tbody>
+        <tr><td>M0 骨架</td><td class="num">0.5 d</td><td>能装到主屏的空壳</td><td>—</td></tr>
+        <tr><td>M1 今日屏</td><td class="num">2 d</td><td>核心价值已成立</td><td><span class="tag ok">可以</span></td></tr>
+        <tr><td>M2 速记 + 剧本</td><td class="num">2 d</td><td>P0 全部完成</td><td><span class="tag ok">正式版</span></td></tr>
+        <tr><td>M3 项目 + 复盘</td><td class="num">2 d</td><td>P1 完成</td><td><span class="tag ok">可以</span></td></tr>
+        <tr><td>M4 打磨</td><td class="num">1.5 d</td><td>能给别人看</td><td><span class="tag ok">可以</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p><strong>M1 结束就该开始每天用。</strong>不要等全部做完再用——用起来才会发现哪些设计是错的，而那时候改还便宜。</p>
+
+  <h3>5.4 部署</h3>
+  <p>最省事：<em class="m">npm run build</em> 产物直接放进现有仓库的 <em class="m">web/desk/</em>，由现在那台 Flask 一起托管，跟 <em class="m">index.html</em>／<em class="m">lab.html</em> 同源，<strong>API 调用没有跨域问题</strong>。B9 迁回云上之后路径不变。</p>
+  <p>token 处理：只读 token 在构建期通过 <em class="m">import.meta.env.VITE_B9_TOKEN</em> 注入，<em class="m">.env</em> 不进仓库。<strong>注意前端包里的 token 等于公开</strong>，所以必须是只读 token，且最好加 IP 或 referer 限制。</p>
+
+  <h3>5.5 可以直接丢给 Claude Code 的第一条指令</h3>
+  <pre>读 docs/prd/deskside-mobile-workbench.html 的 3.2–3.4 节，
+在仓库根建 desk/ 工程：Vite + React + TS + vite-plugin-pwa。
+
+只做 M0：
+1. tokens.css 落齐文档里全部 CSS 变量，命名照抄不要自创
+2. 四 tab（今日/项目/剧本/复盘）+ 中央凸起速记键，
+   规格照 3.6 组件表：h44、radius 999、中央钮 50px
+3. 五个空屏，react-router 真实路由
+4. index.html 带 viewport-fit=cover；
+   tab bar 用 env(safe-area-inset-bottom) 垫底
+5. manifest + 三个尺寸图标，standalone 模式
+
+红线：不装 UI 组件库；不用 backdrop-filter；
+固定定位元素加 transform:translateZ(0) + contain:layout paint。
+
+做完告诉我怎么在 iPhone 上装到主屏验证。</pre>
+</section>
+<!-- ========== 06 教你怎么设计 ========== -->
+<section class="sec" id="teach">
+  <div class="sechead">
+    <span class="eyebrow">How to</span>
+    <h2><span class="n">06</span>怎么自己设计出这样的界面</h2>
+  </div>
+
+  <p class="lead">这一节是方法，不是这个项目的内容。学会了下次做别的界面也能用。</p>
+
+  <h3>6.1 五步法：颜色是最后一步</h3>
+  <div class="steps">
+    <div class="step">
+      <b>定人和瞬间，不是定功能</b>
+      <p>先写清楚「谁、在什么时刻、拿着手机想干什么」。本文档 2.2 的六个瞬间就是这一步的产物。跳过这步直接列功能，做出来的一定是四不像。</p>
+    </div>
+    <div class="step">
+      <b>把每屏写成一个问句</b>
+      <p>「现在该干嘛？」「我卡在哪？」「我以前怎么做的？」。一个屏答不出一个问句就砍掉。这一步能砍掉 60% 的伪需求。</p>
+    </div>
+    <div class="step">
+      <b>排层级：这屏最重要的是哪一件事</b>
+      <p>每屏挑出<b>唯一一个</b>「最重要的东西」，其它全部让位。今日屏是「今天的重心」，所以只有它用了深色反底。选出两个就是没选。</p>
+    </div>
+    <div class="step">
+      <b>画灰度稿</b>
+      <p>只用黑白灰摆块，不碰颜色。灰度稿里层级清楚，上色只是加分；灰度稿里层级不清，<b>再好看的配色也救不回来</b>。这是整个方法里最值钱的一条。</p>
+    </div>
+    <div class="step">
+      <b>最后上色，且只上一处重色</b>
+      <p>色板早就定好了（用现成设计系统就更省事）。上色时把最饱和的那个颜色只给「最重要的那件事」，其余用中性色。</p>
+    </div>
+  </div>
+
+  <h4>三个阶段长这样</h4>
+  <div class="fid">
+    <div class="fidcol">
+      <div class="lab"><b>阶段一</b> 线框 · 只管有什么</div>
+      <div class="fidbox wire">
+        <div class="stack">
+          <span class="wl" style="height:8px;width:38%"></span>
+          <span class="wl" style="height:20px;width:66%"></span>
+          <span class="wl" style="height:38px"></span>
+          <span class="wl" style="height:46px"></span>
+          <span class="wl" style="height:56px"></span>
+          <span class="wl" style="height:26px;margin-top:auto"></span>
+        </div>
+      </div>
+    </div>
+    <div class="fidcol">
+      <div class="lab"><b>阶段二</b> 灰度 · 只管层级</div>
+      <div class="fidbox gray">
+        <div class="stack">
+          <span class="gl lt" style="height:8px;width:38%"></span>
+          <span class="gl dk" style="height:20px;width:66%"></span>
+          <span style="height:38px;background:#4a453e;border-radius:9px"></span>
+          <span class="gl" style="height:46px"></span>
+          <span class="gl lt" style="height:56px"></span>
+          <span class="gl" style="height:26px;margin-top:auto"></span>
+        </div>
+      </div>
+    </div>
+    <div class="fidcol">
+      <div class="lab"><b>阶段三</b> 上色 · 只管一处重色</div>
+      <div class="fidbox color">
+        <div class="stack">
+          <span style="height:8px;width:38%;background:#9a9083;border-radius:4px"></span>
+          <span style="height:20px;width:66%;background:#201e1d;border-radius:5px"></span>
+          <span style="height:38px;background:#2e2b25;border-radius:11px;position:relative">
+            <span style="position:absolute;left:9px;bottom:9px;width:44%;height:6px;background:#c67139;border-radius:3px"></span>
+          </span>
+          <span style="height:46px;background:#e1eecc;border-radius:11px;border:1px solid rgba(122,138,94,.3)"></span>
+          <span style="height:56px;background:#fdf8ef;border-radius:11px;border:1px solid rgba(32,30,29,.1)"></span>
+          <span style="height:26px;background:#fdf8ef;border-radius:8px;border:1px solid rgba(32,30,29,.1);margin-top:auto"></span>
+        </div>
+      </div>
+    </div>
+  </div>
+  <p>注意阶段二：那块最深的灰就是「今天的重心」。<strong>层级是在灰度阶段建立的，颜色只是把它说得更清楚。</strong>如果你把阶段三的色块全部去饱和，会得到跟阶段二几乎一样的图——这就是对的。</p>
+
+  <h3>6.2 五条随时能用的判断法则</h3>
+  <div class="scroll">
+    <table>
+      <thead><tr><th>法则</th><th>怎么用</th></tr></thead>
+      <tbody>
+        <tr><td><strong>先灰度</strong></td><td>任何界面卡住了，就截图转灰度看。层级消失说明你在用颜色掩盖结构问题。</td></tr>
+        <tr><td><strong>一屏一重点</strong></td><td>全屏最亮 / 最深 / 最大的东西只能有一个。数一数，超过一个就降级。</td></tr>
+        <tr><td><strong>间距靠系统</strong></td><td>只用 4 的倍数。凭手感调出来的 13px、17px、23px 是界面显廉价的头号原因。</td></tr>
+        <tr><td><strong>状态别只用颜色</strong></td><td>颜色 + 形状 + 文字，至少两样。截灰度图还能分辨才算过。</td></tr>
+        <tr><td><strong>删到不能删</strong></td><td>先狠删，删到界面缺信息了再加回一样。加出来的和删剩的，是两种质量。</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>6.3 反面教材：同样的信息，两种做法</h3>
+  <div class="vs">
+    <div class="vsbox bad">
+      <div class="hd">✕ 常见做法</div>
+      <div style="padding:12px;background:#f2efe9">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+          <span style="height:30px;background:#fff;border:1px solid #ddd;border-radius:4px"></span>
+          <span style="height:30px;background:#fff;border:1px solid #ddd;border-radius:4px"></span>
+          <span style="height:30px;background:#fff;border:1px solid #ddd;border-radius:4px"></span>
+          <span style="height:30px;background:#fff;border:1px solid #ddd;border-radius:4px"></span>
+          <span style="height:30px;background:#fff;border:1px solid #ddd;border-radius:4px"></span>
+          <span style="height:30px;background:#fff;border:1px solid #ddd;border-radius:4px"></span>
+        </div>
+        <div style="display:flex;gap:5px;margin-top:8px">
+          <span style="flex:1;height:14px;background:#e33;border-radius:3px"></span>
+          <span style="flex:1;height:14px;background:#3a5;border-radius:3px"></span>
+          <span style="flex:1;height:14px;background:#38c;border-radius:3px"></span>
+          <span style="flex:1;height:14px;background:#fb0;border-radius:3px"></span>
+        </div>
+        <div style="margin-top:8px;height:44px;background:#fff;border:1px solid #ddd;border-radius:4px"></div>
+      </div>
+      <div class="bd">六个等大的指标格 + 四种互相竞争的颜色。<b>每样东西都在喊，等于没有东西在说话。</b>而且这是把桌面 KPI 看板直接搬到手机的典型结果。</div>
+    </div>
+    <div class="vsbox good">
+      <div class="hd">✓ 案头做法</div>
+      <div style="padding:12px;background:#f5ead8">
+        <div style="height:34px;background:#2e2b25;border-radius:10px;position:relative">
+          <span style="position:absolute;left:9px;bottom:8px;width:46%;height:5px;background:#c67139;border-radius:3px"></span>
+        </div>
+        <div style="margin-top:7px;height:40px;background:#e1eecc;border:1px solid rgba(122,138,94,.3);border-radius:10px;display:flex;align-items:center;padding:0 10px;gap:6px">
+          <span style="width:7px;height:7px;border-radius:50%;background:#7a8a5e"></span>
+          <span style="flex:1;height:6px;background:rgba(86,99,63,.3);border-radius:3px"></span>
+        </div>
+        <div style="margin-top:7px;height:52px;background:#fdf8ef;border:1px solid rgba(32,30,29,.1);border-radius:10px"></div>
+      </div>
+      <div class="bd">一个深色重点 + 一块状态 + 一块列表。<b>三层，一眼就知道先看哪里。</b>信息量其实没少，少的是"同时要求你注意"的东西。</div>
+    </div>
+  </div>
+
+  <h3>6.4 你 review 设计稿时用的四个测试</h3>
+  <div class="steps">
+    <div class="step"><b>眯眼测试</b><p>眯起眼睛看到糊，还能看出哪块最重要 → 层级过关。看到一片均匀的灰 → 层级失败。</p></div>
+    <div class="step"><b>五秒测试</b><p>盯五秒后合上，说出你看到了什么。说不出来，说明首屏信息组织有问题，不是你记性差。</p></div>
+    <div class="step"><b>单手测试</b><p>单手拿手机，拇指够不到的地方放了高频操作 → 打回。这条最容易在设计稿上被忽略，因为你在电脑上用鼠标看稿。</p></div>
+    <div class="step"><b>断网测试</b><p>飞行模式打开。白屏或者转圈不停 → 三态没做。这是最能区分「做完了」和「做好了」的一测。</p></div>
+  </div>
+
+  <h3>6.5 你已经有的优势</h3>
+  <p>仓库里那套 Organic 设计系统（<em class="m">docs/design_source/organic-styles.css</em>）已经把最难的部分做完了：<strong>色阶是在 OKLCH 上统一明度生成的</strong>，意味着赤陶的 500 和鼠尾草的 500 视觉深浅一致。这种东西手调是调不出来的。</p>
+  <p>所以你做新界面时，<strong>永远从那份变量表开始，而不是从取色器开始。</strong>设计系统的价值不是好看，是让你不用每次重新做一遍这些决定。</p>
+</section>
+
+<!-- ========== 07 验收单 ========== -->
+<section class="sec" id="review">
+  <div class="sechead">
+    <span class="eyebrow">Review Checklist</span>
+    <h2><span class="n">07</span>你 review 时逐条打勾</h2>
+  </div>
+
+  <h3>对这份 PRD</h3>
+  <ul class="chk">
+    <li><b>六个瞬间</b>是不是你真实的手机使用场景？有没有漏掉的、多余的？</li>
+    <li>P0 三个模块（今日 / 速记 / 剧本）是不是你会每天用的？</li>
+    <li>「三件事硬上限 3」这个约束你能接受吗？还是会觉得憋屈？</li>
+    <li>非目标清单里，有没有哪条你其实是想要的？</li>
+    <li>反指标「日均打开 &gt; 15 次算失败」这个定义你认吗？</li>
+    <li>产品代号「案头」——留着还是换？</li>
+  </ul>
+
+  <h3>对设计稿</h3>
+  <ul class="chk">
+    <li>今日屏首屏折线以上的信息，够不够你在会前两分钟做判断？</li>
+    <li>卡片改成「比底色亮」，你在手机上看着比桌面站舒服吗？</li>
+    <li>三种状态点（圆 / 环 / 方块）你能一眼分清吗？</li>
+    <li>「今天挺好」这类文案的语气对不对？太软还是正好？</li>
+    <li>深色版你想要吗？想要的话它就该从 v2 提到 P0。</li>
+  </ul>
+
+  <h3>对实施计划</h3>
+  <ul class="chk">
+    <li>八个工作日的节奏你接受吗？还是想先只做 M0+M1 试水？</li>
+    <li>剧本从仓库构建期读取——这个方案有没有你觉得别扭的地方？</li>
+    <li>P0 用 localStorage 不建后端，你能接受「换手机要手动导出」吗？</li>
+    <li>部署到 <em class="m">web/desk/</em> 由现有 Flask 托管，还是想独立部署？</li>
+  </ul>
+
+  <div class="note sage">
+    <span class="t">改动优先级建议</span>
+    <p>如果你只想改一处，改<b>六个瞬间</b>那张表——它是所有下游内容的源头，改它会连带重排功能优先级和界面。如果只是觉得某屏不好看，那属于细节，等真机跑起来再调更准。</p>
+  </div>
+</section>
+<footer class="foot">
+  <p style="font-size:13.5px;color:var(--ink-2);margin-bottom:20px">
+    <strong>下一步</strong>：你逐条 review 上面的清单，把要改的告诉我，我改完这份稿子，再开 <em class="m">desk/</em> 工程写 M0。<br>
+    在 review 完成前不动代码。
+  </p>
+  <p style="margin-bottom:8px"><strong style="color:var(--ink-2)">调研来源</strong></p>
+  <p class="srclist">
+    <a href="https://uxpilot.ai/blogs/dashboard-design-principles">12 Dashboard Design Principles For Better UX</a> ·
+    <a href="https://www.aufaitux.com/blog/cognitive-load-theory-ui-design/">Cognitive Load Theory in UI Design</a> ·
+    <a href="https://uxmag.com/articles/four-cognitive-design-guidelines-for-effective-information-dashboards">Four Cognitive Design Guidelines for Dashboards</a> ·
+    <a href="https://parachutedesign.ca/blog/thumb-zone-ux/">Mastering the Thumb Zone</a> ·
+    <a href="https://uxdworld.com/bottom-tab-bar-navigation-design-best-practices/">Bottom Tab Bar Navigation Best Practices</a> ·
+    <a href="https://www.uxpin.com/studio/blog/mobile-navigation-examples/">Mobile Navigation Design: 8 Types &amp; Best Practices</a> ·
+    <a href="https://fuselabcreative.com/top-dashboard-design-trends-2025/">Dashboard Design Trends 2026</a> ·
+    <a href="https://muz.li/blog/whats-changing-in-mobile-app-design-ui-patterns-that-matter-in-2026/">Mobile App Design Trends 2026 · Muzli</a> ·
+    <a href="https://efficient.app/apps/sunsama">Sunsama Review 2026</a> ·
+    <a href="https://web.dev/learn/pwa/app-design">PWA App Design · web.dev</a> ·
+    <a href="https://firt.dev/pwa-design-tips/">PWAs Power Tips</a>
+  </p>
+  <p style="margin-top:18px;font-size:11.5px">
+    案头 Deskside · 设计文档 v1 · 2026-08-31 · 视觉沿用本仓库 Organic 设计系统
+  </p>
+</footer>
+</main>
+
+<script>
+(function(){
+  var links = Array.prototype.slice.call(document.querySelectorAll('.navpill'));
+  var targets = links.map(function(a){ return document.querySelector(a.getAttribute('href')); });
+
+  function activate(i){
+    links.forEach(function(a,j){ a.classList.toggle('on', i === j); });
+    var rail = document.querySelector('.navrail');
+    var pill = links[i];
+    if (rail && pill){
+      var want = pill.offsetLeft - rail.clientWidth / 2 + pill.offsetWidth / 2;
+      rail.scrollTo({ left: Math.max(0, want), behavior: 'smooth' });
+    }
+  }
+
+  if ('IntersectionObserver' in window){
+    var seen = {};
+    var io = new IntersectionObserver(function(entries){
+      entries.forEach(function(e){ seen[e.target.id] = e.isIntersecting ? e.boundingClientRect.top : null; });
+      var best = -1;
+      targets.forEach(function(t,i){
+        if (!t) return;
+        var r = t.getBoundingClientRect();
+        if (r.top <= 120) best = i;
+      });
+      if (best >= 0) activate(best);
+    }, { rootMargin: '-100px 0px -70% 0px', threshold: [0, 1] });
+    targets.forEach(function(t){ if (t) io.observe(t); });
+  }
+
+  links.forEach(function(a,i){
+    a.addEventListener('click', function(){ activate(i); });
+  });
+})();
+</script>
+
+</body>
+</html>
