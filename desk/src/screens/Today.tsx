@@ -75,9 +75,13 @@ export function Today({ go, onCapture, toast }: { go: (r: Route) => void; onCapt
           </div>
         </div>
       ) : (
-        <button type="button" className="focus" onClick={() => { setDraft(focus); setEditFocus(true) }}>
+        <button
+          type="button"
+          className={`focus${focus ? '' : ' is-empty'}`}
+          onClick={() => { setDraft(focus); setEditFocus(true) }}
+        >
           <div className="focus-k">今天的重心</div>
-          <div className={`focus-v${focus ? '' : ' hint'}`}>{focus || '点一下，写今天最重要的那件事'}</div>
+          <div className={`focus-v${focus ? '' : ' hint'}`}>{focus || '写今天最重要的那件事'}</div>
         </button>
       )}
 
@@ -121,12 +125,8 @@ export function Today({ go, onCapture, toast }: { go: (r: Route) => void; onCapt
         )}
       </div>
 
-      {tasks.length > 0 && (
-        full ? (
-          <p className="sub" style={{ marginTop: 'var(--s2)', textAlign: 'center', color: 'var(--ink-3)' }}>
-            三件事满了。想加第四件，先划掉一件。
-          </p>
-        ) : adding ? (
+      {tasks.length > 0 && !full && (
+        adding ? (
           <div className="card" style={{ marginTop: 'var(--s2)' }}>
             <input
               autoFocus className="field" value={newTitle} placeholder="第几件事？"
@@ -217,7 +217,7 @@ export function Today({ go, onCapture, toast }: { go: (r: Route) => void; onCapt
           {/* ⑥ 国庆（时令模块，假期结束自动消失） */}
           {tripOn && (
             <>
-              <Section label={s.trip.title || '假期'} meta={`${s.trip.todos.filter((t) => t.done).length} / ${s.trip.todos.length} 备好`} />
+              <Section label={s.trip.title || '假期'} domain="us" meta={`${s.trip.todos.filter((t) => t.done).length} / ${s.trip.todos.length} 备好`} />
               <button type="button" className="card" style={{ width: '100%', textAlign: 'left' }} onClick={() => go('life')}>
                 <div className="row" style={{ marginTop: 0 }}>
                   <IcTrip />
@@ -251,8 +251,12 @@ export function Today({ go, onCapture, toast }: { go: (r: Route) => void; onCapt
   )
 }
 
+/** 右侧只说「还有多久」；具体日期时间在卡片副行里，别两处重复 */
 function whenLabel(date: string, start: string, today: string): string {
-  if (date !== today) return D.shortCN(date)
+  if (date !== today) {
+    const d = D.daysUntil(date)
+    return d === 1 ? '明天' : `${d} 天后`
+  }
   const m = D.minutesUntil(date, start)
   if (m < 0) return '进行中'
   return `${D.humanMinutes(m)}后`

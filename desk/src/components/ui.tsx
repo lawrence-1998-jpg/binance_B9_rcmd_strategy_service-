@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { DOMAINS, type Domain, type Status } from '../lib/types'
+import { IcMore } from './icons'
 
 export function Section({ label, meta, domain }: { label: string; meta?: ReactNode; domain?: Domain }) {
   return (
@@ -69,7 +70,7 @@ export function Check({
       </label>
       {onMore && (
         <button type="button" className="more" onClick={onMore} aria-expanded={!!moreOpen} aria-label="更多操作">
-          <span aria-hidden="true">⋯</span>
+          <IcMore />
         </button>
       )}
     </div>
