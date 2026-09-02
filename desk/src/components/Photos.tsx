@@ -3,6 +3,7 @@ import { update, useStore, uid } from '../lib/store'
 import { downscale, putPhoto, delPhoto, rotatePhoto } from '../lib/media'
 import { readCaptureDate, fallbackDate } from '../lib/exifdate'
 import { usePhotoURL } from '../lib/usePhoto'
+import { askConfirm } from '../lib/confirm'
 import * as D from '../lib/date'
 import { Section } from './ui'
 import { IcPlus, IcClose, IcTrash, IcRotate } from './icons'
@@ -92,7 +93,7 @@ export function Photos({ toast }: { toast: (t: string) => void }) {
         onChange={(e) => { void add(e.target.files); e.target.value = '' }}
       />
       {photos.length === 0 && (
-        <p className="sub" style={{ color: 'var(--ink-3)', marginTop: 'var(--s2)' }}>
+        <p className="sub quiet" style={{ marginTop: 'var(--s2)' }}>
           照片只存在这台设备上，不上传任何地方。存之前会自动压到 1600px，省空间。
         </p>
       )}
@@ -140,11 +141,15 @@ export function Photos({ toast }: { toast: (t: string) => void }) {
               ><IcRotate /> 转 90°</button>
               <button
                 type="button" className="btn ghost wide" style={{ marginTop: 'var(--s2)', color: 'var(--alert)' }}
-                onClick={() => {
-                  void delPhoto(current.id)
-                  update((x) => ({ ...x, photos: x.photos.filter((y) => y.id !== current.id) }))
-                  setOpen(null); toast('删掉了')
-                }}
+                onClick={() => askConfirm({
+                  title: '删掉这张照片？',
+                  detail: '原图不在这里，删了就真的没了。想留着先去设置里导出备份。',
+                  onYes: () => {
+                    void delPhoto(current.id)
+                    update((x) => ({ ...x, photos: x.photos.filter((y) => y.id !== current.id) }))
+                    setOpen(null); toast('删掉了')
+                  },
+                })}
               >
                 <IcTrash /> 删掉这张
               </button>

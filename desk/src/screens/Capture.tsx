@@ -63,13 +63,13 @@ export function Capture({ onClose, toast }: { onClose: () => void; toast: (t: st
             </Chip>
           ))}
         </div>
-        <p className="sub" style={{ marginTop: 'var(--s3)', color: 'var(--ink-3)' }}>
+        <p className="sub quiet" style={{ marginTop: 'var(--s3)' }}>
           分类可以现在选，也可以晚上复盘时再补。
         </p>
 
         <div className="sheet-foot">
           <button type="button" className="btn wide" onClick={save} disabled={!text.trim()}>存下来</button>
-          <p className="sub" style={{ textAlign: 'center', marginTop: 'var(--s2)', color: 'var(--ink-3)' }}>
+          <p className="sub quiet" style={{ textAlign: 'center', marginTop: 'var(--s2)' }}>
             今天已记 {todayCount} 条 · 未处理 {pending} 条
           </p>
         </div>

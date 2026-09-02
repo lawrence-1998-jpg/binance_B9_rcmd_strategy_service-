@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { update, useStore, uid } from '../lib/store'
 import { DOMAINS, type Engagement, type Status } from '../lib/types'
 import * as D from '../lib/date'
+import { askConfirm } from '../lib/confirm'
 import { Section, Dot, Chip, Progress, Empty, Segmented } from '../components/ui'
 import { IcNote, IcTrash, IcWand } from '../components/icons'
 
@@ -52,8 +53,9 @@ export function Work({ toast, onPromptTool }: { toast: (t: string) => void; onPr
         value={line}
         onChange={(v) => { setLine(v); setOpen(null) }}
         options={[
-          { key: 'consult', label: '咨询顾问', color: 'var(--consult)' },
-          { key: 'byte', label: '字节产品', color: 'var(--byte)' },
+          // 选中态是实心底，要用 *-solid 变体：原色上放浅色 13px 字只有 3.4:1
+          { key: 'consult', label: '咨询顾问', color: 'var(--consult-solid)' },
+          { key: 'byte', label: '字节产品', color: 'var(--byte-solid)' },
         ]}
       />
 
@@ -158,10 +160,14 @@ export function Work({ toast, onPromptTool }: { toast: (t: string) => void; onPr
                       归档
                     </button>
                     <button type="button" className="btn ghost small" style={{ flex: '0 0 auto', color: 'var(--alert)' }}
-                      onClick={() => {
-                        update((x) => ({ ...x, engagements: x.engagements.filter((y) => y.id !== e.id) }))
-                        setOpen(null); toast('已删除')
-                      }} aria-label="删除">
+                      onClick={() => askConfirm({
+                        title: `删掉「${e.name}」？`,
+                        detail: '阶段、卡点、下一步都会一起没，撤销不了。只是想让它从列表消失的话，用旁边的「归档」。',
+                        onYes: () => {
+                          update((x) => ({ ...x, engagements: x.engagements.filter((y) => y.id !== e.id) }))
+                          setOpen(null); toast('已删除')
+                        },
+                      })} aria-label="删除">
                       <IcTrash />
                     </button>
                   </div>
@@ -194,7 +200,7 @@ export function Work({ toast, onPromptTool }: { toast: (t: string) => void; onPr
         Prompt 管理器 →
       </button>
 
-      <p className="sub" style={{ marginTop: 'var(--s4)', color: 'var(--ink-3)', textAlign: 'center' }}>
+      <p className="sub quiet" style={{ marginTop: 'var(--s4)', textAlign: 'center' }}>
         手机上只改状态和卡点。真正的活儿回电脑做。
       </p>
     </div>

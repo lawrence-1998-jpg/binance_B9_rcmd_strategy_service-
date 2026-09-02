@@ -14,7 +14,12 @@ body {
   -webkit-font-smoothing: antialiased;
   -webkit-tap-highlight-color: transparent;
   overscroll-behavior-y: none;
+  /* iOS 横过来会自动把字放大一档，把量好的字号阶梯冲掉 */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
+/* 长按按钮不该弹出系统菜单；照片和输入框仍然要能长按 */
+button, .tab, .chip { -webkit-touch-callout: none; }
 
 button, input, textarea, select {
   font: inherit; color: inherit;
@@ -64,6 +69,10 @@ button { cursor: pointer; -webkit-appearance: none; }
   margin: var(--s1) 0 0;
 }
 .sub { font-size: var(--t-sub); color: var(--ink-2); line-height: 1.5; }
+/* 空态提示、脚注这类「说明性」文字降一档。
+   以前这是散在 14 处的内联 color: var(--ink-3)——token 一改就改不动它们，
+   设计系统就是这样一点点烂掉的 */
+.sub.quiet { color: var(--ink-3); }
 .mono { font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
 .trunc { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
@@ -125,8 +134,8 @@ button { cursor: pointer; -webkit-appearance: none; }
   transition: background var(--d-micro) var(--ease), color var(--d-micro) var(--ease);
   white-space: nowrap;
 }
-.chip.tap { min-height: 34px; padding: 0 14px; }
-.chip.on { background: var(--night); color: var(--ground); }
+.chip.tap { min-height: var(--tap); padding: 0 var(--s4); }
+.chip.on { background: var(--night); color: var(--on-night); }
 .chips { display: flex; flex-wrap: wrap; gap: var(--s2); }
 
 /* ---- 按钮 ---- */
@@ -134,25 +143,28 @@ button { cursor: pointer; -webkit-appearance: none; }
   display: flex; align-items: center; justify-content: center; gap: var(--s2);
   min-height: 44px; padding: 0 var(--s5);
   border-radius: var(--r-pill);
-  background: var(--consult); color: #fdf8ef;
+  background: var(--consult-solid); color: var(--on-solid);
   font-weight: 700; font-size: var(--t-title);
   transition: transform var(--d-micro) var(--ease), opacity var(--d-micro) var(--ease);
 }
 .btn:active { transform: scale(.98); }
-.btn[disabled] { opacity: .4; pointer-events: none; }
+/* 禁用态：.4 实测只有 1.70:1，字都认不出来——人看不出这个按钮是干嘛的、
+   为什么点不动。.75 仍然明显「不可用」，但读得出来 */
+.btn[disabled] { opacity: .75; pointer-events: none; }
 .btn.ghost { background: none; border: 1px solid var(--line); color: var(--ink-2); }
 .btn.quiet { background: var(--well); color: var(--ink-2); }
-.btn.small { min-height: 34px; font-size: var(--t-sub); padding: 0 var(--s4); }
+.btn.small { min-height: var(--tap); font-size: var(--t-sub); padding: 0 var(--s4); }
 .btn.wide { width: 100%; }
+.btn.danger { background: var(--alert); color: var(--on-solid); }
+.btn.danger-text { color: var(--alert); }
 
 /* ---- 勾选：真的 input，不是 div ---- */
 .check-row { display: flex; align-items: stretch; gap: var(--s2); }
 .check-row + .check-row { border-top: 1px solid var(--line); }
-.check { display: flex; align-items: flex-start; gap: 11px; flex: 1; min-width: 0; text-align: left; padding: 10px 0; min-height: 48px; cursor: pointer; }
+.check { position: relative; display: flex; align-items: flex-start; gap: 11px; flex: 1; min-width: 0; text-align: left; padding: 10px 0; min-height: 48px; cursor: pointer; }
 .check-right { margin-top: 3px; flex: 0 0 auto; }
-.more { width: 30px; flex: 0 0 auto; color: var(--ink-3); opacity: .75; border-radius: 10px; display: grid; place-items: center; transition: opacity var(--d-micro) var(--ease); }
-.more svg { width: 15px; height: 15px; }
-.more:active { opacity: 1; background: var(--well); }
+.more { width: var(--tap); flex: 0 0 auto; color: var(--ink-3); border-radius: 10px; display: grid; place-items: center; transition: background var(--d-micro) var(--ease); }
+.more svg { width: 17px; height: 17px; }
 .more:active { background: var(--well); }
 .check input { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .box {
@@ -165,12 +177,12 @@ button { cursor: pointer; -webkit-appearance: none; }
 .check input:checked + .box::after {
   content: ""; position: absolute; left: 5.5px; top: 2px;
   width: 5px; height: 9px;
-  border: solid #fdf8ef; border-width: 0 2px 2px 0;
+  border: solid var(--on-solid); border-width: 0 2px 2px 0;
   transform: rotate(42deg);
 }
 .check input:focus-visible + .box { outline: 2px solid var(--consult); outline-offset: 2px; }
 .check-t { font-size: var(--t-body); font-weight: 600; line-height: 1.4; }
-.check.done .check-t { color: var(--ink-3); text-decoration: line-through; }
+.check.done .check-t { color: var(--ink-2); opacity: .85; text-decoration: line-through; }
 
 /* ---- 领域标识条 ---- */
 .dbar { width: 3px; align-self: stretch; border-radius: 2px; flex: 0 0 auto; min-height: 20px; }
@@ -181,12 +193,12 @@ button { cursor: pointer; -webkit-appearance: none; }
 
 /* ---- 重心块：全屏唯一的深色反底 ---- */
 .focus {
-  background: var(--night); color: var(--ground);
+  background: var(--night); color: var(--on-night);
   border-radius: var(--r-card); padding: 13px var(--s4);
   width: 100%; text-align: left;
   margin-top: var(--s3);
 }
-.focus-k { font-family: var(--f-mono); font-size: var(--t-eyebrow); letter-spacing: .14em; text-transform: uppercase; opacity: .55; }
+.focus-k { font-family: var(--f-mono); font-size: var(--t-eyebrow); letter-spacing: .14em; text-transform: uppercase; opacity: .78; }
 .focus-v { font-family: var(--f-cjk); font-weight: 700; font-size: var(--t-focus); margin-top: var(--s1); line-height: 1.35; }
 .focus-v.hint { opacity: .45; font-weight: 400; font-size: .875rem; }
 .focus.is-empty { padding: 11px var(--s4); }
@@ -211,17 +223,18 @@ button { cursor: pointer; -webkit-appearance: none; }
 .field::placeholder { color: var(--ink-3); }
 .field.pill { border-radius: var(--r-pill); padding-inline: var(--s4); }
 textarea.field { resize: none; line-height: 1.5; }
+.field.grow-y { overflow: hidden; }
 
 /* ---- toast ---- */
 .toast {
   position: fixed; left: 50%; z-index: 90;
   bottom: calc(var(--tabbar-h) + 18px + env(safe-area-inset-bottom));
   transform: translateX(-50%);
-  background: var(--night); color: var(--ground);
+  background: var(--night); color: var(--on-night);
   padding: 10px var(--s5); border-radius: var(--r-pill);
   font-size: var(--t-sub); font-weight: 600; box-shadow: var(--sh-l);
   animation: toast var(--d-move) var(--ease) both;
-  max-width: calc(100vw - 40px);
+  max-width: min(calc(100% - 40px), 22rem);
 }
 @keyframes toast { from { opacity: 0; transform: translate(-50%, 8px); } to { opacity: 1; transform: translate(-50%, 0); } }
 
@@ -233,13 +246,15 @@ textarea.field { resize: none; line-height: 1.5; }
   padding: calc(var(--s3) + env(safe-area-inset-top)) var(--gut) calc(var(--s3) + env(safe-area-inset-bottom));
   animation: sheet var(--d-page) var(--ease) both;
   overflow-y: auto;
+  overscroll-behavior: contain;   /* 滚到底继续拖不要带动背景 */
+  -webkit-overflow-scrolling: touch;
 }
 @keyframes sheet { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
 .sheet-in { width: 100%; max-width: var(--w-app); margin-inline: auto; display: flex; flex-direction: column; flex: 1; }
 .sheet-foot { margin-top: auto; padding-top: var(--s5); }
 @media (min-width: 820px) { .sheet-foot { margin-top: var(--s6); } }
 .sheet-head { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); }
-.icon-btn { width: 40px; height: 40px; display: grid; place-items: center; border-radius: 50%; color: var(--ink-2); margin-right: -8px; }
+.icon-btn { width: var(--tap); height: var(--tap); display: grid; place-items: center; border-radius: 50%; color: var(--ink-2); margin-right: -10px; }
 .icon-btn:active { background: var(--well); }
 
 /* ---- 底部导航 ---- */
@@ -265,7 +280,7 @@ textarea.field { resize: none; line-height: 1.5; }
 }
 .tab svg { width: 22px; height: 22px; }
 .tab span { font-size: var(--t-eyebrow); font-weight: 600; letter-spacing: .02em; }
-.tab.on { color: var(--consult); }
+.tab.on { color: var(--consult-text); }
 .cap {
   width: 54px; height: 54px; border-radius: 50%;
   background: var(--consult); color: #fdf8ef;
@@ -306,12 +321,12 @@ textarea.field { resize: none; line-height: 1.5; }
   position: absolute; left: 0; right: 0; bottom: 0;
   padding: 14px 7px 5px;
   background: linear-gradient(transparent, rgba(32, 30, 29, .62));
-  color: #fdf8ef; font-size: var(--t-eyebrow); line-height: 1.3;
+  color: var(--on-solid); font-size: var(--t-sub); line-height: 1.3;
   text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .padd {
-  aspect-ratio: 1; border-radius: 12px; border: 1.5px dashed var(--ink-3);
-  color: var(--ink-3); display: grid; place-items: center; width: 100%;
+  aspect-ratio: 1; border-radius: 12px; border: 1.5px dashed var(--us);
+  color: var(--us-deep); display: grid; place-items: center; width: 100%;
   font-size: var(--t-sub); gap: 2px; line-height: 1.2;
 }
 .padd svg { width: 20px; height: 20px; }
@@ -323,7 +338,7 @@ textarea.field { resize: none; line-height: 1.5; }
   border-radius: var(--r-card); padding: var(--s5) var(--s4);
 }
 .spark-q {
-  font-family: var(--f-cjk); font-weight: 700; font-size: 1.0625rem;
+  font-family: var(--f-cjk); font-weight: 700; font-size: var(--t-focus);
   line-height: 1.45; color: var(--us-deep);
 }
 
@@ -353,11 +368,70 @@ textarea.field { resize: none; line-height: 1.5; }
 .plist { display: grid; gap: var(--s2); }
 .pitem { background: var(--card); border: 1px solid var(--line); border-radius: var(--r-inner); padding: 12px var(--s4); width: 100%; text-align: left; }
 .pitem-h { display: flex; align-items: baseline; gap: var(--s2) }
-.pitem-id { font-family: var(--f-mono); font-size: var(--t-meta); color: var(--consult); font-weight: 600; flex: 0 0 auto }
+.pitem-id { font-family: var(--f-mono); font-size: var(--t-meta); color: var(--consult-text); font-weight: 600; flex: 0 0 auto }
 .pitem-t { font-size: var(--t-body); font-weight: 700; line-height: 1.35; flex: 1; min-width: 0 }
 .pitem-b { font-size: var(--t-sub); color: var(--ink-2); margin-top: 4px; line-height: 1.5; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden }
 .pbody {
   background: var(--well); border-radius: var(--r-inner); padding: 12px;
-  font-family: var(--f-mono); font-size: 11px; line-height: 1.65;
+  font-family: var(--f-mono); font-size: var(--t-sub); line-height: 1.65;
   white-space: pre-wrap; word-break: break-word; color: var(--ink);
+}
+
+
+/* ---- 危险区块：确认删除、覆盖导入这类地方的底 ---- */
+.warn {
+  background: var(--alert-tint);
+  border: 1px solid color-mix(in srgb, var(--alert) 32%, transparent);
+  border-radius: var(--r-inner);
+  padding: var(--s4);
+}
+.warn .sub { color: var(--ink); opacity: .82; }
+
+/* ---- 确认框 ------------------------------------------------------
+   不用 window.confirm：它在主屏 PWA 里样式不受控，还会打断动画。
+   只给不可撤销的操作用——弹得太勤人就会闭眼点确定，那它就白做了。 */
+.scrim {
+  position: fixed; inset: 0; z-index: 200;
+  background: rgba(32, 30, 29, .42);
+  display: grid; place-items: center;
+  padding: var(--gut);
+  animation: fade var(--d-move) var(--ease) both;
+}
+@keyframes fade { from { opacity: 0 } to { opacity: 1 } }
+.dialog {
+  width: 100%; max-width: 21rem;
+  background: var(--card); color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: var(--r-card);
+  padding: var(--s5);
+  box-shadow: var(--sh-l);
+  animation: pop var(--d-move) var(--ease) both;
+}
+@keyframes pop { from { opacity: 0; transform: scale(.96) } to { opacity: 1; transform: none } }
+.dialog-t { font-family: var(--f-cjk); font-weight: 700; font-size: var(--t-title); margin: 0; line-height: 1.4; }
+.dialog-s { font-size: var(--t-sub); color: var(--ink-2); margin: var(--s2) 0 0; line-height: 1.55; }
+.dialog-acts { display: flex; gap: var(--s2); margin-top: var(--s5); }
+
+/* ---- 列表里的删除键 ----
+   之前是个 34×18 的文字「删除」，贴在卡片右上角。18px 高在手机上
+   既难点中又容易误触，而误触的代价是永久删掉一个纪念日 */
+.tap-del {
+  width: var(--tap); height: var(--tap);
+  flex: 0 0 auto; margin: -10px -10px 0 0;
+  display: grid; place-items: center;
+  border-radius: 50%; color: var(--ink-3);
+  transition: background var(--d-micro) var(--ease), color var(--d-micro) var(--ease);
+}
+.tap-del svg { width: 17px; height: 17px; }
+.tap-del:active { background: var(--alert-tint); color: var(--alert); }
+
+/* ---- 存不进去的警告条 ----
+   localStorage 写失败以前是被 try/catch 吞掉的。对一本日记来说这是最坏的
+   默认：界面照常更新，人以为记下了，其实一个字都没落盘 */
+.storage-warn {
+  position: sticky; top: 0; z-index: 120;
+  background: var(--alert); color: var(--on-solid);
+  padding: 10px var(--gut);
+  padding-top: calc(10px + env(safe-area-inset-top));
+  font-size: var(--t-sub); line-height: 1.45;
 }

@@ -2,8 +2,9 @@ import { useState } from 'react'
 import { update, useStore, uid } from '../lib/store'
 import { DOMAINS, NOTE_KINDS, type Domain, type NoteKind } from '../lib/types'
 import * as D from '../lib/date'
-import { Section, Check, Chip, Empty, Segmented } from '../components/ui'
+import { Section, Check, Chip, Empty, Segmented, GrowText } from '../components/ui'
 import { autoDraft } from '../lib/diary'
+import { askConfirm } from '../lib/confirm'
 import { IcGear, IcNote } from '../components/icons'
 import type { Route } from '../components/TabBar'
 
@@ -18,6 +19,7 @@ export function Review({ go, onSettings, toast }: { go: (r: Route) => void; onSe
   const entry = stored ?? { date: today, lines: autoDraft(s, today), auto: true, updatedAt: 0 }
   const [tmTitle, setTmTitle] = useState('')
   const [tmDomain, setTmDomain] = useState<Domain>('consult')
+  const [showAllPending, setShowAllPending] = useState(false)
 
   const tasks = s.tasks.filter((t) => t.date === today)
   const done = tasks.filter((t) => t.done)
@@ -68,7 +70,7 @@ export function Review({ go, onSettings, toast }: { go: (r: Route) => void; onSe
         </div>
         <button type="button" className="icon-btn" onClick={onSettings} aria-label="设置"><IcGear /></button>
       </div>
-      <p className="sub" style={{ marginTop: 'var(--s2)' }}>
+      <p className="sub quiet" style={{ marginTop: 'var(--s2)' }}>
         完成 {done.length} 件，记了 {s.notes.filter((n) => D.key(new Date(n.createdAt)) === today).length} 条
         {weekTotal ? `，这周一共做完 ${weekTotal} 件。` : '。'}
       </p>
@@ -88,7 +90,7 @@ export function Review({ go, onSettings, toast }: { go: (r: Route) => void; onSe
       <Section label="今天" meta={tasks.length ? `${done.length} / ${tasks.length}` : undefined} />
       <div className={tasks.length ? 'card flush' : 'card'}>
         {tasks.length === 0 ? (
-          <p className="sub" style={{ margin: 0, color: 'var(--ink-3)' }}>今天没有列三件事。也没关系。</p>
+          <p className="sub quiet" style={{ margin: 0 }}>今天没有列三件事。也没关系。</p>
         ) : (
           [...done, ...left].map((t) => (
             <Check
@@ -136,7 +138,7 @@ export function Review({ go, onSettings, toast }: { go: (r: Route) => void; onSe
         {pending.length === 0 ? (
           <Empty icon={<IcNote />} title="都处理完了" sub="速记没有积压。" />
         ) : (
-          pending.slice(0, 8).map((n) => (
+          (showAllPending ? pending : pending.slice(0, 8)).map((n) => (
             <div key={n.id} style={{ padding: '12px 0', borderTop: '1px solid var(--line)' }}>
               <p className="row-t" style={{ margin: 0 }}>{n.text}</p>
               <p className="row-s">{D.relTime(n.createdAt)}</p>
@@ -164,21 +166,27 @@ export function Review({ go, onSettings, toast }: { go: (r: Route) => void; onSe
             </div>
           ))
         )}
+        {pending.length > 8 && (
+          <button type="button" className="btn quiet small wide" style={{ margin: 'var(--s3) 0' }}
+            onClick={() => setShowAllPending((v) => !v)}>
+            {showAllPending ? '收起' : `还有 ${pending.length - 8} 条，全部展开`}
+          </button>
+        )}
       </div>
 
       <Section label="今天这三句" meta={entry.auto ? '自动写的，可以改' : '你改过了'} />
       <div className="card">
         {([0, 1, 2] as const).map((i) => (
-          <textarea
+          <GrowText
             key={i}
-            className="field"
-            rows={2}
             style={i ? { marginTop: 'var(--s2)' } : undefined}
             value={entry.lines[i]}
+            maxLength={500}
+            aria-label={`第 ${i + 1} 句`}
             placeholder={['今天做了什么', '心里是什么感觉', '明天先做什么'][i]}
-            onChange={(e) => {
+            onChange={(v) => {
               const lines = [...entry.lines] as [string, string, string]
-              lines[i] = e.target.value
+              lines[i] = v
               saveEntry(lines, false)
             }}
           />
@@ -186,7 +194,17 @@ export function Review({ go, onSettings, toast }: { go: (r: Route) => void; onSe
         <div style={{ display: 'flex', gap: 'var(--s2)', marginTop: 'var(--s3)' }}>
           <button
             type="button" className="btn quiet small" style={{ flex: 1 }}
-            onClick={() => { saveEntry(autoDraft(s, today), true); toast('重写了一遍') }}
+            onClick={() => {
+              // 已经手写过就必须问一句：这三句话是今天唯一不可再生的东西，
+              // 自动草稿随时能再生成，覆盖了就换不回来
+              if (entry.auto) { saveEntry(autoDraft(s, today), true); toast('重写了一遍'); return }
+              askConfirm({
+                title: '用自动草稿覆盖你写的三句话？',
+                detail: '你手写的内容会被替换掉，撤销不了。',
+                confirmLabel: '覆盖',
+                onYes: () => { saveEntry(autoDraft(s, today), true); toast('重写了一遍') },
+              })
+            }}
           >按今天的事重写</button>
         </div>
       </div>
@@ -194,7 +212,7 @@ export function Review({ go, onSettings, toast }: { go: (r: Route) => void; onSe
       <Section label="明天的三件事" meta={`${tmTasks.length} / 3`} />
       <div className={tmTasks.length ? 'card flush' : 'card'}>
         {tmTasks.length === 0 ? (
-          <p className="sub" style={{ margin: 0, color: 'var(--ink-3)' }}>睡前定好明天，早上就不用想了。</p>
+          <p className="sub quiet" style={{ margin: 0 }}>睡前定好明天，早上就不用想了。</p>
         ) : (
           tmTasks.map((t) => (
             <Check key={t.id} done={t.done} bar={t.domain} title={t.title}

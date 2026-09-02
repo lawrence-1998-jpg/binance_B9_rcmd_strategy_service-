@@ -1,5 +1,6 @@
 import { useMemo, useRef, useState } from 'react'
 import { update, useStore, uid } from '../lib/store'
+import { askConfirm } from '../lib/confirm'
 import { buildPrompt, parseOutline, TARGETS, DEPTHS, type Depth, type Target } from '../lib/prompt'
 import { copyText } from '../lib/copy'
 import { Section, Chip, Empty } from '../components/ui'
@@ -74,10 +75,14 @@ export function Prompts({ onClose, toast }: { onClose: () => void; toast: (t: st
             {isMine && (
               <button
                 type="button" className="btn ghost small wide" style={{ marginTop: 'var(--s2)', color: 'var(--alert)' }}
-                onClick={() => {
-                  update((x) => ({ ...x, myPrompts: x.myPrompts.filter((m) => m.id !== p.id) }))
-                  setView({ kind: 'list' }); toast('删掉了')
-                }}
+                onClick={() => askConfirm({
+                  title: `删掉「${p.title}」？`,
+                  detail: '自己写的 prompt 删了就没了，内置那批不受影响。',
+                  onYes: () => {
+                    update((x) => ({ ...x, myPrompts: x.myPrompts.filter((m) => m.id !== p.id) }))
+                    setView({ kind: 'list' }); toast('删掉了')
+                  },
+                })}
               ><IcTrash /> 删掉</button>
             )}
           </div>
@@ -140,7 +145,7 @@ export function Prompts({ onClose, toast }: { onClose: () => void; toast: (t: st
           ＋ 自己加一条
         </button>
 
-        <p className="sub" style={{ color: 'var(--ink-3)', marginTop: 'var(--s4)', lineHeight: 1.6 }}>
+        <p className="sub quiet" style={{ marginTop: 'var(--s4)', lineHeight: 1.6 }}>
           内置这 {BUILTIN.length} 条在构建时从仓库的 <span className="mono">docs/playbook/lawrence-prompt-list.md</span> 生成 ——
           改那份 md 再发布，这里就跟着变，不存第二份。
         </p>

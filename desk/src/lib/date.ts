@@ -6,13 +6,35 @@ export function key(d = new Date()): string {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
 }
 
+/**
+ * `YYYY-MM-DD` → Date（本地时区的当天零点）。
+ *
+ * 输入不合法时返回今天，而不是 Invalid Date：坏日期往下游一传，
+ * 界面上出现的是「NaN/NaN undefined」这种东西，人完全看不懂发生了什么。
+ * 日期会从三个地方进来——手填的 <input type="date">、导入的备份、
+ * 被剥过 EXIF 的照片——都可能是空的或畸形的。
+ */
 export function parse(k: string): Date {
-  const [y, m, d] = k.split('-').map(Number)
-  return new Date(y, m - 1, d)
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(k ?? ''))
+  if (!m) return new Date()
+  const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]))
+  return Number.isNaN(d.getTime()) ? new Date() : d
+}
+
+/** 这个字符串是不是一个能用的日期 */
+export function isDateKey(k: unknown): boolean {
+  if (typeof k !== 'string') return false
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(k)
+  if (!m) return false
+  const y = Number(m[1]), mo = Number(m[2]), d = Number(m[3])
+  if (y < 1900 || y > 2200 || mo < 1 || mo > 12 || d < 1 || d > 31) return false
+  const dt = new Date(y, mo - 1, d)
+  return dt.getMonth() === mo - 1 && dt.getDate() === d
 }
 
 /** 12 → 十二；21 → 二十一 */
 function cn(n: number): string {
+  if (!Number.isFinite(n) || n < 0 || n > 99) return String(n)
   if (n <= 10) return CN_NUM[n]
   if (n < 20) return '十' + CN_NUM[n - 10]
   const t = Math.floor(n / 10)
@@ -71,7 +93,9 @@ export function nextAnniversary(k: string, now = new Date()) {
 
 /** HH:MM 距现在还有多久，返回分钟（可为负） */
 export function minutesUntil(dateK: string, hhmm: string, now = new Date()): number {
-  const [h, m] = hhmm.split(':').map(Number)
+  const t = /^(\d{1,2}):(\d{2})$/.exec(String(hhmm ?? ''))
+  const h = t ? Number(t[1]) : 0
+  const m = t ? Number(t[2]) : 0
   const d = parse(dateK)
   d.setHours(h, m, 0, 0)
   return Math.round((d.getTime() - now.getTime()) / 60000)

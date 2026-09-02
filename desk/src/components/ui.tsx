@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { DOMAINS, type Domain, type Status } from '../lib/types'
 import { IcMore } from './icons'
+import { useConfirm, dismissConfirm } from '../lib/confirm'
 
 export function Section({ label, meta, domain }: { label: string; meta?: ReactNode; domain?: Domain }) {
   return (
@@ -166,10 +167,12 @@ export function Segmented<T extends string>({
             onClick={() => onChange(o.key)}
             aria-pressed={on}
             style={{
-              flex: 1, minHeight: 36, borderRadius: 'var(--r-pill)',
+              // 44 是触控下限；选中态的底走 *-solid 变体——
+              // 原色 #c67139 上放浅色 13px 字只有 3.41:1，读不清
+              flex: 1, minHeight: 'var(--tap)', borderRadius: 'var(--r-pill)',
               fontSize: 'var(--t-body)', fontWeight: 700,
-              background: on ? (o.color ?? 'var(--consult)') : 'transparent',
-              color: on ? '#fdf8ef' : 'var(--ink-2)',
+              background: on ? (o.color ?? 'var(--consult-solid)') : 'transparent',
+              color: on ? 'var(--on-solid)' : 'var(--ink-2)',
               transition: 'background var(--d-micro) var(--ease), color var(--d-micro) var(--ease)',
             }}
           >
@@ -178,5 +181,69 @@ export function Segmented<T extends string>({
         )
       })}
     </div>
+  )
+}
+
+/**
+ * 确认框。只给不可撤销的操作用——弹得太勤，人就会闭着眼点「确定」，
+ * 那时它就一点用都没有了。
+ */
+export function ConfirmDialog() {
+  const ask = useConfirm()
+  if (!ask) return null
+  return (
+    <div className="scrim" onClick={dismissConfirm}>
+      <div className="dialog" role="alertdialog" aria-modal="true" aria-label={ask.title}
+        onClick={(e) => e.stopPropagation()}>
+        <p className="dialog-t">{ask.title}</p>
+        {ask.detail && <p className="dialog-s">{ask.detail}</p>}
+        <div className="dialog-acts">
+          <button type="button" className="btn quiet" style={{ flex: 1 }} onClick={dismissConfirm}>算了</button>
+          <button type="button" className="btn danger" style={{ flex: 1 }} autoFocus
+            onClick={() => { ask.onYes(); dismissConfirm() }}>
+            {ask.confirmLabel ?? '删掉'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/**
+ * 会跟着内容长高的多行输入。
+ *
+ * 固定 rows={2} 的话，写超过两行就只能在框里滚——而「今天这三句」是每天
+ * 真的要回头看的东西，看不全等于白写。resize 手柄在手机上又点不到，
+ * 所以只能由代码来量。
+ */
+export function GrowText({
+  value, onChange, placeholder, minRows = 2, maxLength, style, ...rest
+}: {
+  value: string
+  onChange: (v: string) => void
+  placeholder?: string
+  minRows?: number
+  maxLength?: number
+  style?: CSSProperties
+} & { 'aria-label'?: string }) {
+  const ref = useRef<HTMLTextAreaElement>(null)
+  useLayoutEffect(() => {
+    const el = ref.current
+    if (!el) return
+    el.style.height = 'auto'
+    el.style.height = `${el.scrollHeight}px`
+  }, [value])
+  return (
+    <textarea
+      {...rest}
+      ref={ref}
+      className="field grow-y"
+      rows={minRows}
+      maxLength={maxLength}
+      value={value}
+      placeholder={placeholder}
+      style={style}
+      onChange={(e) => onChange(e.target.value)}
+    />
   )
 }
