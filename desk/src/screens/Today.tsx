@@ -3,6 +3,7 @@ import { get, update, useStore, uid } from '../lib/store'
 import { DOMAINS, type Domain } from '../lib/types'
 import * as D from '../lib/date'
 import { Section, Check, Chip, Empty, Progress } from '../components/ui'
+import { usePhotoURL } from '../lib/usePhoto'
 import { IcNote, IcTrip } from '../components/icons'
 import type { Route } from '../components/TabBar'
 
@@ -32,6 +33,10 @@ export function Today({ go, onCapture, toast }: { go: (r: Route) => void; onCapt
     .map((a) => ({ a, n: D.nextAnniversary(a.date) }))
     .sort((x, y) => x.n.days - y.n.days)[0]
   const wish = s.wishes.find((w) => !w.done)
+  // 一天固定一张，不每次进来都换 —— 回忆不该像老虎机
+  const memory = s.photos.length
+    ? s.photos[Math.floor(Date.now() / 86400000) % s.photos.length]
+    : null
 
   const tripLeft = D.daysUntil(s.trip.start)
   const tripOver = D.daysUntil(s.trip.end) < 0
@@ -193,9 +198,22 @@ export function Today({ go, onCapture, toast }: { go: (r: Route) => void; onCapt
 
         <div>
           {/* ⑤ 我们俩 */}
-          <Section label="我们俩" domain="us" meta={anniv ? `${anniv.n.days} 天后` : undefined} />
+          <Section label="我们俩" domain="us" meta={memory ? '那天的我们' : anniv ? `${anniv.n.days} 天后` : undefined} />
           <button type="button" className="card" style={{ width: '100%', textAlign: 'left' }} onClick={() => go('life')}>
-            {anniv ? (
+            {memory ? (
+              <>
+                <Memory id={memory.id} rev={memory.rev ?? 0} />
+                <span className="row-s" style={{ marginTop: 'var(--s3)' }}>{D.shortCN(memory.date)}</span>
+                <p className="row-t" style={{ margin: '2px 0 0', fontWeight: 600 }}>
+                  {memory.caption || '那天的我们'}
+                </p>
+                {anniv && (
+                  <p className="sub" style={{ margin: '6px 0 0', color: 'var(--ink-3)' }}>
+                    {anniv.a.label} 还有 {anniv.n.days} 天
+                  </p>
+                )}
+              </>
+            ) : anniv ? (
               <>
                 <span className="row-s" style={{ marginTop: 0 }}>{anniv.a.label}</span>
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginTop: 4 }}>
@@ -265,4 +283,19 @@ function whenLabel(date: string, start: string, today: string): string {
 export function todayTaskCount(): number {
   const t = D.key()
   return get().tasks.filter((x) => x.date === t).length
+}
+
+/** 今日屏上的回忆缩略图 */
+function Memory({ id, rev }: { id: string; rev: number }) {
+  const url = usePhotoURL(id, rev)
+  return (
+    <span
+      style={{
+        display: 'block', width: '100%', aspectRatio: '4/3',
+        borderRadius: 'var(--r-inner)', overflow: 'hidden', background: 'var(--well)',
+      }}
+    >
+      {url && <img src={url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />}
+    </span>
+  )
 }
