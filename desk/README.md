@@ -8,7 +8,11 @@
 
 ## 装到 iPhone 主屏（推荐）
 
-仓库开了 GitHub Pages，构建后地址是：
+**首次要手动开一次 Pages**（只需一次，我做不到——Actions 的 token 没有创建 Pages
+站点的权限）：仓库 **Settings → Pages → Build and deployment → Source** 选
+**GitHub Actions**。开完重跑一次流水线，之后每次推送自动发布。
+
+地址是：
 
 ```
 https://lawrence-1998-jpg.github.io/binance_B9_rcmd_strategy_service-/
