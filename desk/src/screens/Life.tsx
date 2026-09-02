@@ -3,6 +3,8 @@ import { update, useStore, uid } from '../lib/store'
 import type { TripTodo, Wish } from '../lib/types'
 import * as D from '../lib/date'
 import { Section, Chip, Check, Empty, Progress, Segmented, InlineAdd } from '../components/ui'
+import { Photos } from '../components/Photos'
+import { SPARKS } from '../data/sparks'
 import { IcLife, IcTrip, IcTrash } from '../components/icons'
 
 type Tab = 'us' | 'trip'
@@ -36,7 +38,10 @@ export function Life({ toast }: { toast: (t: string) => void }) {
 
 function Us({ toast }: { toast: (t: string) => void }) {
   const s = useStore((x) => x)
+  const s2 = s
   const [adding, setAdding] = useState(false)
+  // 用天数当种子：同一天进来看到的是同一张，点一下才换
+  const [spark, setSpark] = useState(() => Math.floor(Date.now() / 86400000))
   const [label, setLabel] = useState('')
   const [date, setDate] = useState('')
   const [countUp, setCountUp] = useState(false)
@@ -122,6 +127,44 @@ function Us({ toast }: { toast: (t: string) => void }) {
           ＋ 再加一个
         </button>
       ) : null}
+
+      <Photos toast={toast} />
+
+      {/* 聊天启发：离线的一副牌。两个人都累到不想说话的晚上，用来起个头 */}
+      <Section label="今晚聊点什么" domain="us" meta="点一下换一张" />
+      <button
+        type="button" className="spark" style={{ width: '100%', textAlign: 'left' }}
+        onClick={() => setSpark((n) => n + 1)}
+      >
+        <span className="spark-q">{SPARKS[spark % SPARKS.length]}</span>
+      </button>
+
+      {/* 想对他说的话 */}
+      <Section label="想对他说" domain="us" meta={s2.moments.length ? `${s2.moments.length} 条` : undefined} />
+      {s2.moments.length > 0 && (
+        <div className="card">
+          {s2.moments.slice(0, 6).map((m, i) => (
+            <div key={m.id} className="row" style={i ? undefined : { marginTop: 0 }}>
+              <span className="grow">
+                <span className="row-t" style={{ fontWeight: 400, lineHeight: 1.5 }}>{m.text}</span>
+                <span className="row-s">{D.relTime(m.createdAt)}</span>
+              </span>
+              <button
+                type="button" style={{ color: 'var(--ink-3)' }} aria-label="删掉"
+                onClick={() => update((x) => ({ ...x, moments: x.moments.filter((y) => y.id !== m.id) }))}
+              ><IcTrash /></button>
+            </div>
+          ))}
+        </div>
+      )}
+      <InlineAdd
+        cta="写一句"
+        placeholder="今天想对他说的一句话"
+        onAdd={(text) => {
+          update((x) => ({ ...x, moments: [{ id: uid(), text, createdAt: Date.now() }, ...x.moments] }))
+          toast('记下了 ♡')
+        }}
+      />
 
       {/* 他提过的 —— 速记里标了「给老公」的都汇到这儿 */}
       <Section label="他提过的" domain="us" meta={heard.length ? `${heard.length} 条` : '空'} />

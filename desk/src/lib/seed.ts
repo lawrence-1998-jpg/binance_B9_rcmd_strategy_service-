@@ -81,6 +81,11 @@ export function seed(): State {
       target: 'tooled',
       depth: 'deep',
     },
+    photos: [],
+    moments: [],
+    entries: [],
+    myPrompts: [],
+    promptUses: {},
   }
 }
 
@@ -102,6 +107,11 @@ export function empty(): State {
       target: 'tooled',
       depth: 'deep',
     },
+    photos: [],
+    moments: [],
+    entries: [],
+    myPrompts: [],
+    promptUses: {},
   }
 }
 

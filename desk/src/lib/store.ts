@@ -13,7 +13,9 @@ function load(): State {
     const raw = localStorage.getItem(KEY)
     if (!raw) return seed()
     const parsed = JSON.parse(raw) as State
-    if (parsed && parsed.version === 1) return { ...seed(), ...parsed }
+    // 版本只做下限判断：新增顶层字段由 {...seed(), ...parsed} 自动补齐，
+    // 不需要为了加字段写迁移
+    if (parsed && parsed.version >= 1) return { ...seed(), ...parsed }
   } catch {
     /* 存储被清了、或在隐私模式下读不到 —— 回到种子数据，不崩 */
   }
