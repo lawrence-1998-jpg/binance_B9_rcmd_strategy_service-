@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react'
 import { exportJSON, importJSON, resetToEmpty, useStore } from '../lib/store'
+import { saveFile } from '../lib/save'
 import * as D from '../lib/date'
 import { Section } from '../components/ui'
 import { IcClose } from '../components/icons'
@@ -7,6 +8,7 @@ import { IcClose } from '../components/icons'
 export function Settings({ onClose, toast }: { onClose: () => void; toast: (t: string) => void }) {
   const s = useStore((x) => x)
   const [confirmClear, setConfirmClear] = useState(false)
+  const [manual, setManual] = useState<string | null>(null)
   const file = useRef<HTMLInputElement>(null)
 
   const counts = [
@@ -16,15 +18,13 @@ export function Settings({ onClose, toast }: { onClose: () => void; toast: (t: s
     ['日子', s.anniversaries.length],
   ] as const
 
-  function download() {
-    const blob = new Blob([exportJSON()], { type: 'application/json' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `deskside-${D.key()}.json`
-    a.click()
-    URL.revokeObjectURL(url)
-    toast('导出好了')
+  async function download() {
+    const json = exportJSON()
+    const outcome = await saveFile(`deskside-${D.key()}.json`, json)
+    if (outcome === 'saved') { setManual(null); toast('导出好了'); return }
+    if (outcome === 'declined') { toast('取消了'); return }
+    // 这个环境不让页面存文件 —— 摊出来让人自己复制，不静默失败
+    setManual(json)
   }
 
   async function pick(f: File | undefined) {
@@ -56,11 +56,27 @@ export function Settings({ onClose, toast }: { onClose: () => void; toast: (t: s
             所以每周导出一次。
           </p>
           <div style={{ display: 'flex', gap: 'var(--s2)', marginTop: 'var(--s4)' }}>
-            <button type="button" className="btn" style={{ flex: 1 }} onClick={download}>导出 JSON</button>
+            <button type="button" className="btn" style={{ flex: 1 }} onClick={() => void download()}>导出 JSON</button>
             <button type="button" className="btn quiet" style={{ flex: 1 }} onClick={() => file.current?.click()}>导入</button>
           </div>
           <input ref={file} type="file" accept="application/json" hidden
             onChange={(e) => { void pick(e.target.files?.[0]); e.target.value = '' }} />
+
+          {manual && (
+            <div style={{ marginTop: 'var(--s4)' }}>
+              <p className="sub" style={{ color: 'var(--ink-2)', marginBottom: 'var(--s2)' }}>
+                这个环境不允许网页直接存文件。下面是你的全部数据，<strong>长按全选复制</strong>，
+                贴到备忘录或任何地方存着；要恢复时用旁边的「导入」。
+              </p>
+              <textarea
+                className="field" rows={6} readOnly value={manual}
+                onFocus={(e) => e.currentTarget.select()}
+                style={{ fontFamily: 'var(--f-mono)', fontSize: '10px', lineHeight: 1.5 }}
+              />
+              <button type="button" className="btn quiet small wide" style={{ marginTop: 'var(--s2)' }}
+                onClick={() => setManual(null)}>收起</button>
+            </div>
+          )}
         </div>
 
         <Section label="重来一次" />
