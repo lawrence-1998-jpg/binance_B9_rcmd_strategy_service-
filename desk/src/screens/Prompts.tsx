@@ -57,7 +57,7 @@ export function Prompts({ onClose, toast }: { onClose: () => void; toast: (t: st
             <button type="button" className="icon-btn" onClick={onClose} aria-label="关闭"><IcClose /></button>
           </div>
           <p className="eyebrow" style={{ marginTop: 'var(--s2)' }}>{p.cat === '我' ? '我加的' : `${p.cat} · ${p.catName}`}</p>
-          <h1 className="h1" style={{ fontSize: '1.25rem' }}>{p.title}</h1>
+          <h1 className="h1" style={{ fontSize: 'var(--t-focus)' }}>{p.title}</h1>
 
           <div className="pbody" style={{ marginTop: 'var(--s4)' }}>{p.body}</div>
 
@@ -170,7 +170,7 @@ function NewPrompt({ onBack, onClose, toast }: { onBack: () => void; onClose: ()
         <Section label="加一条" />
         <input className="field" value={title} placeholder="叫什么？比如：客户访谈提纲" onChange={(e) => setTitle(e.target.value)} />
         <textarea
-          className="field" rows={10} style={{ marginTop: 'var(--s2)', fontFamily: 'var(--f-mono)', fontSize: '11.5px', lineHeight: 1.6 }}
+          className="field" rows={10} style={{ marginTop: 'var(--s2)', fontFamily: 'var(--f-mono)', fontSize: 'var(--t-sub)', lineHeight: 1.6 }}
           value={body} placeholder="把 prompt 正文贴进来" onChange={(e) => setBody(e.target.value)}
         />
         <div className="sheet-foot">
@@ -268,7 +268,7 @@ function Generator({ onBack, onClose, toast }: { onBack: () => void; onClose: ()
           <textarea
             ref={out} className="field" rows={16} readOnly value={prompt}
             onFocus={(e) => e.currentTarget.select()}
-            style={{ marginTop: 'var(--s3)', fontFamily: 'var(--f-mono)', fontSize: '10.5px', lineHeight: 1.55 }}
+            style={{ marginTop: 'var(--s3)', fontFamily: 'var(--f-mono)', fontSize: 'var(--t-meta)', lineHeight: 1.55 }}
           />
         )}
         <div style={{ height: 'var(--s6)' }} />

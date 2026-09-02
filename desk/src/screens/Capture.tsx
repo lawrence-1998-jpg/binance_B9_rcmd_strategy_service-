@@ -3,6 +3,7 @@ import { update, useStore, uid } from '../lib/store'
 import { NOTE_KINDS, type NoteKind } from '../lib/types'
 import * as D from '../lib/date'
 import { Chip } from '../components/ui'
+import { askConfirm } from '../lib/confirm'
 import { IcClose } from '../components/icons'
 
 /**
@@ -17,10 +18,27 @@ export function Capture({ onClose, toast }: { onClose: () => void; toast: (t: st
 
   useEffect(() => {
     ref.current?.focus()
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') close() }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [onClose])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [onClose, text])
+
+  /**
+   * 关掉之前先问一句 —— 但只在真写了点东西的时候。
+   * 手机上返回手势太容易误触，刚想到的东西就这么没了；
+   * 而这里的全部意义就是「想到什么先扔进来」，丢掉一条就是丢掉那个念头。
+   * 只打了两三个字就不问了，不然反而变成骚扰。
+   */
+  function close() {
+    if (text.trim().length < 8) { onClose(); return }
+    askConfirm({
+      title: '不存就走？',
+      detail: `「${text.trim().slice(0, 30)}${text.trim().length > 30 ? '…' : ''}」会丢掉。`,
+      confirmLabel: '丢掉',
+      onYes: onClose,
+    })
+  }
 
   const todayCount = s.notes.filter((n) => D.key(new Date(n.createdAt)) === D.key()).length
   const pending = s.notes.filter((n) => !n.handled).length
@@ -38,7 +56,7 @@ export function Capture({ onClose, toast }: { onClose: () => void; toast: (t: st
       <div className="sheet-in">
         <div className="sheet-head">
           <span className="eyebrow">记一笔</span>
-          <button type="button" className="icon-btn" onClick={onClose} aria-label="关闭"><IcClose /></button>
+          <button type="button" className="icon-btn" onClick={close} aria-label="关闭"><IcClose /></button>
         </div>
 
         <textarea
@@ -50,7 +68,7 @@ export function Capture({ onClose, toast }: { onClose: () => void; toast: (t: st
           placeholder="想到什么，先扔进来"
           style={{
             background: 'none', width: '100%', marginTop: 'var(--s5)',
-            fontFamily: 'var(--f-cjk)', fontWeight: 700, fontSize: '1.0625rem',
+            fontFamily: 'var(--f-cjk)', fontWeight: 700, fontSize: 'var(--t-focus)',
             lineHeight: 1.45, resize: 'none', outline: 'none',
           }}
         />
