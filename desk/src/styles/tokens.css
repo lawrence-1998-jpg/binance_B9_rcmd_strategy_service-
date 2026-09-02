@@ -1,0 +1,103 @@
+/* ============================================================
+   案头 Deskside — 设计 token
+   来源：仓库 docs/design_source/organic-styles.css（Organic 设计系统）
+   本文件是移动重构版：色相不变，改的是明度关系、尺度、以及新增领域色。
+   改配色只改这里，组件不许写死颜色。
+   ============================================================ */
+
+:root {
+  color-scheme: light;
+
+  /* ---- 底与面 ---------------------------------------------
+     与桌面版的关键差异：卡片比底色「亮」。
+     手机会在户外强光下用，屏幕反光抬高黑场，暗卡片会和暗底糊成一片。 */
+  --ground:   #f5ead8;   /* 页面底 · 纸 */
+  --card:     #fdf8ef;   /* 卡片 · 比底色亮 */
+  --well:     #ebddc5;   /* 内嵌槽：进度条底、输入框底（原桌面版卡片色降级复用） */
+  --night:    #2e2b25;   /* 深色反底块 —— 全屏唯一，用于「今天的重心」 */
+
+  /* ---- 墨 ---- */
+  --ink:      #201e1d;   /* 主文字 */
+  --ink-2:    #6b6255;   /* 次文字，纸底上 5.9:1 */
+  --ink-3:    #9a9083;   /* 三级文字，仅装饰性信息，不承载唯一信息 */
+  --line:     rgba(32, 30, 29, .10);
+  --line-2:   rgba(32, 30, 29, .055);
+
+  /* ---- 领域色 ----------------------------------------------
+     四条人生线各一个色相。规则：领域色只出现在 3px 标识条、
+     小圆点、eyebrow 文字和 chip 上，绝不做卡片底色。
+     ——否则整屏会变成四种颜色在互相喊。 */
+  --consult:      #c67139;   /* 咨询顾问 · 赤陶（Organic 原 accent） */
+  --consult-tint: #ffe1d0;
+  --consult-deep: #8c491a;
+
+  --byte:         #6d829b;   /* 字节产品 · 雾蓝 */
+  --byte-tint:    #dfe6ee;
+  --byte-deep:    #41546c;
+
+  --us:           #a8697c;   /* 我们俩 · 梅陶 */
+  --us-tint:      #f3dde3;
+  --us-deep:      #7a4051;
+
+  --me:           #8a7f6d;   /* 我自己 · 中性 */
+  --me-tint:      #ece5d8;
+  --me-deep:      #5c5343;
+
+  /* ---- 语义色（与领域色分开，永远只表示状态） ---- */
+  --ok:        #7a8a5e;   /* 鼠尾草 · 正常 / 完成 */
+  --ok-tint:   #e1eecc;
+  --ok-deep:   #56633f;
+  --alert:     #b3402c;   /* 砖红 · 阻塞 / 破坏性操作。全站出现频率应 < 1% */
+  --alert-tint:#f7e0da;
+
+  /* ---- 字体：中西分工 ---------------------------------------
+     Caprasimo 只有拉丁字形，中文会静默回退。所以它只用在
+     数字和英文上；中文标题一律走 PingFang。 */
+  --f-display: "Caprasimo", Georgia, serif;
+  --f-cjk: "PingFang SC", "Hiragino Sans GB", "Source Han Sans SC", "Microsoft YaHei", system-ui, sans-serif;
+  --f-body: "Figtree", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", system-ui, sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* ---- 字号阶梯：只用这 8 级 ---- */
+  --t-display: 1.4375rem;  /* 23px 屏标题 */
+  --t-focus:   1rem;       /* 16px 今日重心 */
+  --t-title:   .9375rem;   /* 15px 卡片标题 */
+  --t-body:    .8125rem;   /* 13px 列表主文案 */
+  --t-sub:     .71875rem;  /* 11.5px 次要说明 */
+  --t-meta:    .625rem;    /* 10px 时间 / 计数（mono） */
+  --t-eyebrow: .59375rem;  /* 9.5px 分区标签（mono, 大写, +.14em） */
+
+  /* ---- 间距：4pt 基准，只用这 7 个值 ---- */
+  --s1: 4px;  --s2: 8px;  --s3: 12px; --s4: 14px;
+  --s5: 18px; --s6: 24px; --s7: 32px;
+
+  --gut: 15px;             /* 屏幕左右安全边距 */
+  --r-card: 18px;
+  --r-inner: 12px;
+  --r-pill: 999px;
+
+  --sh-s: 0 1px 2px rgba(46, 43, 37, .07);
+  --sh-m: 0 3px 12px rgba(46, 43, 37, .10);
+  --sh-l: 0 10px 34px rgba(46, 43, 37, .16);
+
+  /* ---- 动效：三档，不许自创 ---- */
+  --d-micro: 120ms;        /* 按下、勾选 */
+  --d-move:  200ms;        /* toast、展开 */
+  --d-page:  280ms;        /* 页面转场 */
+  --ease: cubic-bezier(.2, .8, .2, 1);
+
+  --w-app: 100%;           /* 桌面上由 media query 放宽 */
+  --tabbar-h: 62px;
+}
+
+@media (min-width: 820px) {
+  :root {
+    font-size: 106.25%;    /* 17px 基准：桌面上同样的阶梯自动变大一档 */
+    --w-app: 700px;
+    --gut: 22px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root { --d-micro: 1ms; --d-move: 1ms; --d-page: 1ms; }
+}
