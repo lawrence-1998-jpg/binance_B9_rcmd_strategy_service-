@@ -83,8 +83,14 @@ jobs:
         with:
           path: desk/dist
 
-  # 部署。Pages 没开的话只有这个 job 会红，构建校验不受影响。
+  # 部署。只在 main 上跑。
+  #
+  # github-pages 这个 environment 有分支保护，只接受来自默认分支的部署，
+  # 所以在功能分支上这个 job 必然在 1 秒内失败、不产出任何日志。
+  # 之前没加这个条件，每个功能分支的 PR 上都挂一个红叉，而它跟改动无关 ——
+  # 红色必须意味着「有事」，天天红的检查等于没有检查。
   deploy:
+    if: github.ref == 'refs/heads/main'
     needs: build
     runs-on: ubuntu-latest
     environment:
@@ -97,6 +103,7 @@ jobs:
       - name: 部署失败时给出下一步
         if: failure()
         run: |
-          echo "::error::Pages 还没启用。去仓库 Settings → Pages →"
-          echo "::error::Build and deployment → Source 选 'GitHub Actions'，然后重跑这个流水线。"
-          echo "::error::这一步只能手动点一次，Actions 的 token 没有创建 Pages 站点的权限。"
+          echo "::error::部署失败。先确认 Settings → Pages → Build and deployment →"
+          echo "::error::Source 是否为 'GitHub Actions'（这一步只能由人手动点一次，"
+          echo "::error::Actions 的 token 没有创建 Pages 站点的权限）。"
+          echo "::error::已经开过的话，去上面的 build job 看产物是不是没传上来。"
