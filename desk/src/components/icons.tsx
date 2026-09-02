@@ -63,6 +63,11 @@ export const IcCopy = (p: P) => (
     <path d="M5.5 15H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v.5" />
   </svg>
 )
+export const IcRotate = (p: P) => (
+  <svg {...base} {...p}>
+    <path d="M20 11.5A8 8 0 1 1 17.5 6" /><path d="M20 4v4.5h-4.5" />
+  </svg>
+)
 export const IcMore = (p: P) => (
   <svg {...base} strokeWidth={2.6} strokeLinecap="round" {...p}>
     <path d="M6 12h.01M12 12h.01M18 12h.01" />

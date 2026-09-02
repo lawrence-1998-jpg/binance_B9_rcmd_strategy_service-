@@ -78,30 +78,72 @@ export async function usage(): Promise<{ used: number; quota: number } | null> {
  * <img> 这条路更稳。
  */
 export function downscale(file: File, max = 1600, quality = 0.82): Promise<Blob> {
+  return draw(file, max, quality)
+}
+
+/** 把已存的图再转 90°，用于「拍歪了」这种情况 */
+export async function rotatePhoto(id: string, quarterTurns = 1): Promise<boolean> {
+  const blob = await getPhoto(id)
+  if (!blob) return false
+  try {
+    const out = await draw(blob, 4000, 0.85, quarterTurns)
+    await putPhoto(id, out)
+    return true
+  } catch {
+    return false
+  }
+}
+
+/**
+ * 解码 → 可选旋转 → 压缩。
+ *
+ * 关于 EXIF 方向：**故意不自己处理**。
+ * 手机照片把「该转多少度」写在 EXIF 里，现代浏览器（iOS Safari 13.4+、Chrome 81+）
+ * 在 <img> 上会自动摆正。我试过自己接管，结果发现解码器的行为无法可靠探测——
+ * 实测同一个 Chromium 对合成的 orientation=6 测试图会摆正，对真实 iPhone 照片却不会。
+ * 在这种情况下自作主张，只会在某些浏览器上把照片转两次，
+ * 而那是**写进存储的永久错误**，比不转更糟。
+ *
+ * 所以：解码交给浏览器，转错了由用户点「转 90°」修一下。
+ * 简单、可预测、最坏情况可恢复。
+ */
+async function draw(file: Blob, max: number, quality: number, extraTurns = 0): Promise<Blob> {
+  const img = await loadImg(file)
+  const w = img.naturalWidth
+  const h = img.naturalHeight
+
+  const turns = ((extraTurns % 4) + 4) % 4
+  const swap = turns === 1 || turns === 3
+  const outW = swap ? h : w
+  const outH = swap ? w : h
+
+  const scale = Math.min(1, max / Math.max(outW, outH))
+  const cw = Math.round(outW * scale)
+  const ch = Math.round(outH * scale)
+
+  const canvas = document.createElement('canvas')
+  canvas.width = cw
+  canvas.height = ch
+  const ctx = canvas.getContext('2d')
+  if (!ctx) throw new Error('无法处理这张图')
+
+  ctx.translate(cw / 2, ch / 2)
+  ctx.rotate((turns * Math.PI) / 2)
+  const dw = swap ? ch : cw
+  const dh = swap ? cw : ch
+  ctx.drawImage(img, -dw / 2, -dh / 2, dw, dh)
+
+  return await new Promise<Blob>((resolve, reject) =>
+    canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('无法处理这张图'))), 'image/jpeg', quality),
+  )
+}
+
+function loadImg(file: Blob): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const url = URL.createObjectURL(file)
     const img = new Image()
-    img.onload = () => {
-      URL.revokeObjectURL(url)
-      const scale = Math.min(1, max / Math.max(img.width, img.height))
-      const w = Math.round(img.width * scale)
-      const h = Math.round(img.height * scale)
-      const canvas = document.createElement('canvas')
-      canvas.width = w
-      canvas.height = h
-      const ctx = canvas.getContext('2d')
-      if (!ctx) { reject(new Error('无法处理这张图')); return }
-      ctx.drawImage(img, 0, 0, w, h)
-      canvas.toBlob(
-        (b) => (b ? resolve(b) : reject(new Error('无法处理这张图'))),
-        'image/jpeg',
-        quality,
-      )
-    }
-    img.onerror = () => {
-      URL.revokeObjectURL(url)
-      reject(new Error('读不了这张图'))
-    }
+    img.onload = () => { URL.revokeObjectURL(url); resolve(img) }
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('读不了这张图')) }
     img.src = url
   })
 }

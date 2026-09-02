@@ -1,13 +1,13 @@
 import { useRef, useState } from 'react'
 import { update, useStore, uid } from '../lib/store'
-import { downscale, putPhoto, delPhoto } from '../lib/media'
+import { downscale, putPhoto, delPhoto, rotatePhoto } from '../lib/media'
 import { usePhotoURL } from '../lib/usePhoto'
 import * as D from '../lib/date'
 import { Section } from './ui'
-import { IcPlus, IcClose, IcTrash } from './icons'
+import { IcPlus, IcClose, IcTrash, IcRotate } from './icons'
 
-function Tile({ id, caption, onOpen }: { id: string; caption: string; onOpen: () => void }) {
-  const url = usePhotoURL(id)
+function Tile({ id, caption, rev, onOpen }: { id: string; caption: string; rev: number; onOpen: () => void }) {
+  const url = usePhotoURL(id, rev)
   return (
     <button type="button" className="ptile" onClick={onOpen} aria-label={caption || '照片'}>
       {url && <img src={url} alt={caption || ''} />}
@@ -55,7 +55,7 @@ export function Photos({ toast }: { toast: (t: string) => void }) {
           <span>{busy ? '处理中' : '加照片'}</span>
         </button>
         {photos.map((p) => (
-          <Tile key={p.id} id={p.id} caption={p.caption} onOpen={() => setOpen(p.id)} />
+          <Tile key={p.id} id={p.id} caption={p.caption} rev={p.rev ?? 0} onOpen={() => setOpen(p.id)} />
         ))}
       </div>
       <input
@@ -75,7 +75,7 @@ export function Photos({ toast }: { toast: (t: string) => void }) {
               <span className="eyebrow">{D.shortCN(current.date)}</span>
               <button type="button" className="icon-btn" onClick={() => setOpen(null)} aria-label="关闭"><IcClose /></button>
             </div>
-            <Big id={current.id} caption={current.caption} />
+            <Big id={current.id} caption={current.caption} rev={current.rev ?? 0} />
             <textarea
               className="field" rows={2} style={{ marginTop: 'var(--s4)' }}
               value={current.caption}
@@ -86,7 +86,18 @@ export function Photos({ toast }: { toast: (t: string) => void }) {
             />
             <div className="sheet-foot">
               <button
-                type="button" className="btn ghost wide" style={{ color: 'var(--alert)' }}
+                type="button" className="btn quiet wide"
+                onClick={() => {
+                  void rotatePhoto(current.id, 1).then((ok) => {
+                    if (!ok) { toast('转不动这张'); return }
+                    update((x) => ({
+                      ...x, photos: x.photos.map((y) => (y.id === current.id ? { ...y, rev: (y.rev ?? 0) + 1 } : y)),
+                    }))
+                  })
+                }}
+              ><IcRotate /> 转 90°</button>
+              <button
+                type="button" className="btn ghost wide" style={{ marginTop: 'var(--s2)', color: 'var(--alert)' }}
                 onClick={() => {
                   void delPhoto(current.id)
                   update((x) => ({ ...x, photos: x.photos.filter((y) => y.id !== current.id) }))
@@ -104,8 +115,8 @@ export function Photos({ toast }: { toast: (t: string) => void }) {
   )
 }
 
-function Big({ id, caption }: { id: string; caption: string }) {
-  const url = usePhotoURL(id)
+function Big({ id, caption, rev }: { id: string; caption: string; rev: number }) {
+  const url = usePhotoURL(id, rev)
   if (!url) return <div className="pview" style={{ aspectRatio: '4/3' }} />
   return <img className="pview" src={url} alt={caption || '照片'} />
 }

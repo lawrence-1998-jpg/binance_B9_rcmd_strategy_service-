@@ -134,6 +134,8 @@ export interface Photo {
   caption: string
   date: string
   createdAt: number
+  /** 旋转后自增，用来让 object URL 重新取一次 */
+  rev?: number
 }
 
 /** 想对他说的话 */

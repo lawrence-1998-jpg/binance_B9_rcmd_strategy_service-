@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { getPhoto } from './media'
 
 /** 把 IndexedDB 里的图片变成可用的 src，卸载时释放 object URL。 */
-export function usePhotoURL(id: string | null): string | null {
+export function usePhotoURL(id: string | null, rev = 0): string | null {
   const [url, setUrl] = useState<string | null>(null)
   useEffect(() => {
     let dead = false
@@ -17,6 +17,6 @@ export function usePhotoURL(id: string | null): string | null {
       dead = true
       if (made) URL.revokeObjectURL(made)
     }
-  }, [id])
+  }, [id, rev])
   return url
 }
