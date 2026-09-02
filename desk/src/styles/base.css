@@ -155,7 +155,7 @@ button { cursor: pointer; -webkit-appearance: none; }
 .btn.quiet { background: var(--well); color: var(--ink-2); }
 .btn.small { min-height: var(--tap); font-size: var(--t-sub); padding: 0 var(--s4); }
 .btn.wide { width: 100%; }
-.btn.danger { background: var(--alert); color: var(--on-solid); }
+.btn.danger { background: var(--alert-solid); color: var(--on-solid); }
 .btn.danger-text { color: var(--alert); }
 
 /* ---- 勾选：真的 input，不是 div ---- */

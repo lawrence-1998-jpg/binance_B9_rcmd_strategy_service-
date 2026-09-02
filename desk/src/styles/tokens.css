@@ -69,6 +69,9 @@
   --alert:     #b3402c;   /* 砖红 · 阻塞 / 破坏性操作。全站出现频率应 < 1% */
   --alert-tint:#f7e0da;
   --alert-deep:#8d2f1f;
+  /* 破坏性按钮的实心底。跟领域色一样：--alert 在深色模式下会翻成亮红
+     （那是给暗底上的文字用的），拿它当底放白字只有 2.99:1 */
+  --alert-solid:#b3402c;
 
   /* 实心块上的文字色。不许再往组件里写 #fdf8ef */
   --on-solid:  #fdf8ef;
@@ -175,9 +178,10 @@
     --ok:           #9dae79;
     --ok-tint:      #2f3823;
     --ok-deep:      #c3d3a0;
-    --alert:        #e0705a;
+    --alert:        #e0705a;   /* 暗卡片上当文字 4.94:1 */
     --alert-tint:   #45201a;
     --alert-deep:   #f0a08e;
+    --alert-solid:  #bf4a35;   /* 当实心底，on-solid 在其上 4.67:1 */
 
     --on-solid:     #fdf8ef;
     --on-night:     #f0ebe1;   /* 深色 night 上 9.97:1 */
