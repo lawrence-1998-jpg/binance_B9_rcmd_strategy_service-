@@ -1,0 +1,105 @@
+# 案头 Deskside
+
+一个人用的移动 + 桌面工作台。四条线：**咨询顾问 · 字节产品 · 我们俩 · 我自己**。
+
+打开五秒内回答三件事：今天干什么、哪条线卡住了、有什么要记的。
+
+---
+
+## 三种用法，挑一种就好
+
+> ⚠️ **数据存在浏览器本地，按「来源」隔离。**
+> `file://` 打开的单文件、`localhost` 服务、手机 Safari，三者的数据**互不相通**。
+> 选定一种用法就一直用它；要换，先在设置里导出 JSON，再到新的地方导入。
+
+### 1. 桌面 · 最省事（推荐）
+
+双击 `web/desk/deskside-standalone.html`。
+
+这是一个自包含单文件，JS/CSS/图标全内联，**不需要任何服务器**。
+想要 Dock 图标：把这个文件拖到 Dock（macOS），或在 Chrome 里
+「⋮ → 投放、保存和共享 → 创建快捷方式」。
+
+### 2. 桌面 · 真的 App 窗口
+
+```bash
+cd desk && ./run.sh          # 零依赖，只要有 python3
+```
+
+浏览器打开 http://localhost:5173 → Chrome 地址栏右侧的**安装**图标 → 装到桌面。
+装完有独立窗口、独立图标，离线也能开（service worker 会缓存）。
+
+### 3. 手机
+
+把 `web/desk/` 部署到能访问的地址（现有 Flask 站点直接就能托管，
+路径 `/desk/`，和 API 同源）。手机 Safari 打开 → 分享 → **添加到主屏幕**。
+
+---
+
+## 开发
+
+```bash
+cd desk
+npm install
+npm run dev        # 开发服务器
+npm run build      # 构建 → dist/（多文件 + PWA）
+npm run typecheck  # 只跑类型检查
+
+# 单文件版（双击即用的那个）
+npx vite build --config vite.config.single.ts   # → dist-single/index.html
+```
+
+发布到仓库（两种产物都要）：
+
+```bash
+npm run build && npx vite build --config vite.config.single.ts
+rm -rf ../web/desk && mkdir -p ../web/desk
+cp -r dist/. ../web/desk/
+cp dist-single/index.html ../web/desk/deskside-standalone.html
+```
+
+## 依赖只有三个
+
+`react` · `react-dom` · `vite`（加 `vite-plugin-pwa` / `vite-plugin-singlefile` 两个构建插件）。
+
+**没有** UI 组件库、CSS-in-JS、图表库、日期库、图标库、路由库——
+Organic 这套形态（药丸、大圆角、纸感）跟任何现成库都对不上，改库比自己写慢；
+五个屏也不值得引一个路由，hash 路由三十行搞定，而且 `file://` 下能用。
+
+## 目录
+
+```
+desk/
+├─ run.sh                    本地起服务
+├─ vite.config.ts            正常构建 + PWA
+├─ vite.config.single.ts     单文件构建
+├─ scripts-gen-icons.py      生成 PWA 图标（纯标准库，无依赖）
+└─ src/
+   ├─ styles/tokens.css      ← 改配色 / 字号 / 间距只改这里
+   ├─ styles/base.css        组件样式
+   ├─ lib/                   types · date · seed · store
+   ├─ components/            ui · icons · TabBar
+   └─ screens/               Today · Work · Life · Capture · Review · Settings
+```
+
+## 几条改动时别踩的线
+
+- **配色只改 `tokens.css`**，组件里不许写死颜色。领域色（赤陶/雾蓝/梅陶）只用于
+  3px 标识条、小圆点、chip，**绝不做卡片底色**——否则整屏变成四种颜色互相喊。
+- **不要用 `backdrop-filter`。** 页面上有无限循环的脉动点，毛玻璃会让浏览器每帧
+  重算，整页闪烁。顶栏和 tab bar 一律不透明纯色。
+- **固定定位元素保留 `transform: translateZ(0)` + `contain: layout paint`**，
+  否则部分机型滚动会撕裂。
+- **状态不能只靠颜色。** 正常=实心圆、注意=空心环、阻塞=方块，截成灰度图仍要能分辨。
+- **今日三件事的上限就是 3。** 这个摩擦是故意的，别为了「灵活」去掉它。
+
+## 数据
+
+全部存在浏览器 `localStorage`（键 `deskside.v1`），不上传任何地方，没有后端。
+
+首次打开装的是**示例数据**（客户 A、推荐位改版这些），看懂每块放什么之后，
+到「复盘 → 右上角齿轮 → 清空全部数据」换成你自己的。
+
+同一个地方还能**导出 / 导入 JSON**。换设备、清缓存都会丢数据，**每周导出一次**。
+
+设计与实现说明：`docs/prd/deskside-mobile-workbench.html`。
