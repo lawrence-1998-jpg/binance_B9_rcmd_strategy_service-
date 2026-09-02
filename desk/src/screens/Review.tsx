@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { update, useStore, uid } from '../lib/store'
-import { DOMAINS, NOTE_KINDS, type Domain, type NoteKind } from '../lib/types'
+import { DOMAINS, NOTE_KINDS, type Domain, type NoteKind, type Task } from '../lib/types'
 import * as D from '../lib/date'
 import { Section, Check, Chip, Empty, Segmented, GrowText } from '../components/ui'
 import { autoDraft } from '../lib/diary'
@@ -250,9 +250,53 @@ export function Review({ go, onSettings, toast }: { go: (r: Route) => void; onSe
 
 function Timeline() {
   const s = useStore((x) => x)
-  const days = [...s.entries].sort((a, b) => b.date.localeCompare(a.date))
 
-  if (days.length === 0) {
+  /**
+   * 一次遍历建索引，而不是在渲染循环里 filter。
+   *
+   * 原来每条时间轴都对 tasks 和 photos 各扫一遍全量：记满一年、
+   * 攒下上千条任务之后就是每次渲染几十万次迭代，在手机上是能感觉到的卡。
+   * 日记是要一直往前攒的东西，这里不能写成 O(天数 × 任务数)。
+   */
+  const { months, total } = useMemo(() => {
+    const doneByDate = new Map<string, Task[]>()
+    for (const t of s.tasks) {
+      if (!t.done) continue
+      const a = doneByDate.get(t.date)
+      if (a) a.push(t)
+      else doneByDate.set(t.date, [t])
+    }
+    const photoCount = new Map<string, number>()
+    for (const p of s.photos) photoCount.set(p.date, (photoCount.get(p.date) ?? 0) + 1)
+
+    const days = [...s.entries]
+      .filter((e) => D.isDateKey(e.date))
+      .sort((a, b) => b.date.localeCompare(a.date))
+
+    // 按月分组：攒够三个月之后，一条通到底的列表就没法定位了
+    const byMonth = new Map<string, typeof days>()
+    for (const e of days) {
+      const k = e.date.slice(0, 7)
+      const a = byMonth.get(k)
+      if (a) a.push(e)
+      else byMonth.set(k, [e])
+    }
+
+    return {
+      total: days.length,
+      months: [...byMonth.entries()].map(([key, entries]) => ({
+        key,
+        label: D.monthCN(key),
+        entries: entries.map((e) => ({
+          e,
+          done: doneByDate.get(e.date) ?? [],
+          photos: photoCount.get(e.date) ?? 0,
+        })),
+      })),
+    }
+  }, [s.entries, s.tasks, s.photos])
+
+  if (total === 0) {
     return (
       <>
         <Section label="时间轴" />
@@ -269,35 +313,42 @@ function Timeline() {
 
   return (
     <>
-      <Section label="时间轴" meta={`${days.length} 天`} />
-      <div className="tl">
-        {days.map((e) => {
-          const done = s.tasks.filter((t) => t.date === e.date && t.done)
-          const dist = ORDER
-            .map((d) => ({ d, n: done.filter((t) => t.domain === d).length }))
-            .filter((x) => x.n > 0)
-          const photos = s.photos.filter((p) => p.date === e.date)
-          return (
-            <div className="tl-item" key={e.date}>
-              <div className="tl-date">
-                <span>{D.archiveCN(e.date)}</span>
-                {done.length > 0 && <span>· 完成 {done.length}</span>}
-                {photos.length > 0 && <span>· {photos.length} 张照片</span>}
-              </div>
-              <div className="tl-lines">
-                {e.lines.filter(Boolean).map((l, i) => <p key={i}>{l}</p>)}
-              </div>
-              {dist.length > 0 && (
-                <div className="tl-bar">
-                  {dist.map(({ d, n }) => (
-                    <i key={d} style={{ width: `${(n / done.length) * 100}%`, background: DOMAINS[d].color, display: 'block' }} />
-                  ))}
+      <Section label="时间轴" meta={`${total} 天`} />
+      {months.map((m) => (
+        <div key={m.key}>
+          {/* 吸顶：往回翻的时候得一直知道自己在哪个月 */}
+          <div className="tl-month">
+            <span>{m.label}</span>
+            <span className="tl-month-n">记了 {m.entries.length} 天</span>
+          </div>
+          <div className="tl">
+            {m.entries.map(({ e, done, photos }) => {
+              const dist = ORDER
+                .map((d) => ({ d, n: done.filter((t) => t.domain === d).length }))
+                .filter((x) => x.n > 0)
+              return (
+                <div className="tl-item" key={e.date}>
+                  <div className="tl-date">
+                    <span>{D.archiveCN(e.date)}</span>
+                    {done.length > 0 && <span>· 完成 {done.length}</span>}
+                    {photos > 0 && <span>· {photos} 张照片</span>}
+                  </div>
+                  <div className="tl-lines">
+                    {e.lines.filter(Boolean).map((l, i) => <p key={i}>{l}</p>)}
+                  </div>
+                  {dist.length > 0 && (
+                    <div className="tl-bar">
+                      {dist.map(({ d, n }) => (
+                        <i key={d} style={{ width: `${(n / done.length) * 100}%`, background: DOMAINS[d].color, display: 'block' }} />
+                      ))}
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
-          )
-        })}
-      </div>
+              )
+            })}
+          </div>
+        </div>
+      ))}
     </>
   )
 }
