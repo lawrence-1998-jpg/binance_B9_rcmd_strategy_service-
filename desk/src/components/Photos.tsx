@@ -108,9 +108,15 @@ export function Photos({ toast }: { toast: (t: string) => void }) {
             <input
               type="date" className="field" style={{ marginTop: 'var(--s4)' }}
               value={current.date} aria-label="拍摄日期"
-              onChange={(e) => update((x) => ({
-                ...x, photos: x.photos.map((y) => (y.id === current.id ? { ...y, date: e.target.value } : y)),
-              }))}
+              onChange={(e) => {
+                // 清空日期框会给出空串。照片必须有日期，否则会掉进一个没名字的
+                // 分组里，时间轴上也排不进去 —— 清空时保持原值，不接受空。
+                const v = e.target.value
+                if (!v) return
+                update((x) => ({
+                  ...x, photos: x.photos.map((y) => (y.id === current.id ? { ...y, date: v } : y)),
+                }))
+              }}
             />
             <textarea
               className="field" rows={2} style={{ marginTop: 'var(--s2)' }}
