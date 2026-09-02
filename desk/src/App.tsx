@@ -7,6 +7,7 @@ import { Life } from './screens/Life'
 import { Review } from './screens/Review'
 import { Capture } from './screens/Capture'
 import { Settings } from './screens/Settings'
+import { PromptTool } from './screens/PromptTool'
 
 const ROUTES: Route[] = ['today', 'work', 'life', 'review']
 
@@ -19,6 +20,7 @@ export function App() {
   const [route, setRoute] = useState<Route>(readHash)
   const [capture, setCapture] = useState(false)
   const [settings, setSettings] = useState(false)
+  const [promptTool, setPromptTool] = useState(false)
   const toast = useToast()
 
   // 自己写的 hash 路由：五个屏不值得引一个路由库，
@@ -39,7 +41,7 @@ export function App() {
     <>
       <main className="app">
         {route === 'today' && <Today go={go} onCapture={() => setCapture(true)} toast={toast.show} />}
-        {route === 'work' && <Work toast={toast.show} />}
+        {route === 'work' && <Work toast={toast.show} onPromptTool={() => setPromptTool(true)} />}
         {route === 'life' && <Life toast={toast.show} />}
         {route === 'review' && <Review go={go} onSettings={() => setSettings(true)} toast={toast.show} />}
       </main>
@@ -48,6 +50,7 @@ export function App() {
 
       {capture && <Capture onClose={() => setCapture(false)} toast={toast.show} />}
       {settings && <Settings onClose={() => setSettings(false)} toast={toast.show} />}
+      {promptTool && <PromptTool onClose={() => setPromptTool(false)} toast={toast.show} />}
       <Toast text={toast.text} />
     </>
   )

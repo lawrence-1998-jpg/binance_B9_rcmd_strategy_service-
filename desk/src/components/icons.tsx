@@ -51,6 +51,18 @@ export const IcTrip = (p: P) => (
 export const IcTrash = (p: P) => (
   <svg {...base} {...p}><path d="M4.5 6.5h15M9.5 6.5V5a1.5 1.5 0 0 1 1.5-1.5h2A1.5 1.5 0 0 1 14.5 5v1.5M7 6.5l.8 12a1.5 1.5 0 0 0 1.5 1.4h5.4a1.5 1.5 0 0 0 1.5-1.4l.8-12" /></svg>
 )
+export const IcWand = (p: P) => (
+  <svg {...base} {...p}>
+    <path d="M4 20 15 9" /><path d="M13.5 4.5 14.5 7l2.5 1-2.5 1-1 2.5-1-2.5L10 8l2.5-1Z" />
+    <path d="M19 13.5l.6 1.4 1.4.6-1.4.6-.6 1.4-.6-1.4-1.4-.6 1.4-.6Z" />
+  </svg>
+)
+export const IcCopy = (p: P) => (
+  <svg {...base} {...p}>
+    <rect x="9" y="9" width="11" height="11" rx="2.5" />
+    <path d="M5.5 15H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v.5" />
+  </svg>
+)
 export const IcCheck = (p: P) => (
   <svg {...base} strokeWidth={2.2} {...p}><path d="M4.5 12.5 9.5 17.5 19.5 6.5" /></svg>
 )

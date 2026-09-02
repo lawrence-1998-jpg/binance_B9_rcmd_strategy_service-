@@ -71,6 +71,16 @@ export function seed(): State {
       ],
     },
     logs: [],
+    promptDraft: {
+      outline: [
+        'UGC 投稿用户的流量下滑导致投稿流失，抖音有没有出现过，怎么解决的',
+        '抖音现在做作者流量反馈的流量占比大概有多少，是怎么做的',
+      ].join('\n'),
+      subject: '抖音',
+      context: '我在给一个 UGC 内容社区做投稿量下滑的诊断，要找可借鉴的做法。',
+      target: 'tooled',
+      depth: 'deep',
+    },
   }
 }
 
@@ -82,6 +92,16 @@ export function empty(): State {
     anniversaries: [], wishes: [],
     trip: { ...s.trip, days: [], todos: [] },
     logs: [],
+    promptDraft: {
+      outline: [
+        'UGC 投稿用户的流量下滑导致投稿流失，抖音有没有出现过，怎么解决的',
+        '抖音现在做作者流量反馈的流量占比大概有多少，是怎么做的',
+      ].join('\n'),
+      subject: '抖音',
+      context: '我在给一个 UGC 内容社区做投稿量下滑的诊断，要找可借鉴的做法。',
+      target: 'tooled',
+      depth: 'deep',
+    },
   }
 }
 

@@ -6,7 +6,20 @@
 
 ---
 
-## 三种用法，挑一种就好
+## 装到 iPhone 主屏（推荐）
+
+仓库开了 GitHub Pages，构建后地址是：
+
+```
+https://lawrence-1998-jpg.github.io/binance_B9_rcmd_strategy_service-/
+```
+
+iPhone Safari 打开 → 分享 → **添加到主屏幕**。之后从主屏图标启动：
+独立窗口、没有地址栏、有自己的图标，离线也能开（service worker 会缓存）。
+
+部署由 `.github/workflows/deploy-desk.yml` 完成，改了 `desk/` 推上去就自动发布。
+
+## 其它用法
 
 > ⚠️ **数据存在浏览器本地，按「来源」隔离。**
 > `file://` 打开的单文件、`localhost` 服务、手机 Safari，三者的数据**互不相通**。
@@ -83,7 +96,7 @@ desk/
    ├─ styles/base.css        组件样式
    ├─ lib/                   types · date · seed · store
    ├─ components/            ui · icons · TabBar
-   └─ screens/               Today · Work · Life · Capture · Review · Settings
+   └─ screens/               Today · Work · Life · Capture · Review · Settings · PromptTool
 ```
 
 ## 几条改动时别踩的线
@@ -109,5 +122,20 @@ desk/
 导出做了三级降级（`src/lib/save.ts`）：托管环境走平台的下载能力 → 本地走普通 blob
 下载 → 都不通就把 JSON 摊在页面上让你手动复制。**导出是数据安全的最后一道，
 不允许静默失败。**
+
+## 提纲 → Prompt
+
+「工作」屏右上角那个魔杖图标。输入几条要问的问题，出一段能直接贴给
+Claude Code / GPT 的调研 prompt。
+
+生成是**纯本地模板拼装**（`src/lib/prompt.ts`），不联网、不调模型，飞行模式也能用。
+模板里最要紧的一条是**「不许编数字」**——像「XX 的流量占比大概有多少」这类问题，
+模型极容易一本正经给一个看起来很专业的假百分比，而你会拿着它去跟客户讲。
+所以模板强制：没有公开来源就必须写「没有公开数据」，再给带推导过程的区间估算并标注「估算」。
+
+另外三条约束：每段结论标 `[事实]`/`[推断]`/`[猜测]`；必须标时间（平台机制变得快）；
+不许说「加强创作者激励」这种零信息量的话。
+
+要改模板就改 `src/lib/prompt.ts`，它是个纯函数。
 
 设计与实现说明：`docs/prd/deskside-mobile-workbench.html`。

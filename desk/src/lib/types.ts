@@ -119,6 +119,15 @@ export interface DayLog {
   doneCount: number
 }
 
+/** 提纲 → Prompt 工具的草稿，存下来免得每次重打 */
+export interface PromptDraft {
+  outline: string
+  subject: string
+  context: string
+  target: 'tooled' | 'plain'
+  depth: 'quick' | 'deep'
+}
+
 export interface State {
   version: number
   seeded: boolean
@@ -131,4 +140,5 @@ export interface State {
   wishes: Wish[]
   trip: Trip
   logs: DayLog[]
+  promptDraft: PromptDraft
 }

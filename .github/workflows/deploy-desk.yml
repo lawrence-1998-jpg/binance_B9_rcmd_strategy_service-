@@ -1,0 +1,87 @@
+# 把「案头」发布到 GitHub Pages，好让手机能「添加到主屏幕」装成 App。
+# 从源码构建而不是直接传仓库里的产物，避免产物过期。
+name: Deploy 案头 to Pages
+
+on:
+  push:
+    branches:
+      - main
+      - claude/personal-dashboard-design-jgjmnb
+    paths:
+      - 'desk/**'
+      - '.github/workflows/deploy-desk.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: desk/package-lock.json
+
+      - name: 安装依赖
+        working-directory: desk
+        run: npm ci
+
+      - name: 类型检查
+        working-directory: desk
+        run: npm run typecheck
+
+      - name: 构建（多文件 + PWA）
+        working-directory: desk
+        run: npm run build
+
+      - name: 构建单文件版并放进产物
+        working-directory: desk
+        run: |
+          npx vite build --config vite.config.single.ts
+          node scripts-postbuild-single.mjs
+          cp dist-single/index.html dist/deskside-standalone.html
+
+      - name: 冒烟检查 —— 产物不能是空壳
+        working-directory: desk
+        run: |
+          test -f dist/index.html
+          test -f dist/manifest.webmanifest
+          test -s dist/deskside-standalone.html
+          # 单文件版里必须有一段够大的内联脚本，否则就是构建塌了
+          node -e "
+            const fs=require('fs');
+            const h=fs.readFileSync('dist/deskside-standalone.html','utf8');
+            const m=[...h.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(x=>x[1].length);
+            const max=Math.max(0,...m);
+            if(max<50000){console.error('内联脚本只有 '+max+' 字节，产物是空的');process.exit(1)}
+            console.log('ok，内联脚本 '+(max/1024|0)+'KB');
+          "
+
+      - uses: actions/configure-pages@v5
+        with:
+          enablement: true
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: desk/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

@@ -3,11 +3,11 @@ import { update, useStore, uid } from '../lib/store'
 import { DOMAINS, type Engagement, type Status } from '../lib/types'
 import * as D from '../lib/date'
 import { Section, Dot, Chip, Progress, Empty, Segmented } from '../components/ui'
-import { IcNote, IcTrash } from '../components/icons'
+import { IcNote, IcTrash, IcWand } from '../components/icons'
 
 type Line = 'consult' | 'byte'
 
-export function Work({ toast }: { toast: (t: string) => void }) {
+export function Work({ toast, onPromptTool }: { toast: (t: string) => void; onPromptTool: () => void }) {
   const s = useStore((x) => x)
   const [line, setLine] = useState<Line>('consult')
   const [open, setOpen] = useState<string | null>(null)
@@ -38,8 +38,15 @@ export function Work({ toast }: { toast: (t: string) => void }) {
 
   return (
     <div className="screen">
-      <p className="eyebrow" style={{ marginTop: 'var(--s3)' }}>两条线</p>
-      <h1 className="h1">工作</h1>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginTop: 'var(--s3)' }}>
+        <div>
+          <p className="eyebrow">两条线</p>
+          <h1 className="h1">工作</h1>
+        </div>
+        <button type="button" className="icon-btn" onClick={onPromptTool} aria-label="提纲转 Prompt">
+          <IcWand />
+        </button>
+      </div>
 
       <Segmented<Line>
         value={line}
@@ -183,7 +190,11 @@ export function Work({ toast }: { toast: (t: string) => void }) {
         </button>
       ) : null}
 
-      <p className="sub" style={{ marginTop: 'var(--s6)', color: 'var(--ink-3)', textAlign: 'center' }}>
+      <button type="button" className="btn ghost wide" style={{ marginTop: 'var(--s6)' }} onClick={onPromptTool}>
+        把提纲变成 Prompt →
+      </button>
+
+      <p className="sub" style={{ marginTop: 'var(--s4)', color: 'var(--ink-3)', textAlign: 'center' }}>
         手机上只改状态和卡点。真正的活儿回电脑做。
       </p>
     </div>
