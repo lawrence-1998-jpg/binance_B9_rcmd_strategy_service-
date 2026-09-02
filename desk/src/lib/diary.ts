@@ -45,7 +45,8 @@ export function autoDraft(s: State, date: string): [string, string, string] {
   if (extras.length) l2 = (l2 ? l2 + ' ' : '') + extras.join('，') + '。'
 
   // 第三句：明天
-  const tomorrow = D.key(new Date(D.parse(date).getTime() + 86400000))
+  const t = D.parse(date)
+  const tomorrow = D.key(new Date(t.getFullYear(), t.getMonth(), t.getDate() + 1))
   const next = s.tasks.filter((t) => t.date === tomorrow && !t.done)
   const l3 = next.length ? `明天先做「${next[0].title}」。` : '明天还没定。'
 

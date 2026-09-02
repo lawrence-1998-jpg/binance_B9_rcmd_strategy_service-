@@ -3,6 +3,7 @@ import { update, useStore, uid } from '../lib/store'
 import type { TripTodo, Wish } from '../lib/types'
 import * as D from '../lib/date'
 import { Section, Chip, Check, Empty, Progress, Segmented, InlineAdd } from '../components/ui'
+import { askConfirm } from '../lib/confirm'
 import { Photos } from '../components/Photos'
 import { SPARKS } from '../data/sparks'
 import { IcLife, IcTrip, IcTrash } from '../components/icons'
@@ -24,8 +25,8 @@ export function Life({ toast }: { toast: (t: string) => void }) {
         value={tab}
         onChange={setTab}
         options={[
-          { key: 'us', label: '我们俩', color: 'var(--us)' },
-          { key: 'trip', label: s.trip.title || '假期', color: 'var(--us)' },
+          { key: 'us', label: '我们俩', color: 'var(--us-solid)' },
+          { key: 'trip', label: s.trip.title || '假期', color: 'var(--us-solid)' },
         ]}
       />
 
@@ -38,13 +39,13 @@ export function Life({ toast }: { toast: (t: string) => void }) {
 
 function Us({ toast }: { toast: (t: string) => void }) {
   const s = useStore((x) => x)
-  const s2 = s
   const [adding, setAdding] = useState(false)
   // 用天数当种子：同一天进来看到的是同一张，点一下才换
   const [spark, setSpark] = useState(() => Math.floor(Date.now() / 86400000))
   const [label, setLabel] = useState('')
   const [date, setDate] = useState('')
   const [countUp, setCountUp] = useState(false)
+  const [showAllMoments, setShowAllMoments] = useState(false)
 
   const list = s.anniversaries
     .map((a) => ({ a, n: D.nextAnniversary(a.date) }))
@@ -78,25 +79,29 @@ function Us({ toast }: { toast: (t: string) => void }) {
       ) : (
         <div className="grid two">
           {list.map(({ a, n }) => {
-            const together = D.daysBetween(D.parse(a.date), new Date())
+            const together = Math.max(0, D.daysBetween(D.parse(a.date), new Date()))
             return (
               <div className="card" key={a.id} style={{ marginTop: 0 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
                   <span className="row-s" style={{ marginTop: 0 }}>{a.label}</span>
-                  <button type="button" className="row-s" style={{ marginTop: 0, color: 'var(--ink-3)' }}
-                    onClick={() => {
-                      update((x) => ({ ...x, anniversaries: x.anniversaries.filter((y) => y.id !== a.id) }))
-                      toast('删掉了')
-                    }} aria-label={`删除 ${a.label}`}>删除</button>
+                  <button type="button" className="tap-del" aria-label={`删除 ${a.label}`}
+                    onClick={() => askConfirm({
+                      title: `删掉「${a.label}」？`,
+                      detail: '这个日子会从列表里消失，撤销不了。',
+                      onYes: () => {
+                        update((x) => ({ ...x, anniversaries: x.anniversaries.filter((y) => y.id !== a.id) }))
+                        toast('删掉了')
+                      },
+                    })}><IcTrash /></button>
                 </div>
                 {a.countUp ? (
                   <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginTop: 4 }}>
-                    <span className="big" style={{ color: 'var(--us)' }}>{together}</span>
+                    <span className="big" style={{ color: 'var(--us-text)' }}>{together}</span>
                     <span className="sub">天了</span>
                   </div>
                 ) : (
                   <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginTop: 4 }}>
-                    <span className="big" style={{ color: 'var(--us)' }}>{n.days}</span>
+                    <span className="big" style={{ color: 'var(--us-text)' }}>{n.days}</span>
                     <span className="sub">{n.days === 0 ? '就是今天' : `天后 · 第 ${n.nth} 年`}</span>
                   </div>
                 )}
@@ -140,21 +145,31 @@ function Us({ toast }: { toast: (t: string) => void }) {
       </button>
 
       {/* 想对他说的话 */}
-      <Section label="想对他说" domain="us" meta={s2.moments.length ? `${s2.moments.length} 条` : undefined} />
-      {s2.moments.length > 0 && (
+      <Section label="想对他说" domain="us" meta={s.moments.length ? `${s.moments.length} 条` : undefined} />
+      {s.moments.length > 0 && (
         <div className="card">
-          {s2.moments.slice(0, 6).map((m, i) => (
+          {(showAllMoments ? s.moments : s.moments.slice(0, 6)).map((m, i) => (
             <div key={m.id} className="row" style={i ? undefined : { marginTop: 0 }}>
               <span className="grow">
                 <span className="row-t" style={{ fontWeight: 400, lineHeight: 1.5 }}>{m.text}</span>
                 <span className="row-s">{D.relTime(m.createdAt)}</span>
               </span>
               <button
-                type="button" style={{ color: 'var(--ink-3)' }} aria-label="删掉"
-                onClick={() => update((x) => ({ ...x, moments: x.moments.filter((y) => y.id !== m.id) }))}
+                type="button" className="tap-del" aria-label="删掉这句"
+                onClick={() => askConfirm({
+                  title: '删掉这句话？',
+                  detail: m.text.slice(0, 40),
+                  onYes: () => update((x) => ({ ...x, moments: x.moments.filter((y) => y.id !== m.id) })),
+                })}
               ><IcTrash /></button>
             </div>
           ))}
+          {s.moments.length > 6 && (
+            <button type="button" className="btn quiet small wide" style={{ marginTop: 'var(--s3)' }}
+              onClick={() => setShowAllMoments((v) => !v)}>
+              {showAllMoments ? '收起' : `还有 ${s.moments.length - 6} 句，全部展开`}
+            </button>
+          )}
         </div>
       )}
       <InlineAdd
@@ -170,7 +185,7 @@ function Us({ toast }: { toast: (t: string) => void }) {
       <Section label="他提过的" domain="us" meta={heard.length ? `${heard.length} 条` : '空'} />
       <div className={heard.length ? 'card flush' : 'card'}>
         {heard.length === 0 ? (
-          <p className="sub" style={{ margin: 0, color: 'var(--ink-3)' }}>
+          <p className="sub quiet" style={{ margin: 0 }}>
             听见他说想要什么，用中间那个 ＋ 记一笔，选「给老公」，就会出现在这里。
           </p>
         ) : (
@@ -193,7 +208,7 @@ function Us({ toast }: { toast: (t: string) => void }) {
       <Section label="想一起做的事" domain="us" meta={`${s.wishes.filter((w) => w.done).length} / ${s.wishes.length}`} />
       <div className={s.wishes.length ? 'card flush' : 'card'}>
         {s.wishes.length === 0 ? (
-          <p className="sub" style={{ margin: 0, color: 'var(--ink-3)' }}>还没写。想到一件就加一件。</p>
+          <p className="sub quiet" style={{ margin: 0 }}>还没写。想到一件就加一件。</p>
         ) : (
           s.wishes.map((w) => (
             <Check
@@ -225,20 +240,23 @@ function Trip({ toast }: { toast: (t: string) => void }) {
   const t = s.trip
   const [editDates, setEditDates] = useState(false)
   const [addDay, setAddDay] = useState(false)
-  const [dDate, setDDate] = useState(t.start)
+  // 改过行程日期之后再点「排一天」，默认值要跟着走。useState 的初始值只用一次，
+  // 所以这里存「用户有没有手动选过」，没选过就跟随 trip.start
+  const [dDate, setDDate] = useState<string | null>(null)
   const [dTitle, setDTitle] = useState('')
 
   const left = D.daysUntil(t.start)
   const over = D.daysUntil(t.end) < 0
   const done = t.todos.filter((x) => x.done).length
-  const len = D.daysBetween(D.parse(t.start), D.parse(t.end)) + 1
+  // 结束早于开始（手滑输错）时长度会是负数，显示成「-2 天假」
+  const len = Math.max(1, D.daysBetween(D.parse(t.start), D.parse(t.end)) + 1)
 
   return (
     <>
       <Section label="倒数" domain="us" meta={`${len} 天假`} />
       <div className="card">
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
-          <span className="big" style={{ fontSize: '3rem', color: 'var(--us)' }}>
+          <span className="big" style={{ fontSize: '3rem', color: 'var(--us-text)' }}>
             {over ? '0' : Math.max(left, 0)}
           </span>
           <span className="sub" style={{ fontSize: 'var(--t-title)', fontWeight: 700 }}>
@@ -267,7 +285,7 @@ function Trip({ toast }: { toast: (t: string) => void }) {
       <Section label="出发前" domain="us" meta={done === t.todos.length && t.todos.length ? '都备好了' : undefined} />
       <div className={t.todos.length ? 'card flush' : 'card'}>
         {t.todos.length === 0 ? (
-          <p className="sub" style={{ margin: 0, color: 'var(--ink-3)' }}>还没有要办的事。</p>
+          <p className="sub quiet" style={{ margin: 0 }}>还没有要办的事。</p>
         ) : (
           t.todos.map((td) => (
             <Check
@@ -311,11 +329,15 @@ function Trip({ toast }: { toast: (t: string) => void }) {
                   <span className="row-t">{d.title}</span>
                   <span className="row-s">{D.shortCN(d.date)}</span>
                 </span>
-                <button type="button" style={{ color: 'var(--ink-3)' }} aria-label={`删除 ${d.title}`}
-                  onClick={() => {
-                    update((x) => ({ ...x, trip: { ...x.trip, days: x.trip.days.filter((y) => y.id !== d.id) } }))
-                    toast('删掉了')
-                  }}><IcTrash /></button>
+                <button type="button" className="tap-del" aria-label={`删除 ${d.title}`}
+                  onClick={() => askConfirm({
+                    title: `删掉「${d.title}」这天？`,
+                    detail: d.detail ? `写好的安排也会一起没：${d.detail.slice(0, 30)}` : '撤销不了。',
+                    onYes: () => {
+                      update((x) => ({ ...x, trip: { ...x.trip, days: x.trip.days.filter((y) => y.id !== d.id) } }))
+                      toast('删掉了')
+                    },
+                  })}><IcTrash /></button>
               </div>
               <textarea
                 className="field" rows={2} style={{ marginTop: 'var(--s3)' }}
@@ -331,7 +353,7 @@ function Trip({ toast }: { toast: (t: string) => void }) {
 
       {addDay ? (
         <div className="card" style={{ marginTop: 'var(--s3)' }}>
-          <input type="date" className="field" value={dDate} min={t.start} max={t.end}
+          <input type="date" className="field" value={dDate ?? t.start} min={t.start} max={t.end}
             onChange={(e) => setDDate(e.target.value)} aria-label="哪天" />
           <input autoFocus className="field" style={{ marginTop: 'var(--s2)' }} value={dTitle}
             placeholder="这天叫什么？比如：出发 / 海边 / 回程"
@@ -339,7 +361,7 @@ function Trip({ toast }: { toast: (t: string) => void }) {
           <div style={{ display: 'flex', gap: 'var(--s2)', marginTop: 'var(--s3)' }}>
             <button type="button" className="btn" style={{ flex: 1, background: 'var(--us)' }} disabled={!dTitle.trim()}
               onClick={() => {
-                update((x) => ({ ...x, trip: { ...x.trip, days: [...x.trip.days, { id: uid(), date: dDate, title: dTitle.trim(), detail: '' }] } }))
+                update((x) => ({ ...x, trip: { ...x.trip, days: [...x.trip.days, { id: uid(), date: dDate ?? x.trip.start, title: dTitle.trim(), detail: '' }] } }))
                 setDTitle(''); setAddDay(false)
               }}>排上</button>
             <button type="button" className="btn quiet" onClick={() => setAddDay(false)}>取消</button>

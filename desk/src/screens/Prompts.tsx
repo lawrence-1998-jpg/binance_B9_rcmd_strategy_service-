@@ -1,5 +1,6 @@
 import { useMemo, useRef, useState } from 'react'
 import { update, useStore, uid } from '../lib/store'
+import { askConfirm } from '../lib/confirm'
 import { buildPrompt, parseOutline, TARGETS, DEPTHS, type Depth, type Target } from '../lib/prompt'
 import { copyText } from '../lib/copy'
 import { Section, Chip, Empty } from '../components/ui'
@@ -56,7 +57,7 @@ export function Prompts({ onClose, toast }: { onClose: () => void; toast: (t: st
             <button type="button" className="icon-btn" onClick={onClose} aria-label="关闭"><IcClose /></button>
           </div>
           <p className="eyebrow" style={{ marginTop: 'var(--s2)' }}>{p.cat === '我' ? '我加的' : `${p.cat} · ${p.catName}`}</p>
-          <h1 className="h1" style={{ fontSize: '1.25rem' }}>{p.title}</h1>
+          <h1 className="h1" style={{ fontSize: 'var(--t-focus)' }}>{p.title}</h1>
 
           <div className="pbody" style={{ marginTop: 'var(--s4)' }}>{p.body}</div>
 
@@ -74,10 +75,14 @@ export function Prompts({ onClose, toast }: { onClose: () => void; toast: (t: st
             {isMine && (
               <button
                 type="button" className="btn ghost small wide" style={{ marginTop: 'var(--s2)', color: 'var(--alert)' }}
-                onClick={() => {
-                  update((x) => ({ ...x, myPrompts: x.myPrompts.filter((m) => m.id !== p.id) }))
-                  setView({ kind: 'list' }); toast('删掉了')
-                }}
+                onClick={() => askConfirm({
+                  title: `删掉「${p.title}」？`,
+                  detail: '自己写的 prompt 删了就没了，内置那批不受影响。',
+                  onYes: () => {
+                    update((x) => ({ ...x, myPrompts: x.myPrompts.filter((m) => m.id !== p.id) }))
+                    setView({ kind: 'list' }); toast('删掉了')
+                  },
+                })}
               ><IcTrash /> 删掉</button>
             )}
           </div>
@@ -140,7 +145,7 @@ export function Prompts({ onClose, toast }: { onClose: () => void; toast: (t: st
           ＋ 自己加一条
         </button>
 
-        <p className="sub" style={{ color: 'var(--ink-3)', marginTop: 'var(--s4)', lineHeight: 1.6 }}>
+        <p className="sub quiet" style={{ marginTop: 'var(--s4)', lineHeight: 1.6 }}>
           内置这 {BUILTIN.length} 条在构建时从仓库的 <span className="mono">docs/playbook/lawrence-prompt-list.md</span> 生成 ——
           改那份 md 再发布，这里就跟着变，不存第二份。
         </p>
@@ -165,7 +170,7 @@ function NewPrompt({ onBack, onClose, toast }: { onBack: () => void; onClose: ()
         <Section label="加一条" />
         <input className="field" value={title} placeholder="叫什么？比如：客户访谈提纲" onChange={(e) => setTitle(e.target.value)} />
         <textarea
-          className="field" rows={10} style={{ marginTop: 'var(--s2)', fontFamily: 'var(--f-mono)', fontSize: '11.5px', lineHeight: 1.6 }}
+          className="field" rows={10} style={{ marginTop: 'var(--s2)', fontFamily: 'var(--f-mono)', fontSize: 'var(--t-sub)', lineHeight: 1.6 }}
           value={body} placeholder="把 prompt 正文贴进来" onChange={(e) => setBody(e.target.value)}
         />
         <div className="sheet-foot">
@@ -263,7 +268,7 @@ function Generator({ onBack, onClose, toast }: { onBack: () => void; onClose: ()
           <textarea
             ref={out} className="field" rows={16} readOnly value={prompt}
             onFocus={(e) => e.currentTarget.select()}
-            style={{ marginTop: 'var(--s3)', fontFamily: 'var(--f-mono)', fontSize: '10.5px', lineHeight: 1.55 }}
+            style={{ marginTop: 'var(--s3)', fontFamily: 'var(--f-mono)', fontSize: 'var(--t-meta)', lineHeight: 1.55 }}
           />
         )}
         <div style={{ height: 'var(--s6)' }} />

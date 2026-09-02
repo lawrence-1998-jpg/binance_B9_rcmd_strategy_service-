@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { get, update, useStore, uid } from '../lib/store'
 import { DOMAINS, type Domain } from '../lib/types'
 import * as D from '../lib/date'
+import { askConfirm } from '../lib/confirm'
 import { Section, Check, Chip, Empty, Progress } from '../components/ui'
 import { usePhotoURL } from '../lib/usePhoto'
 import { IcNote, IcTrip } from '../components/icons'
@@ -119,10 +120,14 @@ export function Today({ go, onCapture, toast }: { go: (r: Route) => void; onCapt
                     update((x) => ({ ...x, tasks: x.tasks.map((y) => (y.id === t.id ? { ...y, date: D.key(tm), done: false } : y)) }))
                     setOpenTask(null); toast('推到明天了')
                   }}>推到明天</Chip>
-                  <Chip tap onClick={() => {
-                    update((x) => ({ ...x, tasks: x.tasks.filter((y) => y.id !== t.id) }))
-                    setOpenTask(null); toast('已删除')
-                  }}>删掉</Chip>
+                  <Chip tap onClick={() => askConfirm({
+                    title: '删掉这件事？',
+                    detail: t.title,
+                    onYes: () => {
+                      update((x) => ({ ...x, tasks: x.tasks.filter((y) => y.id !== t.id) }))
+                      setOpenTask(null); toast('已删除')
+                    },
+                  })}>删掉</Chip>
                 </div>
               )}
             </div>
@@ -172,7 +177,7 @@ export function Today({ go, onCapture, toast }: { go: (r: Route) => void; onCapt
                 </span>
               </div>
             ) : (
-              <p className="sub" style={{ margin: 0, color: 'var(--ink-3)' }}>接下来没有安排。</p>
+              <p className="sub quiet" style={{ margin: 0 }}>接下来没有安排。</p>
             )}
           </div>
 
@@ -208,7 +213,7 @@ export function Today({ go, onCapture, toast }: { go: (r: Route) => void; onCapt
                   {memory.caption || '那天的我们'}
                 </p>
                 {anniv && (
-                  <p className="sub" style={{ margin: '6px 0 0', color: 'var(--ink-3)' }}>
+                  <p className="sub quiet" style={{ margin: '6px 0 0' }}>
                     {anniv.a.label} 还有 {anniv.n.days} 天
                   </p>
                 )}
@@ -217,7 +222,7 @@ export function Today({ go, onCapture, toast }: { go: (r: Route) => void; onCapt
               <>
                 <span className="row-s" style={{ marginTop: 0 }}>{anniv.a.label}</span>
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginTop: 4 }}>
-                  <span className="big" style={{ color: 'var(--us)' }}>{anniv.n.days}</span>
+                  <span className="big" style={{ color: 'var(--us-text)' }}>{anniv.n.days}</span>
                   <span className="sub">天后 · 第 {anniv.n.nth} 年</span>
                 </div>
               </>
@@ -225,10 +230,10 @@ export function Today({ go, onCapture, toast }: { go: (r: Route) => void; onCapt
               <>
                 <span className="row-s" style={{ marginTop: 0 }}>想一起做的事</span>
                 <p className="row-t" style={{ margin: '4px 0 0' }}>{wish.text}</p>
-                <p className="sub" style={{ margin: '6px 0 0', color: 'var(--ink-3)' }}>去「生活」加上你们的纪念日 →</p>
+                <p className="sub quiet" style={{ margin: '6px 0 0' }}>去「生活」加上你们的纪念日 →</p>
               </>
             ) : (
-              <p className="sub" style={{ margin: 0, color: 'var(--ink-3)' }}>去「生活」加上你们的日子 →</p>
+              <p className="sub quiet" style={{ margin: 0 }}>去「生活」加上你们的日子 →</p>
             )}
           </button>
 
