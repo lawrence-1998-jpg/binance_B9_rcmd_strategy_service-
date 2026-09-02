@@ -100,7 +100,7 @@ function Us({ toast }: { toast: (t: string) => void }) {
                     <span className="sub">{n.days === 0 ? '就是今天' : `天后 · 第 ${n.nth} 年`}</span>
                   </div>
                 )}
-                <p className="row-s" style={{ marginTop: 'var(--s2)' }}>{D.shortCN(a.date)} 起</p>
+                <p className="row-s" style={{ marginTop: 'var(--s2)' }}>{D.archiveCN(a.date)} 起</p>
               </div>
             )
           })}

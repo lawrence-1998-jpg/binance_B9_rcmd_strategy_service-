@@ -32,6 +32,21 @@ export function shortCN(k: string): string {
   return `${p(d.getMonth() + 1)}/${p(d.getDate())} ${WEEK[d.getDay()]}`
 }
 
+/**
+ * 照片墙/时间轴的日期标题：`08/30 周六`，跨年时补上年份 `2024/08/30 周五`。
+ *
+ * shortCN 不带年份，对「今天前后几天」的场景是对的。但照片会一直攒下去，
+ * 两年前的 8 月 30 和今年的 8 月 30 在标题上长得一模一样，
+ * 相册就分不出哪趟是哪趟了。只在不是今年时才补年份，
+ * 平时不让年份占地方。
+ */
+export function archiveCN(k: string, now = new Date()): string {
+  const d = parse(k)
+  const p = (n: number) => String(n).padStart(2, '0')
+  const md = `${p(d.getMonth() + 1)}/${p(d.getDate())} ${WEEK[d.getDay()]}`
+  return d.getFullYear() === now.getFullYear() ? md : `${d.getFullYear()}/${md}`
+}
+
 export function daysBetween(from: Date, to: Date): number {
   const a = new Date(from.getFullYear(), from.getMonth(), from.getDate()).getTime()
   const b = new Date(to.getFullYear(), to.getMonth(), to.getDate()).getTime()
