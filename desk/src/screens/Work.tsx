@@ -43,7 +43,7 @@ export function Work({ toast, onPromptTool }: { toast: (t: string) => void; onPr
           <p className="eyebrow">两条线</p>
           <h1 className="h1">工作</h1>
         </div>
-        <button type="button" className="icon-btn" onClick={onPromptTool} aria-label="提纲转 Prompt">
+        <button type="button" className="icon-btn" onClick={onPromptTool} aria-label="Prompt 管理器">
           <IcWand />
         </button>
       </div>
@@ -191,7 +191,7 @@ export function Work({ toast, onPromptTool }: { toast: (t: string) => void; onPr
       ) : null}
 
       <button type="button" className="btn ghost wide" style={{ marginTop: 'var(--s6)' }} onClick={onPromptTool}>
-        把提纲变成 Prompt →
+        Prompt 管理器 →
       </button>
 
       <p className="sub" style={{ marginTop: 'var(--s4)', color: 'var(--ink-3)', textAlign: 'center' }}>

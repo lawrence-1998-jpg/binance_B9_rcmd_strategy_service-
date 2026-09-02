@@ -23,7 +23,7 @@ export const IcReview = (p: P) => (
   <svg {...base} {...p}><path d="M20.5 14.5A8.5 8.5 0 0 1 9.5 3.5a8.5 8.5 0 1 0 11 11Z" /></svg>
 )
 export const IcPlus = (p: P) => (
-  <svg {...base} strokeWidth={2.4} {...p}><path d="M12 5.5v13M5.5 12h13" /></svg>
+  <svg {...base} strokeWidth={2.1} {...p}><path d="M12 5.5v13M5.5 12h13" /></svg>
 )
 export const IcClose = (p: P) => (
   <svg {...base} strokeWidth={2} {...p}><path d="M6 6l12 12M18 6 6 18" /></svg>

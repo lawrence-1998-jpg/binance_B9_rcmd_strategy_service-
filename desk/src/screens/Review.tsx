@@ -2,7 +2,8 @@ import { useState } from 'react'
 import { update, useStore, uid } from '../lib/store'
 import { DOMAINS, NOTE_KINDS, type Domain, type NoteKind } from '../lib/types'
 import * as D from '../lib/date'
-import { Section, Check, Chip, Empty } from '../components/ui'
+import { Section, Check, Chip, Empty, Segmented } from '../components/ui'
+import { autoDraft } from '../lib/diary'
 import { IcGear, IcNote } from '../components/icons'
 import type { Route } from '../components/TabBar'
 
@@ -12,7 +13,9 @@ export function Review({ go, onSettings, toast }: { go: (r: Route) => void; onSe
   const s = useStore((x) => x)
   const today = D.key()
   const tomorrow = D.key(new Date(Date.now() + 86400000))
-  const [log, setLog] = useState(() => s.logs.find((l) => l.date === today)?.text ?? '')
+  const [tab, setTab] = useState<'today' | 'line'>('today')
+  const stored = s.entries.find((e) => e.date === today)
+  const entry = stored ?? { date: today, lines: autoDraft(s, today), auto: true, updatedAt: 0 }
   const [tmTitle, setTmTitle] = useState('')
   const [tmDomain, setTmDomain] = useState<Domain>('consult')
 
@@ -28,12 +31,11 @@ export function Review({ go, onSettings, toast }: { go: (r: Route) => void; onSe
   const byDomain = ORDER.map((d) => ({ d, n: week.filter((t) => t.domain === d).length })).filter((x) => x.n > 0)
   const weekTotal = week.length
 
-  function saveLog() {
+  function saveEntry(lines: [string, string, string], auto: boolean) {
     update((x) => ({
       ...x,
-      logs: [...x.logs.filter((l) => l.date !== today), { date: today, text: log.trim(), doneCount: done.length }],
+      entries: [...x.entries.filter((e) => e.date !== today), { date: today, lines, auto, updatedAt: Date.now() }],
     }))
-    toast('记下了')
   }
 
   function classify(id: string, kind: NoteKind) {
@@ -70,6 +72,17 @@ export function Review({ go, onSettings, toast }: { go: (r: Route) => void; onSe
         完成 {done.length} 件，记了 {s.notes.filter((n) => D.key(new Date(n.createdAt)) === today).length} 条
         {weekTotal ? `，这周一共做完 ${weekTotal} 件。` : '。'}
       </p>
+
+      <Segmented<'today' | 'line'>
+        value={tab}
+        onChange={setTab}
+        options={[
+          { key: 'today', label: '今天' },
+          { key: 'line', label: '时间轴' },
+        ]}
+      />
+
+      {tab === 'line' ? <Timeline /> : <>
 
       {/* 完成情况：没做完的排在完成的后面，并且已经自动顺延 —— 不制造亏欠感 */}
       <Section label="今天" meta={tasks.length ? `${done.length} / ${tasks.length}` : undefined} />
@@ -153,10 +166,29 @@ export function Review({ go, onSettings, toast }: { go: (r: Route) => void; onSe
         )}
       </div>
 
-      <Section label="一句话日志" meta="选填" />
+      <Section label="今天这三句" meta={entry.auto ? '自动写的，可以改' : '你改过了'} />
       <div className="card">
-        <textarea className="field" rows={2} value={log} placeholder="今天最大的收获是……"
-          onChange={(e) => setLog(e.target.value)} onBlur={saveLog} />
+        {([0, 1, 2] as const).map((i) => (
+          <textarea
+            key={i}
+            className="field"
+            rows={2}
+            style={i ? { marginTop: 'var(--s2)' } : undefined}
+            value={entry.lines[i]}
+            placeholder={['今天做了什么', '心里是什么感觉', '明天先做什么'][i]}
+            onChange={(e) => {
+              const lines = [...entry.lines] as [string, string, string]
+              lines[i] = e.target.value
+              saveEntry(lines, false)
+            }}
+          />
+        ))}
+        <div style={{ display: 'flex', gap: 'var(--s2)', marginTop: 'var(--s3)' }}>
+          <button
+            type="button" className="btn quiet small" style={{ flex: 1 }}
+            onClick={() => { saveEntry(autoDraft(s, today), true); toast('重写了一遍') }}
+          >按今天的事重写</button>
+        </div>
       </div>
 
       <Section label="明天的三件事" meta={`${tmTasks.length} / 3`} />
@@ -191,6 +223,63 @@ export function Review({ go, onSettings, toast }: { go: (r: Route) => void; onSe
       <button type="button" className="btn ghost wide" style={{ marginTop: 'var(--s6)' }} onClick={() => go('today')}>
         回今日
       </button>
+      </>}
     </div>
+  )
+}
+
+/* ---------------------------------------------------------------- 时间轴 */
+
+function Timeline() {
+  const s = useStore((x) => x)
+  const days = [...s.entries].sort((a, b) => b.date.localeCompare(a.date))
+
+  if (days.length === 0) {
+    return (
+      <>
+        <Section label="时间轴" />
+        <div className="card">
+          <Empty
+            icon={<IcNote />}
+            title="还没有记录"
+            sub="每天在「今天」那栏留下三句话，这里就会长出一条时间轴。"
+          />
+        </div>
+      </>
+    )
+  }
+
+  return (
+    <>
+      <Section label="时间轴" meta={`${days.length} 天`} />
+      <div className="tl">
+        {days.map((e) => {
+          const done = s.tasks.filter((t) => t.date === e.date && t.done)
+          const dist = ORDER
+            .map((d) => ({ d, n: done.filter((t) => t.domain === d).length }))
+            .filter((x) => x.n > 0)
+          const photos = s.photos.filter((p) => p.date === e.date)
+          return (
+            <div className="tl-item" key={e.date}>
+              <div className="tl-date">
+                <span>{D.shortCN(e.date)}</span>
+                {done.length > 0 && <span>· 完成 {done.length}</span>}
+                {photos.length > 0 && <span>· {photos.length} 张照片</span>}
+              </div>
+              <div className="tl-lines">
+                {e.lines.filter(Boolean).map((l, i) => <p key={i}>{l}</p>)}
+              </div>
+              {dist.length > 0 && (
+                <div className="tl-bar">
+                  {dist.map(({ d, n }) => (
+                    <i key={d} style={{ width: `${(n / done.length) * 100}%`, background: DOMAINS[d].color, display: 'block' }} />
+                  ))}
+                </div>
+              )}
+            </div>
+          )
+        })}
+      </div>
+    </>
   )
 }

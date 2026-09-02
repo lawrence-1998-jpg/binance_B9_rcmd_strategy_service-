@@ -1,0 +1,126 @@
+{
+  "source": "docs/playbook/lawrence-prompt-list.md",
+  "generatedAt": "2026-09-02",
+  "items": [
+    {
+      "id": "A1",
+      "cat": "A",
+      "catName": "开工",
+      "title": "新任务启动（万能开头）",
+      "body": "<任务描述>\n\n标准约束（每次都适用，不用我重复）：\n- 先讲清你打算怎么做，再动手；有多个方案就给推荐，别让我做选择题\n- 独立的活并行做\n- 缺数据就说缺，绝不填默认值糊过去\n- 报任何数字前先对齐口径：这个数是怎么算的、代表什么、样本范围是什么\n- 做完在真实界面上自己验一遍，别只看返回码\n- 过程中的判断和踩的坑随手记进 TODO 和长期记忆",
+      "note": "防的是：`never-default-missing-data`（无日期当成\"现在\"，2024 年新闻顶着今天日期上前端）、 `verify-metric-matches-claim`（把\"SQL 取到 400 行\"当成\"缓存可用 400 条\"）、 `definition-of-done-user-surface`（落表≠交付）。"
+    },
+    {
+      "id": "A2",
+      "cat": "A",
+      "catName": "开工",
+      "title": "先规划再做（大改动/碰线上）",
+      "body": "<需求描述>\n\n先出方案再动手，不要直接改代码。方案里要有：\n1. 现状是什么、问题在哪（基于你实际读过的代码，不是猜的）\n2. 打算怎么改，为什么这么改\n3. 会碰到哪些存量代码，有没有可能把线上搞崩\n4. 怎么验证改对了、怎么回滚\n\n绝对不要把线上搞崩。我确认方案后你再开工。",
+      "note": "防的是：策略实验室加 tab 那次的教训——大改动直接上手会漏掉存量影响面。 配合 `/engineering:architecture` 效果更好。"
+    },
+    {
+      "id": "A3",
+      "cat": "A",
+      "catName": "开工",
+      "title": "放手干（不想被打断时）",
+      "body": "都做，不要再问我了，一路干下去。\n遇到只有我能决定的事（会花钱、会通知到别人、不可逆）再停下来问，\n其他的你自己判断，做完一起汇报。",
+      "note": "注意：这条会关掉我的确认习惯。危险动作我仍会停——删数据、发消息给同事、 花钱的操作。想连这些都放开，得单独说。"
+    },
+    {
+      "id": "B1",
+      "cat": "B",
+      "catName": "救火",
+      "title": "服务异常（现象描述式）",
+      "body": "<现象，例如：首页不更新了 / 情绪打分没有了 / 服务挂了>\n\n先诊断再动手：\n- 从\"最近还有没有真的产出\"这个终点往回查，不要只看组件活没活着\n- 找到根因再修，不要凭现象猜\n- 修完回补断档期间的数据\n- 告诉我这次的根因是什么、以后怎么防",
+      "note": "防的是：`scheduled-job-never-ran`（组件级检查全绿、日志零 ERROR，产品已经三天没更新）。 端到端健康判据就是这次的产物。"
+    },
+    {
+      "id": "B2",
+      "cat": "B",
+      "catName": "救火",
+      "title": "修完要复盘",
+      "body": "把这次事故记录下来，后面不要再犯。\n要写清楚：现象是什么、根因是什么、为什么之前的检查没发现、以后靠什么防住。\n记进长期记忆，不是写篇文档就完事。",
+      "note": "防的是：同类事故复发。停摆事故发生过两次，第二次才根治。"
+    },
+    {
+      "id": "C1",
+      "cat": "C",
+      "catName": "交付验收",
+      "title": "上线前自检（最该常用的一条）",
+      "body": "上线前自己走一遍：\n- 列出所有会用到这个功能的角色，每个角色的完整旅程走通一次\n- 只用界面上真实存在的东西操作，不要用你知道但用户看不到的路径\n- 每个新加的控件真的点一次，看有没有产生预期的副作用\n- 首屏肉眼扫一遍，可疑的数字搜一下\n\n自检通过再告诉我\"可以了\"。",
+      "note": "防的是：`walk-each-role-journey-before-ship`（机制测试 13 项全绿，仍漏了\"审批人看不到 申请内容\"）、`control-shipped-but-never-fired`（控件绑了监听但从未触发过）、 `human-eyeball-test-is-my-floor`（一天被抓三次）。"
+    },
+    {
+      "id": "C2",
+      "cat": "C",
+      "catName": "交付验收",
+      "title": "要完整数据（说一次就够）",
+      "body": "把 <数据> 完整给我，我要拿去评测。\n\n完整的意思是：\n- 所有 ID、标题、字段值一律原样输出，不截断、不省略、不加省略号\n- 行数不够就分批给，不要用\"等 N 条\"糊弄\n- 同时给一份 CSV，我要能直接拖进表格",
+      "note": "防的是：我曾输出 8 字符 eventId、48 字符标题的\"数据\"，你追问了三次。 截断的评测数据等于没有。"
+    },
+    {
+      "id": "C3",
+      "cat": "C",
+      "catName": "交付验收",
+      "title": "给老板看的材料",
+      "body": "<主题> 整理成给老板看的材料。\n\n要求：\n- 结论先行，第一段就说清楚\"发生了什么/该做什么\"\n- 数字都要有出处，标明口径和样本范围\n- 局限和没做到的地方如实写，不要粉饰\n- 配图/流程图能说清的就别用大段文字",
+      "note": "防的是：汇报材料堆细节没结论。你要求过\"方便我老板看\"。"
+    },
+    {
+      "id": "D1",
+      "cat": "D",
+      "catName": "数据与取数（Spade）",
+      "title": "找表",
+      "body": "帮我找 <用途> 的表。\n\n选表标准（别再给我边缘表）：\n- Asset Level 认 P0/P1，收藏数高的优先\n- 必须有中英文描述，`bnb_dwd`/`bnb_dws`/`bnb_dwm` 标准层\n- 不碰 `_ha` 后缀、`bnb_temp`/`bnb_dtest`/`ods`/`_bak_日期`\n- 先去「数据专辑」(Data Map → DW Data) 按 板块→数据域→产品线 找，别盲搜关键词\n\n定下来之前必须做两件事：\n1. `SELECT MAX(分区)` 验数据真的在更新——元数据的\"最近更新时间\"是假的\n2. 看字段清单，确认能回答我的问题（别拿累计口径的表来答单日问题）",
+      "note": "防的是：`fact_main_spot_order_d` 元数据写 2026-05 更新、实测数据停在 2021-04-17； `dws_main_trade_spot_order_uid_td` 全是 `_td` 累计口径没有 symbol。两次都是看了字段/ 验了分区才发现。Kevin 和 Maya 都纠正过我的选表。"
+    },
+    {
+      "id": "D2",
+      "cat": "D",
+      "catName": "数据与取数（Spade）",
+      "title": "申请权限",
+      "body": "把上面这些表的权限申请了。\n\n- Read Only，时长选最长的（1 year / Permanent，别用默认的 7 days）\n- 申请理由用这段：\n  Apply for data to build a price alert sensitivity model to optimize the smart\n  tooltips strategy in B9 project. As the senior strategy PM and data scientist of\n  B9 recommendation. I will need user journey history, asset price change log, user\n  features especially the marketing and transaction related ones, and other key\n  dataset to build the model.\n  后面补上这张表具体要哪几个字段、用来干什么。\n- 提交完去 Access Center → My Request 核对真的在列表里，别看有没有弹提示",
+      "note": "防的是：提交成功的 toast 会一闪而过，我曾差点把\"没看到提示\"当成失败。 默认 7 天对建模项目完全不够。"
+    },
+    {
+      "id": "D3",
+      "cat": "D",
+      "catName": "数据与取数（Spade）",
+      "title": "跑数分析",
+      "body": "用 tools/spade/spq.sh 查 <问题>。\n\n- 必须带 date_key 分区过滤，神策表每天 170~210 亿条，裸扫会炸\n- 时间比较用 TIMESTAMP '2026-08-18 12:00:00' 字面量，不能直接给字符串\n- 拿到结果先自检：这个数合理吗？跟我的问题口径对得上吗？\n- 数字反常就先怀疑自己的 SQL，别急着当成发现报给我",
+      "note": "防的是：`aggregate-number-hides-first-screen`（390 万条事件看着很足，拆开 pageView 只有 77 个用户）。大数字最容易骗人。"
+    },
+    {
+      "id": "E1",
+      "cat": "E",
+      "catName": "沉淀与归档",
+      "title": "记经验",
+      "body": "把这次的经验记进长期记忆，后面不要再犯。\n写清楚：踩的是什么坑、为什么会踩、以后靠什么防住。\n凡是人一看/一搜就能发现的问题，你都不该让它流到我这里。",
+      "note": ""
+    },
+    {
+      "id": "E2",
+      "cat": "E",
+      "catName": "沉淀与归档",
+      "title": "归档备份",
+      "body": "把 <范围> 全部整理进 GitHub 备份，以防丢失。\nreadme 好好写，要能让接手的人看懂这是什么、从哪读起。\n密钥一律不进库，单独存我本机。",
+      "note": "注意：仓库是 public。归档时我会跑密钥扫描 + pre-commit 闸双层拦截。 曾漏过 `-p'密码'` 这种 shell 参数形式的明文密码，靠闸门拦下的。"
+    },
+    {
+      "id": "F1",
+      "cat": "F",
+      "catName": "调研",
+      "title": "技术选型（要证据不要记忆）",
+      "body": "调研 <问题>。\n\n- 结论要有出处，给我能点开的链接或官方文档原文\n- 分不清的地方明确说\"不确定\"，不要用听起来合理的话糊过去\n- 涉及产品定位的（是 search API 还是聚合器？有没有这个字段？）必须去官方文档确认\n- 最后给推荐，别只列清单",
+      "note": "防的是：我曾把 RavenPack 说成 search API，查了文档才发现 News Analytics 是 feed， 只有 Bigdata.com 才是 search 且返回 chunk 不是全文。"
+    },
+    {
+      "id": "F2",
+      "cat": "F",
+      "catName": "调研",
+      "title": "快速解释",
+      "body": "<术语> 是什么意思？结合我们项目的场景说，别讲教科书定义。",
+      "note": ""
+    }
+  ]
+}

@@ -249,7 +249,7 @@ textarea.field { resize: none; line-height: 1.5; }
   border-top: 1px solid var(--line);
   padding-bottom: env(safe-area-inset-bottom);
   transform: translateZ(0);             /* 提合成层，防止滚动撕裂 */
-  contain: layout paint;
+  contain: layout;                      /* 不能带 paint —— 会把浮出栏外的速记键裁掉 */
 }
 .tabbar-in {
   max-width: var(--w-app); margin-inline: auto;
@@ -267,15 +267,17 @@ textarea.field { resize: none; line-height: 1.5; }
 .tab span { font-size: var(--t-eyebrow); font-weight: 600; letter-spacing: .02em; }
 .tab.on { color: var(--consult); }
 .cap {
-  width: 50px; height: 50px; border-radius: 50%;
+  width: 54px; height: 54px; border-radius: 50%;
   background: var(--consult); color: #fdf8ef;
   display: grid; place-items: center;
-  margin-top: -20px; flex: 0 0 auto;
-  box-shadow: 0 6px 16px rgba(198, 113, 57, .40);
+  align-self: flex-start;               /* 不跟着 tab 垂直居中，否则只能浮出几个像素 */
+  margin-top: -18px; flex: 0 0 auto;
+  /* 第一层是与栏同色的描边：让按钮「打穿」栏的上边线，而不是压在线上 */
+  box-shadow: 0 0 0 5px var(--card), 0 8px 18px rgba(198, 113, 57, .28);
   transition: transform var(--d-micro) var(--ease);
 }
 .cap:active { transform: scale(.94); }
-.cap svg { width: 24px; height: 24px; }
+.cap svg { width: 22px; height: 22px; }
 
 @media (min-width: 820px) {
   .tabbar {
@@ -286,7 +288,76 @@ textarea.field { resize: none; line-height: 1.5; }
     box-shadow: var(--sh-l);
   }
   .tabbar-in { padding: 0 var(--s4); gap: var(--s2); }
-  .cap { margin-top: 0; width: 44px; height: 44px; }
+  .cap { align-self: center; margin-top: 0; width: 46px; height: 46px; box-shadow: 0 6px 16px rgba(198, 113, 57, .28); }
 }
 
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* ---- 照片 ---------------------------------------------------
+   注意：类名不能叫 .cap —— 那是底部速记键，撞了会互相覆盖。
+   （这套代码里已经因为 .empty 撞过一次车，不再犯第二次） */
+.pgrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.ptile {
+  aspect-ratio: 1; border-radius: 12px; overflow: hidden;
+  background: var(--well); position: relative; display: block; width: 100%;
+}
+.ptile img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.ptile-note {
+  position: absolute; left: 0; right: 0; bottom: 0;
+  padding: 14px 7px 5px;
+  background: linear-gradient(transparent, rgba(32, 30, 29, .62));
+  color: #fdf8ef; font-size: var(--t-eyebrow); line-height: 1.3;
+  text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.padd {
+  aspect-ratio: 1; border-radius: 12px; border: 1.5px dashed var(--ink-3);
+  color: var(--ink-3); display: grid; place-items: center; width: 100%;
+  font-size: var(--t-sub); gap: 2px; line-height: 1.2;
+}
+.padd svg { width: 20px; height: 20px; }
+.pview { width: 100%; border-radius: var(--r-card); display: block; background: var(--well); }
+
+/* ---- 聊天启发 ---- */
+.spark {
+  background: var(--us-tint); border: 1px solid rgba(168, 105, 124, .22);
+  border-radius: var(--r-card); padding: var(--s5) var(--s4);
+}
+.spark-q {
+  font-family: var(--f-cjk); font-weight: 700; font-size: 1.0625rem;
+  line-height: 1.45; color: var(--us-deep);
+}
+
+/* ---- 时间轴 ---- */
+.tl { position: relative; padding-left: 18px; }
+.tl::before {
+  content: ""; position: absolute; left: 4px; top: 6px; bottom: 6px;
+  width: 2px; background: var(--line); border-radius: 2px;
+}
+.tl-item { position: relative; }
+.tl-item + .tl-item { margin-top: var(--s4); }
+.tl-item::before {
+  content: ""; position: absolute; left: -18px; top: 7px;
+  width: 10px; height: 10px; border-radius: 50%;
+  background: var(--card); border: 2px solid var(--consult);
+}
+.tl-date {
+  font-family: var(--f-mono); font-size: var(--t-meta); color: var(--ink-2);
+  display: flex; align-items: center; gap: var(--s2);
+}
+.tl-lines { margin-top: 5px; font-size: var(--t-body); line-height: 1.55; }
+.tl-lines p { margin: 0 0 2px; }
+.tl-lines p:last-child { margin-bottom: 0; }
+.tl-bar { display: flex; height: 4px; border-radius: 99px; overflow: hidden; background: var(--well); margin-top: 7px; }
+
+/* ---- prompt 管理器 ---- */
+.plist { display: grid; gap: var(--s2); }
+.pitem { background: var(--card); border: 1px solid var(--line); border-radius: var(--r-inner); padding: 12px var(--s4); width: 100%; text-align: left; }
+.pitem-h { display: flex; align-items: baseline; gap: var(--s2) }
+.pitem-id { font-family: var(--f-mono); font-size: var(--t-meta); color: var(--consult); font-weight: 600; flex: 0 0 auto }
+.pitem-t { font-size: var(--t-body); font-weight: 700; line-height: 1.35; flex: 1; min-width: 0 }
+.pitem-b { font-size: var(--t-sub); color: var(--ink-2); margin-top: 4px; line-height: 1.5; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden }
+.pbody {
+  background: var(--well); border-radius: var(--r-inner); padding: 12px;
+  font-family: var(--f-mono); font-size: 11px; line-height: 1.65;
+  white-space: pre-wrap; word-break: break-word; color: var(--ink);
+}

@@ -7,7 +7,7 @@ import { Life } from './screens/Life'
 import { Review } from './screens/Review'
 import { Capture } from './screens/Capture'
 import { Settings } from './screens/Settings'
-import { PromptTool } from './screens/PromptTool'
+import { Prompts } from './screens/Prompts'
 
 const ROUTES: Route[] = ['today', 'work', 'life', 'review']
 
@@ -26,7 +26,14 @@ export function App() {
   // 自己写的 hash 路由：五个屏不值得引一个路由库，
   // 而且 hash 路由在 file:// 下也能用（桌面快捷方式直接打开 dist/index.html）
   useEffect(() => {
-    const on = () => setRoute(readHash())
+    const on = () => {
+      setRoute(readHash())
+      // 路由变了就收起覆盖层。正常操作时 sheet 盖住了 tab 栏点不到，
+      // 但手势返回会绕过去，留下「换了页却还盖着一层」的状态
+      setCapture(false)
+      setSettings(false)
+      setPromptTool(false)
+    }
     window.addEventListener('hashchange', on)
     return () => window.removeEventListener('hashchange', on)
   }, [])
@@ -50,7 +57,7 @@ export function App() {
 
       {capture && <Capture onClose={() => setCapture(false)} toast={toast.show} />}
       {settings && <Settings onClose={() => setSettings(false)} toast={toast.show} />}
-      {promptTool && <PromptTool onClose={() => setPromptTool(false)} toast={toast.show} />}
+      {promptTool && <Prompts onClose={() => setPromptTool(false)} toast={toast.show} />}
       <Toast text={toast.text} />
     </>
   )

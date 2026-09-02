@@ -128,6 +128,37 @@ export interface PromptDraft {
   depth: 'quick' | 'deep'
 }
 
+/** 照片本体在 IndexedDB，这里只留 id 和文字 */
+export interface Photo {
+  id: string
+  caption: string
+  date: string
+  createdAt: number
+}
+
+/** 想对他说的话 */
+export interface Moment {
+  id: string
+  text: string
+  createdAt: number
+}
+
+/** 一天三句话。auto=true 表示还是自动草稿，没被改过 */
+export interface DayEntry {
+  date: string
+  lines: [string, string, string]
+  auto: boolean
+  updatedAt: number
+}
+
+/** 自己加的 prompt（内置那批从仓库 md 构建期生成，不存这里） */
+export interface MyPrompt {
+  id: string
+  title: string
+  body: string
+  createdAt: number
+}
+
 export interface State {
   version: number
   seeded: boolean
@@ -141,4 +172,9 @@ export interface State {
   trip: Trip
   logs: DayLog[]
   promptDraft: PromptDraft
+  photos: Photo[]
+  moments: Moment[]
+  entries: DayEntry[]
+  myPrompts: MyPrompt[]
+  promptUses: Record<string, number>
 }
