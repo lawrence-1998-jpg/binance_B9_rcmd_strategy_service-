@@ -262,7 +262,7 @@ function Timeline() {
           return (
             <div className="tl-item" key={e.date}>
               <div className="tl-date">
-                <span>{D.shortCN(e.date)}</span>
+                <span>{D.archiveCN(e.date)}</span>
                 {done.length > 0 && <span>· 完成 {done.length}</span>}
                 {photos.length > 0 && <span>· {photos.length} 张照片</span>}
               </div>

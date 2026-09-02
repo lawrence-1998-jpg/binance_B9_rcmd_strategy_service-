@@ -203,7 +203,7 @@ export function Today({ go, onCapture, toast }: { go: (r: Route) => void; onCapt
             {memory ? (
               <>
                 <Memory id={memory.id} rev={memory.rev ?? 0} />
-                <span className="row-s" style={{ marginTop: 'var(--s3)' }}>{D.shortCN(memory.date)}</span>
+                <span className="row-s" style={{ marginTop: 'var(--s3)' }}>{D.archiveCN(memory.date)}</span>
                 <p className="row-t" style={{ margin: '2px 0 0', fontWeight: 600 }}>
                   {memory.caption || '那天的我们'}
                 </p>

@@ -79,7 +79,7 @@ export function Photos({ toast }: { toast: (t: string) => void }) {
       </div>
       {groups.slice(1).map((g) => (
         <div key={g.date}>
-          <p className="row-s" style={{ margin: 'var(--s4) 0 var(--s2)' }}>{D.shortCN(g.date)} · {g.items.length} 张</p>
+          <p className="row-s" style={{ margin: 'var(--s4) 0 var(--s2)' }}>{D.archiveCN(g.date)} · {g.items.length} 张</p>
           <div className="pgrid">
             {g.items.map((p) => (
               <Tile key={p.id} id={p.id} caption={p.caption} rev={p.rev ?? 0} onOpen={() => setOpen(p.id)} />
@@ -101,7 +101,7 @@ export function Photos({ toast }: { toast: (t: string) => void }) {
         <div className="sheet" role="dialog" aria-modal="true" aria-label="照片">
           <div className="sheet-in">
             <div className="sheet-head">
-              <span className="eyebrow">{D.shortCN(current.date)}</span>
+              <span className="eyebrow">{D.archiveCN(current.date)}</span>
               <button type="button" className="icon-btn" onClick={() => setOpen(null)} aria-label="关闭"><IcClose /></button>
             </div>
             <Big id={current.id} caption={current.caption} rev={current.rev ?? 0} />
