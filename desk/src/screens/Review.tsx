@@ -47,11 +47,15 @@ export function Review({ go, onSettings, toast }: { go: (r: Route) => void; onSe
     setTmTitle('')
   }
 
-  const headline = done.length === 0 && tasks.length === 0
+  // 「明天再来」只在天黑之后说得通。白天什么都没勾就丢这句，
+  // 既不准确也泄气 —— 平静优先的意思是不制造亏欠感。
+  const headline = tasks.length === 0
     ? '今天没记事'
-    : done.length === tasks.length && tasks.length > 0
+    : done.length === tasks.length
       ? '三件都做完了'
-      : done.length > 0 ? '今天挺好' : '明天再来'
+      : done.length > 0
+        ? '今天挺好'
+        : D.isEvening() ? '明天再来' : '今天还长'
 
   return (
     <div className="screen">
