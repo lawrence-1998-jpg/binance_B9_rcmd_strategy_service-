@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { resetToEmpty, useStore } from '../lib/store'
 import { buildBackup, restoreBackup, backupName, humanBytes } from '../lib/backup'
 import { pruneOrphans, usage } from '../lib/media'
+import { isStandalone } from '../lib/install'
 import { saveFile } from '../lib/save'
 import { Section } from '../components/ui'
 import { IcClose } from '../components/icons'
@@ -16,6 +17,7 @@ export function Settings({ onClose, toast }: { onClose: () => void; toast: (t: s
   const [busy, setBusy] = useState<Busy>(null)
   const [space, setSpace] = useState<{ used: number; quota: number } | null>(null)
   const file = useRef<HTMLInputElement>(null)
+  const standalone = isStandalone()
 
   useEffect(() => { void usage().then(setSpace) }, [])
 
@@ -81,10 +83,17 @@ export function Settings({ onClose, toast }: { onClose: () => void; toast: (t: s
             </p>
           )}
           <p className="sub" style={{ marginTop: 'var(--s4)' }}>
-            数据只存在这台设备的浏览器里，不上传任何地方。换设备、清缓存都会没——
+            数据只存在这台设备上，不上传任何地方。换设备、清缓存都会没——
             所以每周导出一次。<strong>导出的文件包含照片本体</strong>，
             换手机时导入就能全部还回来。
           </p>
+          {!standalone && (
+            <p className="sub" style={{ marginTop: 'var(--s3)', color: 'var(--alert)' }}>
+              你现在是在浏览器里打开的。iPhone 上浏览器和主屏 App 的数据是
+              <strong>两份、互相看不见</strong>，而且浏览器里 7 天不打开会被系统清掉。
+              长期用请从主屏幕图标进。
+            </p>
+          )}
 
           {busy && (
             <p className="row-s" style={{ marginTop: 'var(--s3)' }}>

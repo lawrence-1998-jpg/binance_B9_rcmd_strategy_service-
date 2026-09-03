@@ -457,3 +457,24 @@ textarea.field { resize: none; line-height: 1.5; }
   padding-top: calc(10px + env(safe-area-inset-top));
   font-size: var(--t-sub); line-height: 1.45;
 }
+
+
+/* ---- 「先加到主屏幕」----------------------------------------------
+   用 alert 而不是普通卡片：这条不是建议，是「不这么做数据会丢」。
+   全站唯一另一处这么用的是删除确认 */
+.install {
+  background: var(--alert-tint);
+  border: 1px solid color-mix(in srgb, var(--alert) 30%, transparent);
+  border-radius: var(--r-card);
+  padding: var(--s5) var(--s4);
+  margin-top: var(--s3);
+}
+.install-t {
+  font-family: var(--f-cjk); font-weight: 700; font-size: var(--t-title);
+  margin: 0; line-height: 1.4; color: var(--ink);
+}
+.install-s {
+  font-size: var(--t-sub); line-height: 1.6; color: var(--ink);
+  opacity: .85; margin: var(--s2) 0 0;
+}
+.install-s strong { opacity: 1; }
