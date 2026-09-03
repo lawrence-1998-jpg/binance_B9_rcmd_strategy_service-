@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type 
 import { DOMAINS, type Domain, type Status } from '../lib/types'
 import { IcMore } from './icons'
 import { useConfirm, dismissConfirm } from '../lib/confirm'
+import { shouldPromptInstall, dismissNotice } from '../lib/install'
 
 export function Section({ label, meta, domain }: { label: string; meta?: ReactNode; domain?: Domain }) {
   return (
@@ -245,5 +246,37 @@ export function GrowText({
       style={style}
       onChange={(e) => onChange(e.target.value)}
     />
+  )
+}
+
+/**
+ * 「先添加到主屏幕」。
+ *
+ * 不是普通的安装引导。iOS 上 Safari 标签页和主屏 App 是**两份隔离的存储**，
+ * 在浏览器里写的日记、存的照片，装到主屏幕之后一条都看不到；而且只在
+ * Safari 里用的话，7 天不打开就会被系统清掉。
+ *
+ * 她只能先在 Safari 里打开这个链接——默认路径就是错的那条。
+ * 所以这句话必须赶在她开始往里写东西**之前**说，晚了就只能靠导出救。
+ */
+export function InstallNotice() {
+  const [show, setShow] = useState(shouldPromptInstall)
+  if (!show) return null
+  return (
+    <div className="install">
+      <p className="install-t">先把它加到主屏幕，再开始记</p>
+      <p className="install-s">
+        iPhone 上，<strong>浏览器里的数据和主屏 App 是两份，互相看不见</strong>。
+        现在在浏览器里记的东西，装好之后一条都不会带过去。
+        而且浏览器里 7 天不打开，系统会把数据清掉。
+      </p>
+      <p className="install-s" style={{ marginTop: 'var(--s2)' }}>
+        底部<strong>分享</strong>按钮 → <strong>添加到主屏幕</strong>，然后从桌面图标进来。
+      </p>
+      <button type="button" className="btn quiet small wide" style={{ marginTop: 'var(--s4)' }}
+        onClick={() => { dismissNotice(); setShow(false) }}>
+        知道了，先在浏览器里看看
+      </button>
+    </div>
   )
 }

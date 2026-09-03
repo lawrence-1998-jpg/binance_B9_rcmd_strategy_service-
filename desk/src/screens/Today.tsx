@@ -3,7 +3,7 @@ import { get, update, useStore, uid } from '../lib/store'
 import { DOMAINS, type Domain } from '../lib/types'
 import * as D from '../lib/date'
 import { askConfirm } from '../lib/confirm'
-import { Section, Check, Chip, Empty, Progress } from '../components/ui'
+import { Section, Check, Chip, Empty, Progress, InstallNotice } from '../components/ui'
 import { usePhotoURL } from '../lib/usePhoto'
 import { IcNote, IcTrip } from '../components/icons'
 import type { Route } from '../components/TabBar'
@@ -62,6 +62,7 @@ export function Today({ go, onCapture, toast }: { go: (r: Route) => void; onCapt
 
   return (
     <div className="screen">
+      <InstallNotice />
       <p className="eyebrow" style={{ marginTop: 'var(--s3)' }}>{D.longCN()}</p>
       <h1 className="h1">{D.greeting()}</h1>
 
