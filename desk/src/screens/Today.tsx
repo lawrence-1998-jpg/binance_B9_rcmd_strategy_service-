@@ -39,9 +39,12 @@ export function Today({ go, onCapture, toast }: { go: (r: Route) => void; onCapt
     ? s.photos[Math.floor(Date.now() / 86400000) % s.photos.length]
     : null
 
-  const tripLeft = D.daysUntil(s.trip.start)
-  const tripOver = D.daysUntil(s.trip.end) < 0
-  const tripOn = !tripOver && tripLeft <= 60
+  // 没定日期就整块不出现。parse('') 会兜底成今天，不判断的话
+  // 「清空全部数据」之后首屏会冒出一个「就是今天 09/02 – 09/02」的假期
+  const tripSet = D.isDateKey(s.trip.start) && D.isDateKey(s.trip.end)
+  const tripLeft = tripSet ? D.daysUntil(s.trip.start) : 0
+  const tripOver = tripSet && D.daysUntil(s.trip.end) < 0
+  const tripOn = tripSet && !tripOver && tripLeft <= 60
 
   function saveFocus() {
     const v = draft.trim()
@@ -182,7 +185,15 @@ export function Today({ go, onCapture, toast }: { go: (r: Route) => void; onCapt
           </div>
 
           {/* ④ 两条线 */}
-          <Section label="两条线" meta={`${live.length} 件在跑`} />
+          <Section label="两条线" meta={live.length ? `${live.length} 件在跑` : undefined} />
+          {live.length === 0 ? (
+            // 两张写着「0 件在跑 · 都没卡」的卡片占掉一屏，说的却是「什么都没有」。
+            // 空的时候要么别占地方，要么给个入口——不能又占地方又不说事
+            <button type="button" className="card" style={{ width: '100%', textAlign: 'left' }} onClick={() => go('work')}>
+              <span className="row-t">还没有在跑的事</span>
+              <span className="row-s">去「工作」加上手上的项目和需求 →</span>
+            </button>
+          ) : (
           <button type="button" className="card" style={{ width: '100%', textAlign: 'left' }} onClick={() => go('work')}>
             {(['consult', 'byte'] as const).map((d, i) => {
               const list = live.filter((e) => e.domain === d)
@@ -199,6 +210,7 @@ export function Today({ go, onCapture, toast }: { go: (r: Route) => void; onCapt
               )
             })}
           </button>
+          )}
         </div>
 
         <div>

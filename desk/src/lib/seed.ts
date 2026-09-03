@@ -95,7 +95,9 @@ export function empty(): State {
     ...s,
     tasks: [], notes: [], engagements: [], meetings: [],
     anniversaries: [], wishes: [],
-    trip: { ...s.trip, days: [], todos: [] },
+    // 连同标题和日期一起清。留着 seed 里的「国庆 10/01–10/08」，
+    // 用户就会在「清空全部数据」之后仍然看到一个自己从没设过的假期在倒数
+    trip: { title: '', start: '', end: '', budget: 0, days: [], todos: [] },
     logs: [],
     promptDraft: {
       outline: [
