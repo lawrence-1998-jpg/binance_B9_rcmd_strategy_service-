@@ -69,6 +69,13 @@ export function archiveCN(k: string, now = new Date()): string {
   return d.getFullYear() === now.getFullYear() ? md : `${d.getFullYear()}/${md}`
 }
 
+/** "2026-09" → "2026 年 9 月"；今年的省掉年份 */
+export function monthCN(k: string, now = new Date()): string {
+  const [y, m] = k.split('-').map(Number)
+  if (!y || !m) return k
+  return y === now.getFullYear() ? `${m} 月` : `${y} 年 ${m} 月`
+}
+
 export function daysBetween(from: Date, to: Date): number {
   const a = new Date(from.getFullYear(), from.getMonth(), from.getDate()).getTime()
   const b = new Date(to.getFullYear(), to.getMonth(), to.getDate()).getTime()

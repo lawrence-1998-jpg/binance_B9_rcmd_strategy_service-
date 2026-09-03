@@ -26,7 +26,7 @@ export function Life({ toast }: { toast: (t: string) => void }) {
         onChange={setTab}
         options={[
           { key: 'us', label: '我们俩', color: 'var(--us-solid)' },
-          { key: 'trip', label: s.trip.title || '假期', color: 'var(--us-solid)' },
+          { key: 'trip', label: s.trip.title?.trim() || '假期', color: 'var(--us-solid)' },
         ]}
       />
 
@@ -245,11 +245,41 @@ function Trip({ toast }: { toast: (t: string) => void }) {
   const [dDate, setDDate] = useState<string | null>(null)
   const [dTitle, setDTitle] = useState('')
 
-  const left = D.daysUntil(t.start)
-  const over = D.daysUntil(t.end) < 0
+  // 没定日期就不要装作有假期。parse('') 会兜底成今天，倒数会显示「就是今天」，
+  // 比空着更让人困惑
+  const planned = D.isDateKey(t.start) && D.isDateKey(t.end)
+  const left = planned ? D.daysUntil(t.start) : 0
+  const over = planned && D.daysUntil(t.end) < 0
   const done = t.todos.filter((x) => x.done).length
   // 结束早于开始（手滑输错）时长度会是负数，显示成「-2 天假」
-  const len = Math.max(1, D.daysBetween(D.parse(t.start), D.parse(t.end)) + 1)
+  const len = planned ? Math.max(1, D.daysBetween(D.parse(t.start), D.parse(t.end)) + 1) : 0
+
+  if (!planned) {
+    return (
+      <>
+        <Section label="假期" domain="us" />
+        <div className="card">
+          <Empty
+            tone="us"
+            icon={<IcTrip />}
+            title="还没定假期"
+            sub="定下哪天走哪天回，这里就会开始倒数，要订的要带的也有地方放。"
+            action={
+              <button type="button" className="btn" style={{ background: 'var(--us-solid)' }}
+                onClick={() => {
+                  const today = D.key()
+                  const week = D.key(new Date(Date.now() + 6 * 86400000))
+                  update((x) => ({ ...x, trip: { ...x.trip, title: x.trip.title || '假期', start: today, end: week } }))
+                  toast('定好了，改一下日期')
+                }}>
+                定一个
+              </button>
+            }
+          />
+        </div>
+      </>
+    )
+  }
 
   return (
     <>

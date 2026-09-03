@@ -352,6 +352,19 @@ textarea.field { resize: none; line-height: 1.5; }
 }
 
 /* ---- 时间轴 ---- */
+/* 月份吸顶条。日记是往前攒一年、两年的东西，
+   一条通到底的列表滚到中间就不知道自己在哪儿了 */
+.tl-month {
+  position: sticky; top: 0; z-index: 5;
+  display: flex; align-items: baseline; justify-content: space-between;
+  gap: var(--s2);
+  margin: var(--s5) 0 var(--s2);
+  padding: 6px 0;
+  background: var(--ground);
+  font-family: var(--f-cjk); font-weight: 700; font-size: var(--t-title);
+}
+.tl-month-n { font-family: var(--f-mono); font-size: var(--t-meta); font-weight: 400; color: var(--ink-3); }
+
 .tl { position: relative; padding-left: 18px; }
 .tl::before {
   content: ""; position: absolute; left: 4px; top: 6px; bottom: 6px;
