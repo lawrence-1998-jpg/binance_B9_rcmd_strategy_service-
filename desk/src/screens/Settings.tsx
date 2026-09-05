@@ -138,7 +138,7 @@ export function Settings({ onClose, toast }: { onClose: () => void; toast: (t: s
               <textarea
                 className="field" rows={6} readOnly value={manual}
                 onFocus={(e) => e.currentTarget.select()}
-                style={{ fontFamily: 'var(--f-mono)', fontSize: 'var(--t-meta)', lineHeight: 1.5 }}
+                style={{ fontFamily: 'var(--f-mono)', fontSize: 'var(--t-input)', lineHeight: 1.5 }}
               />
               <button type="button" className="btn quiet small wide" style={{ marginTop: 'var(--s2)' }}
                 onClick={() => setManual(null)}>收起</button>

@@ -170,7 +170,7 @@ function NewPrompt({ onBack, onClose, toast }: { onBack: () => void; onClose: ()
         <Section label="加一条" />
         <input className="field" value={title} placeholder="叫什么？比如：客户访谈提纲" onChange={(e) => setTitle(e.target.value)} />
         <textarea
-          className="field" rows={10} style={{ marginTop: 'var(--s2)', fontFamily: 'var(--f-mono)', fontSize: 'var(--t-sub)', lineHeight: 1.6 }}
+          className="field" rows={10} style={{ marginTop: 'var(--s2)', fontFamily: 'var(--f-mono)', fontSize: 'var(--t-input)', lineHeight: 1.6 }}
           value={body} placeholder="把 prompt 正文贴进来" onChange={(e) => setBody(e.target.value)}
         />
         <div className="sheet-foot">
