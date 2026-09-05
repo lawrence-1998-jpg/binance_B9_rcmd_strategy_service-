@@ -80,13 +80,54 @@ export interface Engagement {
  * 状态由内容推导，不手填：填到哪一步就是哪一步。
  * engagement 的进度 = 有结论的条数 / 总条数，这个数才是真的。
  */
+/**
+ * 一条记下来的数据。
+ *
+ * 这是「不许编数字」那条硬约束在数据结构上的另一半：prompt 逼着模型
+ * 把没有出处的数字标出来，而这里逼着**我自己**在抄下一个数字的时候，
+ * 同时写清它是什么、哪儿来的、有多信。
+ *
+ * 因为这些数字最终会出现在给客户的材料里。到那个时候，
+ * 「15%」和「某篇 2023 年的媒体报道说约 15%，中等置信」是两回事。
+ */
+export interface Fact {
+  id: string
+  value: string                 // 数字或事实本身：「约 15%」「2021 年上线」
+  what: string                  // 它到底是什么
+  source: string                // 出处。空着就是没出处，材料里会照实说
+  confidence: 'high' | 'mid' | 'low'
+}
+
+export const CONFIDENCE: { key: Fact['confidence']; label: string }[] = [
+  { key: 'high', label: '高' },
+  { key: 'mid',  label: '中' },
+  { key: 'low',  label: '低' },
+]
+
+/** 这条靠查（AI 调研）还是靠问人（访谈）。两条路走同一条流水线 */
+export type Kind = 'ai' | 'interview'
+
+/**
+ * 显式收口。
+ *
+ * 阶段（stage）是从内容推导出来的，不手填 —— 这是为了不再出现
+ * 「拍脑袋填的 62%」。但「这条我不查了」「先搁着」是内容推不出来的，
+ * 只有她知道。所以显式状态只能**关闭**一条线，不能宣称它有进展：
+ * 永远不会出现「什么都没填但标成完成」。
+ */
+export type Closed = 'parked' | 'dropped'
+
 export interface Inquiry {
   id: string
   engagementId: string
   question: string
+  kind?: Kind                   // 默认 'ai'
   prompt?: string
   findings?: string
   conclusion?: string
+  keywords?: string[]           // 关键词：查的时候用了什么词、回来的东西属于什么主题
+  facts?: Fact[]                // 记下来的数据
+  closed?: Closed               // 搁置 / 不查了
   createdAt: number
   updatedAt: number
 }
@@ -101,11 +142,28 @@ export const STAGES: { key: Stage; label: string; short: string }[] = [
   { key: 'concluded', label: '有结论',    short: '结' },
 ]
 
+/** 访谈那条路上，每一站叫的名字不一样 —— 同一条流水线，两套说法 */
+export const STAGES_INTERVIEW: { key: Stage; label: string; short: string }[] = [
+  { key: 'ask',       label: '待访',    short: '问' },
+  { key: 'prompted',  label: '提纲已备', short: '纲' },
+  { key: 'found',     label: '访谈记录', short: '记' },
+  { key: 'concluded', label: '有结论',  short: '结' },
+]
+
+export function stagesFor(q: Inquiry) {
+  return q.kind === 'interview' ? STAGES_INTERVIEW : STAGES
+}
+
 export function stageOf(q: Inquiry): Stage {
   if (q.conclusion?.trim()) return 'concluded'
   if (q.findings?.trim()) return 'found'
   if (q.prompt?.trim()) return 'prompted'
   return 'ask'
+}
+
+/** 还在盘子上的（没被搁置、没被放弃）—— 进度只按这些算 */
+export function isLive(q: Inquiry): boolean {
+  return !q.closed
 }
 
 export interface Meeting {
