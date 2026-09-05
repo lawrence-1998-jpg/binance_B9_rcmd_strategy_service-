@@ -654,3 +654,22 @@ button.kw:active { background: var(--line-2); }
   color: var(--ink); white-space: pre-wrap; word-break: break-word;
   max-height: 180px; overflow-y: auto;
 }
+
+
+/* ---- Prompt 零件 --------------------------------------------------
+   叮嘱语和附录不是第二套 prompt，是挂在正要复制的那一条后面的零件。
+   所以挑选发生在详情页里，不是另一个列表 */
+.partrow {
+  display: flex; align-items: flex-start; gap: var(--s3);
+  width: 100%; text-align: left; padding: 10px 0; min-height: var(--tap);
+}
+.partrow + .partrow { border-top: 1px solid var(--line-2); }
+.partrow:active { background: var(--line-2); }
+.partbox {
+  flex: 0 0 auto; width: 22px; height: 22px; margin-top: 2px;
+  border-radius: 6px; border: 1.5px solid var(--line);
+  display: grid; place-items: center;
+  font-size: var(--t-sub); font-weight: 700; color: var(--on-solid);
+}
+.partrow.on .partbox { background: var(--consult-solid); border-color: var(--consult-solid); }
+.partrow.on .row-t { color: var(--consult-text); }

@@ -87,6 +87,7 @@ export function seed(): State {
     entries: [],
     myPrompts: [],
     promptUses: {},
+    promptParts: [],
   }
 }
 
@@ -115,6 +116,7 @@ export function empty(): State {
     entries: [],
     myPrompts: [],
     promptUses: {},
+    promptParts: [],
   }
 }
 

@@ -89,6 +89,7 @@ function merge(p: Partial<State>): State {
     entries: arr(p.entries, []),
     myPrompts: arr(p.myPrompts, []),
     promptUses: obj(p.promptUses) as Record<string, number>,
+    promptParts: arr(p.promptParts, []),
   }
 }
 

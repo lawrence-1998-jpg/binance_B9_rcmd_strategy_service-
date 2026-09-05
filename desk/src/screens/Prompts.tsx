@@ -8,8 +8,31 @@ import { IcClose, IcBack, IcCopy, IcNote, IcTrash, IcWand } from '../components/
 import data from '../data/prompts.json'
 
 interface Builtin { id: string; cat: string; catName: string; title: string; body: string; note: string }
+/** 零件：挂在任何一条 prompt 后面的可复用片段 */
+interface Part { id: string; kind: string; title: string; body: string; note: string }
 const BUILTIN = (data.items as Builtin[])
+const PARTS = (data.parts as Part[])
 const CATS = Array.from(new Map(BUILTIN.map((b) => [b.cat, b.catName])).entries())
+
+/**
+ * 把选中的零件挂到正文后面。
+ *
+ * 叮嘱语合并成一段列表（挂五条也不会把 prompt 撑散），
+ * 附录各自成节（它们本来就是成段的东西）。
+ * 顺序按零件库里的顺序，不按她点的顺序 —— 同一套零件每次拼出来要一模一样，
+ * 不然她没法判断这次和上次到底哪儿不同。
+ */
+export function withParts(body: string, ids: string[]): string {
+  const on = PARTS.filter((p) => ids.includes(p.id))
+  if (on.length === 0) return body
+  const tips = on.filter((p) => p.kind === '叮嘱语')
+  const apps = on.filter((p) => p.kind !== '叮嘱语')
+  const out = [body.trim()]
+  // 每条叮嘱语之间空一行 —— 挤在一起会读成一段车轱辘话，那就等于没挂
+  if (tips.length) out.push('', '---', '', tips.map((t) => t.body.trim()).join('\n\n'))
+  for (const a of apps) out.push('', '---', '', `【${a.title}】`, '', a.body.trim())
+  return out.join('\n') + '\n'
+}
 
 type View = { kind: 'list' } | { kind: 'item'; id: string } | { kind: 'gen' } | { kind: 'new' }
 
@@ -19,6 +42,12 @@ export function Prompts({ onClose, toast }: { onClose: () => void; toast: (t: st
   const [view, setView] = useState<View>({ kind: 'list' })
   const [q, setQ] = useState('')
   const [cat, setCat] = useState<string | null>(null)
+  const picked = useStore((x) => x.promptParts)
+  const togglePart = (id: string) =>
+    update((x) => ({
+      ...x,
+      promptParts: x.promptParts.includes(id) ? x.promptParts.filter((y) => y !== id) : [...x.promptParts, id],
+    }))
 
   const all = useMemo(
     () => [
@@ -68,9 +97,11 @@ export function Prompts({ onClose, toast }: { onClose: () => void; toast: (t: st
             <p className="row-s" style={{ marginTop: 'var(--s3)' }}>复制过 {uses[p.id]} 次</p>
           )}
 
+          <PartPicker picked={picked} onToggle={togglePart} />
+
           <div className="sheet-foot">
-            <button type="button" className="btn wide" onClick={() => void copy(p.id, p.body)}>
-              <IcCopy /> 一键复制
+            <button type="button" className="btn wide" onClick={() => void copy(p.id, withParts(p.body, picked))}>
+              <IcCopy /> {picked.length ? `复制（含 ${picked.length} 个零件）` : '一键复制'}
             </button>
             {isMine && (
               <button
@@ -156,6 +187,63 @@ export function Prompts({ onClose, toast }: { onClose: () => void; toast: (t: st
 }
 
 /* ---------------------------------------------------------------- 自建 */
+
+/**
+ * 挂零件。
+ *
+ * 她的原话：「我们经常要去写 prompt，里面有很多的叮嘱语啊附录啊，
+ * 这种是不是要提前准备好呢」。是。所以零件不做成第二套 prompt 让她再找一遍，
+ * 而是直接挂在她正要复制的这一条后面。
+ *
+ * 选择是**记住的**（存进 promptParts）：她多半每次都挂同样那三条，
+ * 每次重选一遍就等于没做。
+ */
+function PartPicker({ picked, onToggle }: { picked: string[]; onToggle: (id: string) => void }) {
+  const [open, setOpen] = useState(false)
+  const kinds = Array.from(new Set(PARTS.map((p) => p.kind)))
+
+  return (
+    <>
+      <Section label="挂零件" meta={picked.length ? `已挂 ${picked.length} 个` : `${PARTS.length} 个可挂`} />
+      <div className="card">
+        <p className="sub quiet" style={{ margin: 0 }}>
+          挂上的会接在正文后面一起复制。选择会记住，下次打开还是这几个。
+        </p>
+        {!open && picked.length > 0 && (
+          <div className="kw-row" style={{ marginTop: 'var(--s3)' }}>
+            {PARTS.filter((p) => picked.includes(p.id)).map((p) => (
+              <button key={p.id} type="button" className="kw on" onClick={() => onToggle(p.id)}
+                aria-label={`取下 ${p.title}`}>{p.title} ✕</button>
+            ))}
+          </div>
+        )}
+        <button type="button" className="btn quiet small wide" style={{ marginTop: 'var(--s3)' }}
+          onClick={() => setOpen((v) => !v)}>
+          {open ? '收起' : picked.length ? '改挂哪些' : '挑几个挂上'}
+        </button>
+
+        {open && kinds.map((k) => (
+          <div key={k} style={{ marginTop: 'var(--s4)' }}>
+            <p className="eyebrow">{k}</p>
+            {PARTS.filter((p) => p.kind === k).map((p) => {
+              const on = picked.includes(p.id)
+              return (
+                <button key={p.id} type="button" className={`partrow${on ? ' on' : ''}`}
+                  aria-pressed={on} onClick={() => onToggle(p.id)}>
+                  <i className="partbox" aria-hidden="true">{on ? '✓' : ''}</i>
+                  <span className="grow">
+                    <span className="row-t">{p.title}</span>
+                    <span className="row-s">{p.body.replace(/\s+/g, ' ').slice(0, 42)}</span>
+                  </span>
+                </button>
+              )
+            })}
+          </div>
+        ))}
+      </div>
+    </>
+  )
+}
 
 function NewPrompt({ onBack, onClose, toast }: { onBack: () => void; onClose: () => void; toast: (t: string) => void }) {
   const [title, setTitle] = useState('')
