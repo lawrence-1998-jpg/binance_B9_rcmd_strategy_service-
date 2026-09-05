@@ -143,7 +143,7 @@ export function Today({ go, onCapture, toast }: { go: (r: Route) => void; onCapt
         adding ? (
           <div className="card" style={{ marginTop: 'var(--s2)' }}>
             <input
-              autoFocus className="field" value={newTitle} placeholder="第几件事？"
+              autoFocus className="field" value={newTitle} placeholder="还要做什么？"
               onChange={(e) => setNewTitle(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter') addTask(); if (e.key === 'Escape') setAdding(false) }}
             />

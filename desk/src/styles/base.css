@@ -25,6 +25,14 @@ button, input, textarea, select {
   font: inherit; color: inherit;
   background: none; border: 0; margin: 0;
 }
+/* 16px 下限，兜住所有可输入控件。
+   iOS Safari 会在聚焦一个字号 < 16px 的输入框时自动放大整个页面，
+   而且不会缩回来——放大之后 position:fixed 的 tab 栏被推出可视区，
+   「复盘」那个 tab 就直接看不见了。真机上踩到过一次。
+   （不是靠 maximum-scale=1 解决：那等于禁掉双指放大，是可访问性倒退。）
+   checkbox / radio / file 不接受文本输入，不触发放大，不用管。 */
+input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+textarea, select { font-size: max(16px, 1em); }
 button { cursor: pointer; -webkit-appearance: none; }
 
 :focus-visible {
@@ -217,7 +225,7 @@ button { cursor: pointer; -webkit-appearance: none; }
 /* ---- 输入 ---- */
 .field {
   width: 100%; background: var(--well); border-radius: var(--r-inner);
-  padding: 11px var(--s3); font-size: var(--t-body); color: var(--ink);
+  padding: 11px var(--s3); font-size: var(--t-input); color: var(--ink);
   min-height: 44px;
 }
 .field::placeholder { color: var(--ink-3); }
