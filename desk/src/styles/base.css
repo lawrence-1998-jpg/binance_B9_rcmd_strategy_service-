@@ -1,4 +1,5 @@
 @import './tokens.css';
+@import './fonts.css';
 
 *, *::before, *::after { box-sizing: border-box; }
 
@@ -233,9 +234,13 @@ button { cursor: pointer; -webkit-appearance: none; }
 textarea.field { resize: none; line-height: 1.5; }
 .field.grow-y { overflow: hidden; }
 
-/* ---- toast ---- */
+/* ---- toast ----
+   层级要压过全屏 sheet（100）。以前是 90，也就是说在设置页里点「导出备份」，
+   那句「导出成功 / 失败」是弹了的，但整个被设置页盖住，她一个字都看不见——
+   而「备份到底成没成」恰恰是最需要有回音的一件事。
+   提示是这个 App 唯一会说话的地方，让它永远在最上面 */
 .toast {
-  position: fixed; left: 50%; z-index: 90;
+  position: fixed; left: 50%; z-index: 210;
   bottom: calc(var(--tabbar-h) + 18px + env(safe-area-inset-bottom));
   transform: translateX(-50%);
   background: var(--night); color: var(--on-night);
@@ -526,3 +531,24 @@ textarea.field { resize: none; line-height: 1.5; }
 .flow-i.done .flow-d { background: var(--ok); color: var(--on-solid); }
 .flow-i.now { color: var(--consult-text); font-weight: 700; }
 .flow-i.now .flow-d { background: var(--consult-solid); color: var(--on-solid); }
+
+
+/* ---- 「有新版本」---------------------------------------------------
+   跟 toast 同一个位置（拇指最容易够到的地方），但它不会自己消失：
+   她不点就一直在。用 night 底色而不是 alert：这不是坏消息 */
+.update-pill {
+  position: fixed; left: 50%; z-index: 88;
+  bottom: calc(var(--tabbar-h) + 18px + env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  display: flex; align-items: center; gap: var(--s3);
+  min-height: var(--tap);
+  background: var(--night); color: var(--on-night);
+  padding: 8px var(--s5); border-radius: var(--r-pill);
+  box-shadow: var(--sh-l);
+  animation: toast var(--d-move) var(--ease) both;
+  max-width: min(calc(100% - 40px), 22rem);
+}
+.update-t { font-size: var(--t-sub); font-weight: 700; }
+.update-a { font-size: var(--t-sub); opacity: .72; }
+.update-pill:active { transform: translateX(-50%) scale(.97); }
+body.has-update .toast { bottom: calc(var(--tabbar-h) + 74px + env(safe-area-inset-bottom)); }

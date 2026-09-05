@@ -17,7 +17,11 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
-      registerType: 'autoUpdate',
+      // prompt 而不是 autoUpdate：autoUpdate 会 skipWaiting，新 SW 抢先接管，
+      // 页面却还跑着旧代码——实测的结果是「打开一次还是旧版，开第二次才换」。
+      // 换成 prompt 后新版装好了先等着，什么时候上位由 lib/update.ts 决定
+      registerType: 'prompt',
+      injectRegister: null,
       includeAssets: ['icons/apple-touch-icon.png'],
       manifest: {
         name: '案头 Deskside',
@@ -37,27 +41,15 @@ export default defineConfig({
         ],
       },
       workbox: {
+        // 新 SW 只在收到 SKIP_WAITING 后才上位（prompt 模式），
+        // 但上位那一刻必须立刻接管已经开着的页面。没有 clientsClaim 就没有
+        // controllerchange，而 controllerchange 是 lib/update.ts 唯一认的信号
+        // ——换版本会永远卡在「正在换……」
+        clientsClaim: true,
+        skipWaiting: false,
+        // woff2 必须在里面：字体现在是自带的，跟着 precache 一起装，
+        // 装完之后飞机上、地铁里打开都是完整的样子
         globPatterns: ['**/*.{js,css,html,png,svg,woff2}'],
-        // 字体是跨域外链，不在 precache 范围内。不缓存的话离线打开
-        // Caprasimo 会回退到 Georgia、IBM Plex Mono 回退到系统等宽，
-        // 纪念日倒数那几个大数字会明显变样。这个 App 是要在飞机上、
-        // 地铁里用的，离线是常态不是异常
-        runtimeCaching: [
-          {
-            urlPattern: /^https:\/\/fonts\.googleapis\.com\//,
-            handler: 'StaleWhileRevalidate',
-            options: { cacheName: 'gfonts-css', cacheableResponse: { statuses: [0, 200] } },
-          },
-          {
-            urlPattern: /^https:\/\/fonts\.gstatic\.com\//,
-            handler: 'CacheFirst',
-            options: {
-              cacheName: 'gfonts-files',
-              cacheableResponse: { statuses: [0, 200] },
-              expiration: { maxEntries: 20, maxAgeSeconds: 60 * 60 * 24 * 365 },
-            },
-          },
-        ],
       },
     }),
   ],

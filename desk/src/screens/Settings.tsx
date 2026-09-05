@@ -3,6 +3,7 @@ import { resetToEmpty, useStore } from '../lib/store'
 import { buildBackup, restoreBackup, backupName, humanBytes } from '../lib/backup'
 import { pruneOrphans, usage } from '../lib/media'
 import { isStandalone } from '../lib/install'
+import { checkForUpdate } from '../lib/update'
 import { saveFile } from '../lib/save'
 import { Section } from '../components/ui'
 import { IcClose } from '../components/icons'
@@ -12,6 +13,23 @@ type Busy = { what: string; done: number; total: number } | null
 export function Settings({ onClose, toast }: { onClose: () => void; toast: (t: string) => void }) {
   const s = useStore((x) => x)
   const [confirmClear, setConfirmClear] = useState(false)
+  const [checking, setChecking] = useState(false)
+
+  /**
+   * 手动查一次。平时不用点——从后台切回来会自动查。
+   * 放这个按钮是因为「到底更没更新」以前只能靠猜，
+   * 而猜错的代价是她一直用着一个我以为已经修好的版本。
+   */
+  async function check() {
+    setChecking(true)
+    try {
+      const found = await checkForUpdate()
+      if (found) toast('有新版本，正在换……')
+      else toast('已经是最新的')
+    } finally {
+      setChecking(false)
+    }
+  }
   const [confirmImport, setConfirmImport] = useState<File | null>(null)
   const [manual, setManual] = useState<string | null>(null)
   const [busy, setBusy] = useState<Busy>(null)
@@ -177,6 +195,15 @@ export function Settings({ onClose, toast }: { onClose: () => void; toast: (t: s
         <Section label="关于" />
         <div className="card">
           <p className="row-t" style={{ margin: 0 }}>案头 Deskside v1</p>
+          {/* 版本戳。「我这边已经修好了」和「你手机上还是旧的」是两件事，
+              没有这一行就分不清是 bug 没修好还是新版没到你手上 */}
+          <p className="sub mono" style={{ marginTop: 'var(--s2)' }}>
+            {__BUILD_SHA__} · {__BUILD_TIME__}
+          </p>
+          <button type="button" className="btn ghost wide" style={{ marginTop: 'var(--s3)' }}
+            disabled={checking} onClick={() => void check()}>
+            {checking ? '正在查……' : '检查更新'}
+          </button>
           <p className="sub" style={{ marginTop: 'var(--s1)' }}>
             四条线：咨询顾问 · 字节产品 · 我们俩 · 我自己。<br />
             视觉沿用 Organic 设计系统，按手机重构。<br />
