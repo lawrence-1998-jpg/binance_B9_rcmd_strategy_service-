@@ -63,6 +63,51 @@ export interface Engagement {
   archived?: boolean
 }
 
+/**
+ * 一条调研线 —— 这套东西的核心对象。
+ *
+ * 之前 engagement 只有状态（阶段、卡点、手填的百分比），没有内容：
+ * 「提纲 → Prompt」生成完把 prompt 扔进剪贴板就消失了，
+ * 研究结果没有地方回来，进度是拍脑袋填的。四个格子各装各的，中间没有线。
+ *
+ * 一条 inquiry 就是流水线上的一件在制品，四站往下走，每站的产出留在原地：
+ *
+ *   ① question   提纲里的一条问题
+ *   ② prompt     照四条硬约束生成，存下来（不再只丢剪贴板）
+ *   ③ findings   AI 给的结果，原样贴回来
+ *   ④ conclusion 你自己提炼的一句话 —— 只有这句是你的，前面都是材料
+ *
+ * 状态由内容推导，不手填：填到哪一步就是哪一步。
+ * engagement 的进度 = 有结论的条数 / 总条数，这个数才是真的。
+ */
+export interface Inquiry {
+  id: string
+  engagementId: string
+  question: string
+  prompt?: string
+  findings?: string
+  conclusion?: string
+  createdAt: number
+  updatedAt: number
+}
+
+/** 一条调研线走到哪儿了。顺序即流水线顺序。 */
+export type Stage = 'ask' | 'prompted' | 'found' | 'concluded'
+
+export const STAGES: { key: Stage; label: string; short: string }[] = [
+  { key: 'ask',       label: '待查',      short: '问' },
+  { key: 'prompted',  label: 'Prompt 已备', short: '备' },
+  { key: 'found',     label: '有材料',    short: '料' },
+  { key: 'concluded', label: '有结论',    short: '结' },
+]
+
+export function stageOf(q: Inquiry): Stage {
+  if (q.conclusion?.trim()) return 'concluded'
+  if (q.findings?.trim()) return 'found'
+  if (q.prompt?.trim()) return 'prompted'
+  return 'ask'
+}
+
 export interface Meeting {
   id: string
   title: string
@@ -168,6 +213,7 @@ export interface State {
   tasks: Task[]
   notes: Note[]
   engagements: Engagement[]
+  inquiries: Inquiry[]
   meetings: Meeting[]
   anniversaries: Anniversary[]
   wishes: Wish[]

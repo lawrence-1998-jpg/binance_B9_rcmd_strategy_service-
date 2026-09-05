@@ -46,6 +46,7 @@ export function seed(): State {
         progress: 75, next: '和 leader 一对一', nextDate: addDays(today, 3), updatedAt: Date.now() - 86400000,
       },
     ],
+    inquiries: [],
     meetings: [
       { id: id(), title: '客户 A 周会', date: today, start: '15:00', end: '16:00', domain: 'consult', note: '带上诊断中期结论' },
       { id: id(), title: '需求评审', date: addDays(today, 2), start: '10:30', end: '11:30', domain: 'byte' },
