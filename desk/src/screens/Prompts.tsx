@@ -3,7 +3,7 @@ import { update, useStore, uid } from '../lib/store'
 import { askConfirm } from '../lib/confirm'
 import { buildPrompt, parseOutline, TARGETS, DEPTHS, type Depth, type Target } from '../lib/prompt'
 import { copyText } from '../lib/copy'
-import { Section, Chip, Empty } from '../components/ui'
+import { Section, Chip, Empty, GrowText } from '../components/ui'
 import { IcClose, IcBack, IcCopy, IcNote, IcTrash, IcWand } from '../components/icons'
 import data from '../data/prompts.json'
 
@@ -13,6 +13,28 @@ interface Part { id: string; kind: string; title: string; body: string; note: st
 const BUILTIN = (data.items as Builtin[])
 const PARTS = (data.parts as Part[])
 const CATS = Array.from(new Map(BUILTIN.map((b) => [b.cat, b.catName])).entries())
+
+/**
+ * 找出正文里的 <占位符>。
+ *
+ * 39 条里有 31 条带占位符，也就是说她几乎每复制一次，就得在粘出来的
+ * 一大段文字里找到 `<任务描述>` 再替换掉 —— 在手机上这是件很烦的事，
+ * 烦到足以让这个库只发挥一半作用。
+ *
+ * 所以复制之前先在这儿填。留空的**原样保留**尖括号：
+ * 悄悄替换成空字符串比留着占位符更糟，那样她会把一句残缺的话发出去
+ * 而且看不出来。
+ */
+export function holesOf(body: string): string[] {
+  return Array.from(new Set(Array.from(body.matchAll(/<([^<>\n]{1,40})>/g), (m) => m[1])))
+}
+
+export function fillHoles(body: string, values: Record<string, string>): string {
+  return body.replace(/<([^<>\n]{1,40})>/g, (whole, key: string) => {
+    const v = (values[key] ?? '').trim()
+    return v || whole
+  })
+}
 
 /**
  * 把选中的零件挂到正文后面。
@@ -42,6 +64,8 @@ export function Prompts({ onClose, toast }: { onClose: () => void; toast: (t: st
   const [view, setView] = useState<View>({ kind: 'list' })
   const [q, setQ] = useState('')
   const [cat, setCat] = useState<string | null>(null)
+  /** 占位符填的内容。不落盘 —— 这是每次的具体内容，不是设置 */
+  const [fills, setFills] = useState<Record<string, string>>({})
   const picked = useStore((x) => x.promptParts)
   const togglePart = (id: string) =>
     update((x) => ({
@@ -78,6 +102,9 @@ export function Prompts({ onClose, toast }: { onClose: () => void; toast: (t: st
     const p = all.find((x) => x.id === view.id)
     if (!p) return null
     const isMine = mine.some((m) => m.id === p.id)
+    const holes = holesOf(p.body)
+    const filled = fillHoles(p.body, fills)
+    const left = holes.filter((h) => !(fills[h] ?? '').trim()).length
     return (
       <div className="sheet" role="dialog" aria-modal="true" aria-label={p.title}>
         <div className="sheet-in">
@@ -88,7 +115,26 @@ export function Prompts({ onClose, toast }: { onClose: () => void; toast: (t: st
           <p className="eyebrow" style={{ marginTop: 'var(--s2)' }}>{p.cat === '我' ? '我加的' : `${p.cat} · ${p.catName}`}</p>
           <h1 className="h1" style={{ fontSize: 'var(--t-focus)' }}>{p.title}</h1>
 
-          <div className="pbody" style={{ marginTop: 'var(--s4)' }}>{p.body}</div>
+          {holes.length > 0 && (
+            <div className="card" style={{ marginTop: 'var(--s4)' }}>
+              <p className="sub quiet" style={{ margin: '0 0 var(--s3)' }}>
+                先在这儿填，复制出去就是填好的 —— 不用再到粘出来的一大段里去找尖括号。
+                留空的会原样保留 <span className="mono">&lt;…&gt;</span>。
+              </p>
+              {holes.map((h) => (
+                <div key={h} style={{ marginTop: 'var(--s3)' }}>
+                  <p className="eyebrow">{h}</p>
+                  <GrowText
+                    value={fills[h] ?? ''} minRows={2} aria-label={h}
+                    placeholder={`把${h}写在这儿`}
+                    onChange={(v) => setFills((x) => ({ ...x, [h]: v }))}
+                  />
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div className="pbody" style={{ marginTop: 'var(--s4)' }}>{filled}</div>
 
           {p.note && (
             <p className="sub" style={{ color: 'var(--ink-2)', marginTop: 'var(--s3)', lineHeight: 1.6 }}>{p.note}</p>
@@ -100,9 +146,14 @@ export function Prompts({ onClose, toast }: { onClose: () => void; toast: (t: st
           <PartPicker picked={picked} onToggle={togglePart} />
 
           <div className="sheet-foot">
-            <button type="button" className="btn wide" onClick={() => void copy(p.id, withParts(p.body, picked))}>
+            <button type="button" className="btn wide" onClick={() => void copy(p.id, withParts(filled, picked))}>
               <IcCopy /> {picked.length ? `复制（含 ${picked.length} 个零件）` : '一键复制'}
             </button>
+            {left > 0 && (
+              <p className="sub" style={{ color: 'var(--alert)', marginTop: 'var(--s2)', textAlign: 'center' }}>
+                还有 {left} 处没填，会原样带着 &lt;…&gt; 复制出去
+              </p>
+            )}
             {isMine && (
               <button
                 type="button" className="btn ghost small wide" style={{ marginTop: 'var(--s2)', color: 'var(--alert)' }}
@@ -139,6 +190,7 @@ export function Prompts({ onClose, toast }: { onClose: () => void; toast: (t: st
 
         <div className="chips" style={{ marginTop: 'var(--s3)' }}>
           <Chip tap on={cat === null} onClick={() => setCat(null)}>全部</Chip>
+          <Chip tap on={cat === '零件'} onClick={() => setCat('零件')}>零件 {PARTS.length}</Chip>
           {mine.length > 0 && <Chip tap on={cat === '我'} onClick={() => setCat('我')}>我加的</Chip>}
           {CATS.map(([c, name]) => (
             <Chip key={c} tap on={cat === c} onClick={() => setCat(c)}>{name}</Chip>
@@ -154,13 +206,44 @@ export function Prompts({ onClose, toast }: { onClose: () => void; toast: (t: st
           <span className="pitem-b">输入几条要问的，出一段带「不许编数字」约束的调研 prompt</span>
         </button>
 
+        {cat === '零件' ? (
+          <>
+            <Section label="零件" meta={picked.length ? `已挂 ${picked.length} 个` : `${PARTS.length} 个`} />
+            <p className="sub quiet" style={{ margin: '0 0 var(--s3)' }}>
+              点一条＝单独复制它。想让它跟着某条 prompt 一起复制，
+              到那条 prompt 里「挂零件」。
+            </p>
+            {Array.from(new Set(PARTS.map((x) => x.kind))).map((k) => (
+              <div key={k} style={{ marginTop: 'var(--s4)' }}>
+                <p className="eyebrow">{k}</p>
+                {PARTS.filter((x) => x.kind === k)
+                  .filter((x) => { const kw = q.trim().toLowerCase(); return kw ? (x.title + x.body).toLowerCase().includes(kw) : true })
+                  .map((x) => (
+                    <button key={x.id} type="button" className="partrow"
+                      onClick={() => void copy(x.id, x.body)}>
+                      <i className="partbox" aria-hidden="true" style={{ border: 'none', background: 'none', color: 'var(--ink-3)' }}>
+                        {picked.includes(x.id) ? '挂' : ''}
+                      </i>
+                      <span className="grow">
+                        <span className="row-t">{x.title}</span>
+                        <span className="row-s">{x.body.replace(/\s+/g, ' ').slice(0, 46)}</span>
+                      </span>
+                    </button>
+                  ))}
+              </div>
+            ))}
+            <div style={{ height: 'var(--s7)' }} />
+          </>
+        ) : (
+        <>
         <Section label={cat ? (CATS.find((c) => c[0] === cat)?.[1] ?? '我加的') : '全部'} meta={`${shown.length} 条`} />
         {shown.length === 0 ? (
           <div className="card"><Empty icon={<IcNote />} title="没搜到" sub="换个词试试，或者自己加一条。" /></div>
         ) : (
           <div className="plist">
             {shown.map((p) => (
-              <button key={p.id} type="button" className="pitem" onClick={() => setView({ kind: 'item', id: p.id })}>
+              <button key={p.id} type="button" className="pitem"
+                onClick={() => { setFills({}); setView({ kind: 'item', id: p.id }) }}>
                 <span className="pitem-h">
                   <span className="pitem-id">{p.cat === '我' ? '★' : p.id}</span>
                   <span className="pitem-t">{p.title}</span>
@@ -177,9 +260,12 @@ export function Prompts({ onClose, toast }: { onClose: () => void; toast: (t: st
         </button>
 
         <p className="sub quiet" style={{ marginTop: 'var(--s4)', lineHeight: 1.6 }}>
-          内置这 {BUILTIN.length} 条在构建时从仓库的 <span className="mono">docs/playbook/lawrence-prompt-list.md</span> 生成 ——
-          改那份 md 再发布，这里就跟着变，不存第二份。
+          内置这 {BUILTIN.length} 条和 {PARTS.length} 个零件，都在构建时从仓库的
+          <span className="mono"> docs/playbook/ </span>两份 md 生成 ——
+          改那两份再发布，这里就跟着变，不存第二份。
         </p>
+        </>
+        )}
         <div style={{ height: 'var(--s6)' }} />
       </div>
     </div>
