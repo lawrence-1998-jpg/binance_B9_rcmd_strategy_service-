@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { TabBar, type Route } from './components/TabBar'
-import { Toast, useToast, ConfirmDialog } from './components/ui'
+import { Toast, useToast, ConfirmDialog, UpdatePill } from './components/ui'
 import { onPersistFail } from './lib/store'
 import { Today } from './screens/Today'
 import { Work } from './screens/Work'
@@ -95,6 +95,7 @@ export function App() {
       {sheet === 'settings' && <Settings onClose={closeSheet} toast={toast.show} />}
       {sheet === 'prompts' && <Prompts onClose={closeSheet} toast={toast.show} />}
       <ConfirmDialog />
+      <UpdatePill />
       <Toast text={toast.text} />
     </>
   )

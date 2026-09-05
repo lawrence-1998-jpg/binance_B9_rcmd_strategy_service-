@@ -3,6 +3,7 @@ import { DOMAINS, type Domain, type Status } from '../lib/types'
 import { IcMore } from './icons'
 import { useConfirm, dismissConfirm } from '../lib/confirm'
 import { shouldPromptInstall, dismissNotice } from '../lib/install'
+import { useUpdate, applyUpdate } from '../lib/update'
 
 export function Section({ label, meta, domain }: { label: string; meta?: ReactNode; domain?: Domain }) {
   return (
@@ -278,5 +279,37 @@ export function InstallNotice() {
         知道了，先在浏览器里看看
       </button>
     </div>
+  )
+}
+
+/**
+ * 「有新版本」。
+ *
+ * 只有一种情况会浮出来：她正用着的时候后台装好了新版（多半是从后台切回前台
+ * 那一下查到的）。刚打开就查到的那种不走这里——直接换掉了，不打扰。
+ *
+ * 做成一整条可点的，而不是一句话加一个小「更新」链接：她多半是单手、
+ * 走在路上点的，整条 44px 高的横幅比一个链接好点太多。
+ */
+export function UpdatePill() {
+  const { ready, applying } = useUpdate()
+  useEffect(() => {
+    // 浮出来的时候把 toast 抬高一档，两个都在拇指区，不能叠在一起
+    document.body.classList.toggle('has-update', ready)
+    return () => document.body.classList.remove('has-update')
+  }, [ready])
+  if (!ready) return null
+  return (
+    <button type="button" className="update-pill" disabled={applying} onClick={applyUpdate}>
+      {applying ? (
+        // 换一次要几秒。这几秒不说话的话，看着就是点了没反应
+        <span className="update-t">正在换……</span>
+      ) : (
+        <>
+          <span className="update-t">有新版本</span>
+          <span className="update-a">点一下换过来</span>
+        </>
+      )}
+    </button>
   )
 }
