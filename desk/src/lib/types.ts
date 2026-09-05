@@ -283,4 +283,6 @@ export interface State {
   entries: DayEntry[]
   myPrompts: MyPrompt[]
   promptUses: Record<string, number>
+  /** 常挂的零件 id —— 她多半每次都挂同样那几条，记住比每次重选强 */
+  promptParts: string[]
 }
