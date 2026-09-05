@@ -1,10 +1,13 @@
 import { useState } from 'react'
 import { update, useStore, uid } from '../lib/store'
-import { DOMAINS, type Engagement, type Status } from '../lib/types'
+import { DOMAINS, STAGES, stageOf, type Engagement, type Status } from '../lib/types'
 import * as D from '../lib/date'
 import { askConfirm } from '../lib/confirm'
-import { Section, Dot, Chip, Progress, Empty, Segmented } from '../components/ui'
-import { IcNote, IcTrash, IcWand } from '../components/icons'
+import { Section, Dot, Chip, Progress, Empty, Segmented, GrowText } from '../components/ui'
+import { IcNote, IcTrash, IcWand, IcCopy } from '../components/icons'
+import { Inquiry, splitOutline } from './Inquiry'
+import { copyText } from '../lib/copy'
+import { buildBrief } from '../lib/brief'
 
 type Line = 'consult' | 'byte'
 
@@ -15,6 +18,9 @@ export function Work({ toast, onPromptTool }: { toast: (t: string) => void; onPr
   const [adding, setAdding] = useState(false)
   const [name, setName] = useState('')
   const [client, setClient] = useState('')
+  const [openQ, setOpenQ] = useState<string | null>(null)
+  const [outlineFor, setOutlineFor] = useState<string | null>(null)
+  const [outline, setOutline] = useState('')
 
   const list = s.engagements.filter((e) => e.domain === line && !e.archived)
   const stuck = list.filter((e) => e.blocker).length
@@ -33,11 +39,18 @@ export function Work({ toast, onPromptTool }: { toast: (t: string) => void; onPr
     setName(''); setClient(''); setAdding(false)
   }
 
+  const qOf = (id: string) => s.inquiries.filter((q) => q.engagementId === id)
+  const done = (id: string) => qOf(id).filter((q) => stageOf(q) === 'concluded').length
+  // 进度不再手填。以前那个百分比是拍脑袋的数，现在它等于「有结论的条数 / 总条数」——
+  // 这个数说的是真事
+  const pct = (id: string) => { const n = qOf(id).length; return n ? (done(id) / n) * 100 : 0 }
+
   function patch(id: string, p: Partial<Engagement>) {
     update((x) => ({ ...x, engagements: x.engagements.map((e) => (e.id === id ? { ...e, ...p, updatedAt: Date.now() } : e)) }))
   }
 
   return (
+    <>
     <div className="screen">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginTop: 'var(--s3)' }}>
         <div>
@@ -91,7 +104,7 @@ export function Work({ toast, onPromptTool }: { toast: (t: string) => void; onPr
                     <span className="row-t">{e.name}</span>
                     <span className="row-s">{e.client ? `${e.client} · ` : ''}{e.stage}</span>
                   </span>
-                  <Chip tone={line}>{e.progress}%</Chip>
+                  <Chip tone={line}>{qOf(e.id).length ? `${done(e.id)} / ${qOf(e.id).length}` : `${e.progress}%`}</Chip>
                 </div>
 
                 {/* 卡点是这一屏真正的主角，不是进度 */}
@@ -105,14 +118,24 @@ export function Work({ toast, onPromptTool }: { toast: (t: string) => void; onPr
                 </p>
 
                 <div style={{ marginTop: 'var(--s3)' }}>
-                  <Progress value={e.progress} color={DOMAINS[line].color} />
+                  <Progress value={pct(e.id)} color={DOMAINS[line].color} />
                 </div>
 
                 <div className="row-s" style={{ display: 'flex', justifyContent: 'space-between', marginTop: 'var(--s2)' }}>
-                  <span>{e.next ? `下一步 ${e.next}` : '下一步待定'}{e.nextDate ? ` · ${D.shortCN(e.nextDate)}` : ''}</span>
+                  <span>{qOf(e.id).length
+                    ? `${done(e.id)} / ${qOf(e.id).length} 条有结论`
+                    : (e.next ? `下一步 ${e.next}` : '还没拆提纲')}</span>
                   <span>{D.relTime(e.updatedAt)}</span>
                 </div>
               </button>
+
+              {/* 调研线 —— 这是把「状态牌」变成「流水线」的地方 */}
+              <Flow
+                eng={e}
+                onOpenQ={setOpenQ}
+                onAddOutline={() => { setOutlineFor(e.id); setOutline('') }}
+                toast={toast}
+              />
 
               {open === e.id && (
                 <div style={{ marginTop: 'var(--s4)', paddingTop: 'var(--s4)', borderTop: '1px solid var(--line)' }}>
@@ -146,6 +169,9 @@ export function Work({ toast, onPromptTool }: { toast: (t: string) => void; onPr
                     onChange={(ev) => patch(e.id, { next: ev.target.value })}
                   />
 
+                  {qOf(e.id).length === 0 && (<>
+                  {/* 只在还没拆提纲时才手填。拆了之后进度 = 有结论条数 / 总条数，
+                      那个数是真的；再留一个手填的滑块只会和它打架 */}
                   <p className="eyebrow" style={{ marginTop: 'var(--s4)' }}>进度 {e.progress}%</p>
                   <input
                     type="range" min={0} max={100} step={5} value={e.progress}
@@ -153,6 +179,7 @@ export function Work({ toast, onPromptTool }: { toast: (t: string) => void; onPr
                     onChange={(ev) => patch(e.id, { progress: Number(ev.target.value) })}
                     aria-label="进度"
                   />
+                  </>)}
 
                   <div style={{ display: 'flex', gap: 'var(--s2)', marginTop: 'var(--s4)' }}>
                     <button type="button" className="btn quiet small" style={{ flex: 1 }}
@@ -201,8 +228,103 @@ export function Work({ toast, onPromptTool }: { toast: (t: string) => void; onPr
       </button>
 
       <p className="sub quiet" style={{ marginTop: 'var(--s4)', textAlign: 'center' }}>
-        手机上只改状态和卡点。真正的活儿回电脑做。
+        提纲进去，材料出来。中间四步都能在手机上走完，AI 那一步去 Claude Code 或 GPT 里跑。
       </p>
+    </div>
+
+    {openQ && (() => {
+      const q = s.inquiries.find((x) => x.id === openQ)
+      if (!q) return null
+      return <Inquiry q={q} eng={s.engagements.find((e) => e.id === q.engagementId)}
+        onClose={() => setOpenQ(null)} toast={toast} />
+    })()}
+
+    {outlineFor && (
+      <div className="sheet" role="dialog" aria-modal="true" aria-label="拆提纲">
+        <div className="sheet-in">
+          <div className="sheet-head">
+            <span className="eyebrow">提纲拆成调研线</span>
+            <button type="button" className="icon-btn" onClick={() => setOutlineFor(null)} aria-label="关闭">✕</button>
+          </div>
+          <p className="sub quiet" style={{ marginTop: 'var(--s3)' }}>
+            一行一条。约访提纲、客户问的问题、自己列的疑点都行——
+            每一条会变成一条能一路走到结论的调研线。
+          </p>
+          <GrowText
+            value={outline} minRows={6} aria-label="提纲"
+            placeholder={'比如：\n1、UGC 投稿用户流量下滑导致投稿流失，抖音出现过吗，怎么解决的\n2、抖音做作者流量反馈的流量占比大概多少，怎么做的'}
+            onChange={setOutline}
+          />
+          <div className="sheet-foot">
+            <button type="button" className="btn wide" disabled={!outline.trim()}
+              onClick={() => {
+                const made = splitOutline(outline, outlineFor)
+                update((x) => ({ ...x, inquiries: [...x.inquiries, ...made] }))
+                setOutlineFor(null); setOutline('')
+                toast(`拆成 ${made.length} 条`)
+              }}>
+              拆开
+            </button>
+          </div>
+          <div style={{ height: 'var(--s6)' }} />
+        </div>
+      </div>
+    )}
+    </>
+  )
+}
+
+/**
+ * 一个 engagement 底下的调研线列表。
+ *
+ * 每行左边一个小圆点标着走到第几站，点进去就是那条线的四步。
+ * 全部有结论之后，底下会出现「出材料」——从提纲进去，从材料出来，
+ * 这条链闭合了才叫工作流。
+ */
+function Flow({
+  eng, onOpenQ, onAddOutline, toast,
+}: {
+  eng: Engagement
+  onOpenQ: (id: string) => void
+  onAddOutline: () => void
+  toast: (t: string) => void
+}) {
+  const s = useStore((x) => x)
+  const list = s.inquiries.filter((q) => q.engagementId === eng.id)
+  const finished = list.filter((q) => stageOf(q) === 'concluded')
+
+  if (list.length === 0) {
+    return (
+      <button type="button" className="btn quiet small wide" style={{ marginTop: 'var(--s2)' }} onClick={onAddOutline}>
+        ＋ 贴提纲，拆成调研线
+      </button>
+    )
+  }
+
+  return (
+    <div style={{ marginTop: 'var(--s3)', paddingTop: 'var(--s3)', borderTop: '1px solid var(--line)' }}>
+      {list.map((q) => {
+        const st = stageOf(q)
+        const i = STAGES.findIndex((x) => x.key === st)
+        return (
+          <button key={q.id} type="button" className="qrow" onClick={() => onOpenQ(q.id)}>
+            <i className={`qdot s${i}`} aria-hidden="true">{STAGES[i].short}</i>
+            <span className="grow">
+              <span className="row-t">{q.question || '（还没写问题）'}</span>
+              <span className="row-s">{STAGES[i].label}{q.conclusion ? ` · ${q.conclusion.slice(0, 18)}` : ''}</span>
+            </span>
+          </button>
+        )
+      })}
+      <div style={{ display: 'flex', gap: 'var(--s2)', marginTop: 'var(--s3)' }}>
+        <button type="button" className="btn quiet small" style={{ flex: 1 }} onClick={onAddOutline}>＋ 再拆一段提纲</button>
+        {finished.length > 0 && (
+          <button type="button" className="btn small" style={{ flex: 1, background: 'var(--ok-deep)' }}
+            onClick={() => { void copyText(buildBrief(eng, list)).then((ok) => toast(ok ? `${finished.length} 条结论已复制` : '复制不了，长按选中')) }}>
+            <IcCopy /> 出材料
+          </button>
+        )}
+      </div>
     </div>
   )
 }

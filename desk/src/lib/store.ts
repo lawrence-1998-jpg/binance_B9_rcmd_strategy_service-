@@ -42,6 +42,7 @@ function merge(p: Partial<State>): State {
     tasks: arr(p.tasks, base.tasks),
     notes: arr(p.notes, base.notes),
     engagements: arr(p.engagements, base.engagements),
+    inquiries: arr(p.inquiries, []),
     meetings: arr(p.meetings, base.meetings),
     anniversaries: arr(p.anniversaries, base.anniversaries),
     wishes: arr(p.wishes, base.wishes),
@@ -129,7 +130,7 @@ export function looksLikeBackup(v: unknown): v is Partial<State> {
   if (!v || typeof v !== 'object' || Array.isArray(v)) return false
   const o = v as Record<string, unknown>
   // 认得出是这个 App 导出的：至少要有一个我们认识的数组字段，且形状是对的
-  const known = ['tasks', 'notes', 'engagements', 'wishes', 'entries', 'photos', 'moments', 'anniversaries']
+  const known = ['tasks', 'notes', 'engagements', 'inquiries', 'wishes', 'entries', 'photos', 'moments', 'anniversaries']
   const present = known.filter((k) => k in o)
   if (present.length === 0) return false
   return present.every((k) => Array.isArray(o[k]))
