@@ -566,3 +566,27 @@ textarea.field { resize: none; line-height: 1.5; }
 .update-a { font-size: var(--t-sub); opacity: .72; }
 .update-pill:active { transform: translateX(-50%) scale(.97); }
 body.has-update .toast { bottom: calc(var(--tabbar-h) + 74px + env(safe-area-inset-bottom)); }
+
+
+/* ---- 「上次有一份数据没读出来」-------------------------------------
+   跟删除确认、「先加到主屏幕」同一套警示语言：这不是建议，是
+   「你的东西可能正处在只剩一份的状态」。它不会自己消失，
+   要她导出之后自己点掉 —— 因为它消失就等于那份东西没人管了 */
+.rescue {
+  background: var(--alert-tint);
+  border: 1px solid color-mix(in srgb, var(--alert) 34%, transparent);
+  border-radius: var(--r-card);
+  padding: var(--s5) var(--s4);
+  margin: var(--s3) var(--gut) 0;
+}
+.rescue-t {
+  font-family: var(--f-cjk); font-weight: 700; font-size: var(--t-title);
+  margin: 0; line-height: 1.4; color: var(--ink);
+}
+.rescue-s {
+  font-size: var(--t-sub); line-height: 1.6; color: var(--ink);
+  opacity: .85; margin: var(--s2) 0 0;
+}
+.rescue-s strong { opacity: 1; }
+.rescue-acts { display: flex; gap: var(--s2); margin-top: var(--s4); flex-wrap: wrap; }
+.rescue-acts .btn { flex: 1 1 auto; }
