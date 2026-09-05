@@ -66,6 +66,9 @@
   --ok:        #7a8a5e;   /* 鼠尾草 · 正常 / 完成 */
   --ok-tint:   #e1eecc;
   --ok-deep:   #56633f;
+  /* 实心底专用。--ok 是色块色，拿来当底 + --on-solid 白字只有 3.53:1 ——
+     跟 --consult / --consult-solid 是同一个道理，别再混用了 */
+  --ok-solid:  #4f5c3a;
   --alert:     #b3402c;   /* 砖红 · 阻塞 / 破坏性操作。全站出现频率应 < 1% */
   --alert-tint:#f7e0da;
   --alert-deep:#8d2f1f;
@@ -182,6 +185,7 @@
 
     --ok:           #9dae79;
     --ok-tint:      #2f3823;
+    --ok-solid:     #4b5a33;   /* 当实心底，on-solid 在其上 ≥4.5:1 */
     --ok-deep:      #c3d3a0;
     --alert:        #e0705a;   /* 暗卡片上当文字 4.94:1 */
     --alert-tint:   #45201a;

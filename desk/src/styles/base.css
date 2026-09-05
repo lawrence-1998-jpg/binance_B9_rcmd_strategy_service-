@@ -525,7 +525,7 @@ textarea.field { resize: none; line-height: 1.5; }
 .qdot.s0 { background: var(--well);          color: var(--ink-3); }
 .qdot.s1 { background: var(--consult-tint);  color: var(--consult-text); }
 .qdot.s2 { background: var(--byte-tint);     color: var(--byte-text); }
-.qdot.s3 { background: var(--ok);            color: var(--on-solid); }
+.qdot.s3 { background: var(--ok-solid);      color: var(--on-solid); }
 
 /* ---- 四步进度 ----
    打开一条调研线时最上面那一条。做完的打勾，当前的高亮，
@@ -542,7 +542,7 @@ textarea.field { resize: none; line-height: 1.5; }
   background: var(--well); color: var(--ink-3);
 }
 .flow-i.done { color: var(--ok-deep); }
-.flow-i.done .flow-d { background: var(--ok); color: var(--on-solid); }
+.flow-i.done .flow-d { background: var(--ok-solid); color: var(--on-solid); }
 .flow-i.now { color: var(--consult-text); font-weight: 700; }
 .flow-i.now .flow-d { background: var(--consult-solid); color: var(--on-solid); }
 
@@ -590,3 +590,67 @@ body.has-update .toast { bottom: calc(var(--tabbar-h) + 74px + env(safe-area-ins
 .rescue-s strong { opacity: 1; }
 .rescue-acts { display: flex; gap: var(--s2); margin-top: var(--s4); flex-wrap: wrap; }
 .rescue-acts .btn { flex: 1 1 auto; }
+
+
+/* ---- 流水线：整套操作、关键词、数据 ------------------------------
+   她的活是「问一次，拿一大段回来」，不是「一条一条问 n 次」。
+   所以整套复制 / 整套贴回是主操作，摆在列表底下最顺手的位置 */
+.setbar { display: flex; gap: var(--s2); margin-top: var(--s3); }
+
+/* 行首的题号。它跟「整套 Prompt」里的编号是同一个 —— 贴回来能对上，
+   靠的就是这个数，所以它得看得见 */
+.qn {
+  display: inline-block; min-width: 1.35em; margin-right: 6px;
+  font-family: var(--f-mono); font-size: var(--t-eyebrow); font-weight: 600;
+  color: var(--ink-3);
+}
+
+/* 搁置 / 不查了的行：还在，但明显退到后面去。
+   退场感只能靠「圆点掉色 + 状态写明」来给，不能靠 opacity ——
+   实测 opacity:.55 把状态那行压到 2.42:1，等于让她读不清自己搁置了什么 */
+.qrow.off .qdot { background: var(--well); color: var(--ink-2); }
+.qrow.off .row-t { color: var(--ink-2); font-weight: 500; }
+.qrow.off .row-s { color: var(--ink-2); }
+.flow-i.off { color: var(--ink-3); }
+.flow-i.off .flow-d { background: var(--well); color: var(--ink-2); }
+
+/* 关键词 */
+.kw-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 4px; }
+.kw {
+  display: inline-flex; align-items: center;
+  background: var(--well); color: var(--ink-2);
+  border-radius: var(--r-pill); padding: 3px var(--s2);
+  font-size: var(--t-eyebrow); font-weight: 600; line-height: 1.6;
+}
+/* 能点的那些（挂上的可点掉、建议的可点上）必须够 44 —— 32 是我第一版写的，
+   量出来不够。列表里那些只用来看的 <i class="kw"> 不是触控目标，维持小尺寸 */
+button.kw { min-height: var(--tap); padding: 4px var(--s3); }
+button.kw:active { background: var(--line-2); }
+.kw.on { background: var(--consult-tint); color: var(--consult-text); }
+
+/* 记下来的一条数据。数字最显眼，出处永远跟着它 —— 这两样分开过一次，
+   就会有人拿着一个没出处的百分比去跟客户讲 */
+.fact { padding: var(--s3) 0; }
+.fact + .fact { border-top: 1px solid var(--line-2); }
+.fact-h { display: flex; align-items: center; gap: var(--s2); }
+.fact-v { font-family: var(--f-mono); font-weight: 600; font-size: var(--t-title); color: var(--ink); }
+.fact-c {
+  font-size: var(--t-eyebrow); font-weight: 700; border-radius: var(--r-pill);
+  padding: 2px var(--s2); margin-right: auto;
+}
+.fact-c.c-high { background: var(--ok-tint);      color: var(--ok-deep); }
+.fact-c.c-mid  { background: var(--well);         color: var(--ink-2); }
+.fact-c.c-low  { background: var(--alert-tint);   color: var(--alert-deep); }
+.fact-w { font-size: var(--t-sub); color: var(--ink); margin: var(--s1) 0 0; line-height: 1.5; }
+.fact-s { font-size: var(--t-eyebrow); color: var(--ink-2); margin: 4px 0 0; line-height: 1.5; }
+/* 没出处就说没出处，不留白让人以为有 */
+.fact-s.none { color: var(--alert-deep); }
+
+/* 没归到任何一题的那一段 —— 不能悄悄扔掉，摆出来让她自己处置 */
+.leftover {
+  margin: var(--s2) 0 0; padding: var(--s3);
+  background: var(--well); border-radius: var(--r-inner);
+  font-family: var(--f-mono); font-size: var(--t-eyebrow); line-height: 1.6;
+  color: var(--ink); white-space: pre-wrap; word-break: break-word;
+  max-height: 180px; overflow-y: auto;
+}

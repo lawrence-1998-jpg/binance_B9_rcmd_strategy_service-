@@ -1,11 +1,12 @@
 import { useState } from 'react'
 import { update, useStore, uid } from '../lib/store'
-import { DOMAINS, STAGES, stageOf, type Engagement, type Status } from '../lib/types'
+import { DOMAINS, stageOf, stagesFor, isLive, type Engagement, type Inquiry as Q, type Status } from '../lib/types'
 import * as D from '../lib/date'
 import { askConfirm } from '../lib/confirm'
 import { Section, Dot, Chip, Progress, Empty, Segmented, GrowText } from '../components/ui'
 import { IcNote, IcTrash, IcWand, IcCopy } from '../components/icons'
 import { Inquiry, splitOutline } from './Inquiry'
+import { buildPrompt, splitAnswer } from '../lib/prompt'
 import { copyText } from '../lib/copy'
 import { buildBrief } from '../lib/brief'
 
@@ -21,6 +22,9 @@ export function Work({ toast, onPromptTool }: { toast: (t: string) => void; onPr
   const [openQ, setOpenQ] = useState<string | null>(null)
   const [outlineFor, setOutlineFor] = useState<string | null>(null)
   const [outline, setOutline] = useState('')
+  const [pasteFor, setPasteFor] = useState<string | null>(null)
+  const [pasted, setPasted] = useState('')
+  const [leftover, setLeftover] = useState<string | null>(null)
 
   const list = s.engagements.filter((e) => e.domain === line && !e.archived)
   const stuck = list.filter((e) => e.blocker).length
@@ -39,7 +43,8 @@ export function Work({ toast, onPromptTool }: { toast: (t: string) => void; onPr
     setName(''); setClient(''); setAdding(false)
   }
 
-  const qOf = (id: string) => s.inquiries.filter((q) => q.engagementId === id)
+  // 搁置 / 不查了的不算在分母里 —— 否则「我决定不查了」会让进度永远差一截
+  const qOf = (id: string) => s.inquiries.filter((q) => q.engagementId === id && isLive(q))
   const done = (id: string) => qOf(id).filter((q) => stageOf(q) === 'concluded').length
   // 进度不再手填。以前那个百分比是拍脑袋的数，现在它等于「有结论的条数 / 总条数」——
   // 这个数说的是真事
@@ -131,6 +136,7 @@ export function Work({ toast, onPromptTool }: { toast: (t: string) => void; onPr
 
               {/* 调研线 —— 这是把「状态牌」变成「流水线」的地方 */}
               <Flow
+                onPasteSet={() => { setPasteFor(e.id); setPasted(''); setLeftover(null) }}
                 eng={e}
                 onOpenQ={setOpenQ}
                 onAddOutline={() => { setOutlineFor(e.id); setOutline('') }}
@@ -239,6 +245,83 @@ export function Work({ toast, onPromptTool }: { toast: (t: string) => void; onPr
         onClose={() => setOpenQ(null)} toast={toast} />
     })()}
 
+    {pasteFor && (() => {
+      const live = s.inquiries.filter((q) => q.engagementId === pasteFor && isLive(q))
+      return (
+        <div className="sheet" role="dialog" aria-modal="true" aria-label="贴回整套结果">
+          <div className="sheet-in">
+            <div className="sheet-head">
+              <span className="eyebrow">整套结果贴回来</span>
+              <button type="button" className="icon-btn" onClick={() => setPasteFor(null)} aria-label="关闭">✕</button>
+            </div>
+            <p className="sub quiet" style={{ marginTop: 'var(--s3)' }}>
+              把 AI 回的**一整段**原样贴进来。按题号自动分到下面这 {live.length} 条上，
+              编号跟列表里的一致。<strong>不会覆盖已有的材料</strong>——同一条上原来有东西的话是追在后面。
+            </p>
+            <GrowText
+              value={pasted} minRows={8} aria-label="整套结果"
+              placeholder={'把 AI 回的整段贴这儿，形如：\n\n## 1. 第一个问题\n[事实] ……\n\n## 2. 第二个问题\n[推断] ……'}
+              onChange={setPasted}
+            />
+
+            {leftover && (
+              <div className="warn" style={{ marginTop: 'var(--s3)' }}>
+                <p className="row-t" style={{ margin: 0 }}>有一段没归到任何一条</p>
+                <p className="sub" style={{ marginTop: 'var(--s1)' }}>
+                  多半是开头的前言或结尾的「还没搞清楚的」。没扔，放这儿了：
+                </p>
+                <pre className="leftover">{leftover}</pre>
+                <button type="button" className="btn quiet small wide" style={{ marginTop: 'var(--s2)' }}
+                  onClick={() => { void copyText(leftover).then((ok) => toast(ok ? '复制好了' : '复制不了，长按选中')) }}>
+                  <IcCopy /> 复制这段
+                </button>
+              </div>
+            )}
+
+            <div className="sheet-foot">
+              <button type="button" className="btn wide" disabled={!pasted.trim()}
+                onClick={() => {
+                  const r = splitAnswer(pasted, live.length)
+                  if (!r) {
+                    // 认不出题号就明说，绝不瞎猜着往里塞 —— 塞错比不塞更糟
+                    toast('看不出题号（要形如「## 1.」），没敢乱分')
+                    return
+                  }
+                  let filled = 0
+                  let appended = 0
+                  update((x) => ({
+                    ...x,
+                    inquiries: x.inquiries.map((q) => {
+                      const i = live.findIndex((y) => y.id === q.id)
+                      if (i < 0 || !r.parts[i]) return q
+                      const had = (q.findings ?? '').trim()
+                      had ? appended++ : filled++
+                      return {
+                        ...q,
+                        findings: had ? `${had}\n\n———\n\n${r.parts[i]}` : r.parts[i],
+                        updatedAt: Date.now(),
+                      }
+                    }),
+                  }))
+                  setLeftover(r.rest || null)
+                  toast(`分好了：${filled} 条填上${appended ? `，${appended} 条追加` : ''}`)
+                  if (!r.rest) { setPasteFor(null); setPasted('') }
+                }}>
+                按题号分到各条
+              </button>
+              {leftover && (
+                <button type="button" className="btn quiet wide" style={{ marginTop: 'var(--s2)' }}
+                  onClick={() => { setPasteFor(null); setPasted(''); setLeftover(null) }}>
+                  知道了，关掉
+                </button>
+              )}
+            </div>
+            <div style={{ height: 'var(--s6)' }} />
+          </div>
+        </div>
+      )
+    })()}
+
     {outlineFor && (
       <div className="sheet" role="dialog" aria-modal="true" aria-label="拆提纲">
         <div className="sheet-in">
@@ -258,10 +341,20 @@ export function Work({ toast, onPromptTool }: { toast: (t: string) => void; onPr
           <div className="sheet-foot">
             <button type="button" className="btn wide" disabled={!outline.trim()}
               onClick={() => {
-                const made = splitOutline(outline, outlineFor)
+                // 拆的同时就把每条的 prompt 生成好。
+                // 她的原话是「贴进去它就能变成一套可以让我直接复制的」——
+                // 拆完还要一条条点进去点「生成」，那就还是在让她伺候工具
+                const eng = s.engagements.find((e) => e.id === outlineFor)
+                const made = splitOutline(outline, outlineFor).map((q) => ({
+                  ...q,
+                  prompt: buildPrompt({
+                    outline: q.question, subject: eng?.client ?? '',
+                    context: s.promptDraft.context, target: s.promptDraft.target, depth: s.promptDraft.depth,
+                  }),
+                }))
                 update((x) => ({ ...x, inquiries: [...x.inquiries, ...made] }))
                 setOutlineFor(null); setOutline('')
-                toast(`拆成 ${made.length} 条`)
+                toast(`拆成 ${made.length} 条，Prompt 也一起生成好了`)
               }}>
               拆开
             </button>
@@ -282,18 +375,20 @@ export function Work({ toast, onPromptTool }: { toast: (t: string) => void; onPr
  * 这条链闭合了才叫工作流。
  */
 function Flow({
-  eng, onOpenQ, onAddOutline, toast,
+  eng, onOpenQ, onAddOutline, onPasteSet, toast,
 }: {
   eng: Engagement
   onOpenQ: (id: string) => void
   onAddOutline: () => void
+  onPasteSet: () => void
   toast: (t: string) => void
 }) {
   const s = useStore((x) => x)
-  const list = s.inquiries.filter((q) => q.engagementId === eng.id)
-  const finished = list.filter((q) => stageOf(q) === 'concluded')
+  const all = s.inquiries.filter((q) => q.engagementId === eng.id)
+  const live = all.filter(isLive)
+  const finished = live.filter((q) => stageOf(q) === 'concluded')
 
-  if (list.length === 0) {
+  if (all.length === 0) {
     return (
       <button type="button" className="btn quiet small wide" style={{ marginTop: 'var(--s2)' }} onClick={onAddOutline}>
         ＋ 贴提纲，拆成调研线
@@ -303,28 +398,84 @@ function Flow({
 
   return (
     <div style={{ marginTop: 'var(--s3)', paddingTop: 'var(--s3)', borderTop: '1px solid var(--line)' }}>
-      {list.map((q) => {
+      {all.map((q) => {
         const st = stageOf(q)
-        const i = STAGES.findIndex((x) => x.key === st)
+        const steps = stagesFor(q)
+        const i = steps.findIndex((x) => x.key === st)
+        const n = live.indexOf(q) + 1
         return (
-          <button key={q.id} type="button" className="qrow" onClick={() => onOpenQ(q.id)}>
-            <i className={`qdot s${i}`} aria-hidden="true">{STAGES[i].short}</i>
+          <button key={q.id} type="button" className={`qrow${q.closed ? ' off' : ''}`} onClick={() => onOpenQ(q.id)}>
+            <i className={`qdot s${i}`} aria-hidden="true">{q.closed ? '—' : steps[i].short}</i>
             <span className="grow">
-              <span className="row-t">{q.question || '（还没写问题）'}</span>
-              <span className="row-s">{STAGES[i].label}{q.conclusion ? ` · ${q.conclusion.slice(0, 18)}` : ''}</span>
+              <span className="row-t">
+                {/* 题号跟「整套 Prompt」里的编号是同一个，贴回来才对得上 */}
+                {!q.closed && <span className="qn">{n}</span>}
+                {q.question || '（还没写问题）'}
+              </span>
+              <span className="row-s">
+                {q.closed === 'parked' ? '先搁着' : q.closed === 'dropped' ? '不查了' : steps[i].label}
+                {q.kind === 'interview' ? ' · 访谈' : ''}
+                {q.facts?.length ? ` · ${q.facts.length} 条数据` : ''}
+                {q.conclusion ? ` · ${q.conclusion.slice(0, 16)}` : ''}
+              </span>
+              {!!q.keywords?.length && (
+                <span className="kw-row">{q.keywords.slice(0, 4).map((k) => <i key={k} className="kw">{k}</i>)}</span>
+              )}
             </span>
           </button>
         )
       })}
-      <div style={{ display: 'flex', gap: 'var(--s2)', marginTop: 'var(--s3)' }}>
+
+      {/* 整套：一次复制、一次贴回。她的活是「问一次拿一大段回来」，
+          不是「一条一条问 n 次」——工具得按她的节奏来 */}
+      <SetBar eng={eng} live={live} onPasteSet={onPasteSet} toast={toast} />
+
+      <div style={{ display: 'flex', gap: 'var(--s2)', marginTop: 'var(--s2)' }}>
         <button type="button" className="btn quiet small" style={{ flex: 1 }} onClick={onAddOutline}>＋ 再拆一段提纲</button>
         {finished.length > 0 && (
-          <button type="button" className="btn small" style={{ flex: 1, background: 'var(--ok-deep)' }}
-            onClick={() => { void copyText(buildBrief(eng, list)).then((ok) => toast(ok ? `${finished.length} 条结论已复制` : '复制不了，长按选中')) }}>
+          <button type="button" className="btn small" style={{ flex: 1, background: 'var(--ok-solid)' }}
+            onClick={() => { void copyText(buildBrief(eng, all)).then((ok) => toast(ok ? `${finished.length} 条结论已复制` : '复制不了，长按选中')) }}>
             <IcCopy /> 出材料
           </button>
         )}
       </div>
+    </div>
+  )
+}
+
+/** 整套 Prompt = 把这个 engagement 下还在盘子上的问题合成一份，编号跟列表一致 */
+export function setPromptOf(eng: Engagement, live: Q[], draft: { context: string; target: 'tooled' | 'plain'; depth: 'quick' | 'deep' }) {
+  return buildPrompt({
+    outline: live.map((q) => q.question).join('\n'),
+    subject: eng.client ?? '',
+    context: draft.context,
+    target: draft.target,
+    depth: draft.depth,
+  })
+}
+
+function SetBar({
+  eng, live, onPasteSet, toast,
+}: {
+  eng: Engagement
+  live: Q[]
+  onPasteSet: () => void
+  toast: (t: string) => void
+}) {
+  const draft = useStore((x) => x.promptDraft)
+  if (live.length === 0) return null
+  return (
+    <div className="setbar">
+      <button type="button" className="btn small" style={{ flex: 1 }}
+        onClick={() => {
+          void copyText(setPromptOf(eng, live, draft)).then((ok) =>
+            toast(ok ? `整套 Prompt 已复制（${live.length} 条），去问吧` : '复制不了，长按选中'))
+        }}>
+        <IcCopy /> 复制整套 · {live.length} 条
+      </button>
+      <button type="button" className="btn quiet small" style={{ flex: 1 }} onClick={onPasteSet}>
+        贴回整套结果
+      </button>
     </div>
   )
 }
