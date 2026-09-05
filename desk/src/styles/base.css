@@ -157,15 +157,29 @@ button { cursor: pointer; -webkit-appearance: none; }
   transition: transform var(--d-micro) var(--ease), opacity var(--d-micro) var(--ease);
 }
 .btn:active { transform: scale(.98); }
-/* 禁用态：.4 实测只有 1.70:1，字都认不出来——人看不出这个按钮是干嘛的、
-   为什么点不动。.75 仍然明显「不可用」，但读得出来 */
-.btn[disabled] { opacity: .75; pointer-events: none; }
 .btn.ghost { background: none; border: 1px solid var(--line); color: var(--ink-2); }
 .btn.quiet { background: var(--well); color: var(--ink-2); }
 .btn.small { min-height: var(--tap); font-size: var(--t-sub); padding: 0 var(--s4); }
 .btn.wide { width: 100%; }
 .btn.danger { background: var(--alert-solid); color: var(--on-solid); }
 .btn.danger-text { color: var(--alert); }
+/* 禁用态。
+   以前只是 opacity:.75，实拍下来那颗橙按钮跟能按的几乎一模一样——
+   她在速记里还没写字就去点「存下来」，什么都不会发生，而
+   pointer-events:none 连按压动画都吃掉了，于是连「我点到了」都没有。
+   （更早还试过 .4，那是另一头：只有 1.70:1，字都认不出来。）
+   现在退成槽底色：形状还在，她知道那儿有个按钮、写完就能用，
+   但一眼看得出现在按不动。
+   必须排在所有 .btn.x 变体后面 —— 同为 0,2,0 特指度，靠顺序取胜，
+   否则 .btn.danger[disabled] 会继续顶着警示红 */
+.btn[disabled] {
+  background: var(--well);
+  color: var(--ink-3);
+  border-color: transparent;
+  opacity: 1;
+  box-shadow: none;
+  pointer-events: none;
+}
 
 /* ---- 勾选：真的 input，不是 div ---- */
 .check-row { display: flex; align-items: stretch; gap: var(--s2); }
