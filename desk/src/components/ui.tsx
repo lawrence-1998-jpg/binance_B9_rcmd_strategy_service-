@@ -4,6 +4,10 @@ import { IcMore } from './icons'
 import { useConfirm, dismissConfirm } from '../lib/confirm'
 import { shouldPromptInstall, dismissNotice } from '../lib/install'
 import { useUpdate, applyUpdate } from '../lib/update'
+import { onRescue, rescuedRaw, dropRescue } from '../lib/store'
+import { askConfirm } from '../lib/confirm'
+import { saveFile } from '../lib/save'
+import * as D from '../lib/date'
 
 export function Section({ label, meta, domain }: { label: string; meta?: ReactNode; domain?: Domain }) {
   return (
@@ -311,5 +315,52 @@ export function UpdatePill() {
         </>
       )}
     </button>
+  )
+}
+
+/**
+ * 「上次有一份数据没读出来」。
+ *
+ * 出现的条件很窄，但后果最重：存着的那串东西解析不了（截断、被别的
+ * 东西写坏、版本字段没了），以前的做法是直接回到示例数据，然后
+ * 一动就把示例数据盖回去 —— 她那本日记就这么没了，一句话都没有。
+ *
+ * 现在原始那串字节被原样留着。这条横幅的唯一任务是让她**先把它导出去**，
+ * 所以「导出那份」是主按钮，删除得她自己确认 —— 那一步不可逆，
+ * 而这份东西可能是她仅剩的一份。
+ */
+export function RescueNotice({ toast }: { toast: (t: string) => void }) {
+  const [raw, setRaw] = useState<string | null>(null)
+  useEffect(() => onRescue(setRaw), [])
+  if (!raw) return null
+
+  async function save() {
+    const data = rescuedRaw()
+    if (!data) return
+    const out = await saveFile(`案头-读不出来的那份-${D.key().replace(/-/g, '')}.json`, data)
+    toast(out === 'saved' ? '存下来了，先收好' : out === 'declined' ? '取消了' : '存不了，去设置页手动复制')
+  }
+
+  return (
+    <div className="rescue" role="alert">
+      <p className="rescue-t">上次有一份数据没读出来</p>
+      <p className="rescue-s">
+        存着的东西解析不了，界面先回到了示例数据。
+        <strong>原来那份没有删，原样留着。</strong>
+        先把它导出去存好，再决定怎么办 —— 别在导出之前清空数据。
+      </p>
+      <div className="rescue-acts">
+        <button type="button" className="btn small" onClick={() => void save()}>导出那份</button>
+        <button type="button" className="btn small quiet"
+          onClick={() => askConfirm({
+            title: '删掉那份读不出来的数据？',
+            detail: '删了就真没了，没有别的副本。确认你已经导出并存好了。',
+            confirmLabel: '删掉',
+            onYes: dropRescue,
+          })}>
+          存好了，删掉
+        </button>
+      </div>
+    </div>
   )
 }

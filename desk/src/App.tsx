@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { TabBar, type Route } from './components/TabBar'
-import { Toast, useToast, ConfirmDialog, UpdatePill } from './components/ui'
+import { Toast, useToast, ConfirmDialog, UpdatePill, RescueNotice } from './components/ui'
 import { onPersistFail } from './lib/store'
 import { Today } from './screens/Today'
 import { Work } from './screens/Work'
@@ -81,6 +81,8 @@ export function App() {
           <strong>现在改的东西关掉页面就会没。</strong>
         </div>
       )}
+
+      <RescueNotice toast={toast.show} />
 
       <main className="app">
         {route === 'today' && <Today go={go} onCapture={() => openSheet('capture')} toast={toast.show} />}

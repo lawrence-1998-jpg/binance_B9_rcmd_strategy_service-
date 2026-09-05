@@ -3,21 +3,56 @@ import type { State } from './types'
 import { seed, empty } from './seed'
 
 const KEY = 'deskside.v1'
+/**
+ * 读不出来的那份原始数据留在这儿。
+ *
+ * 以前 load() 遇到解析失败、或者对象上没有 version，就直接 return seed()
+ * ——回到示例数据。然后她一动，persist() 就把示例数据盖回同一个 key。
+ * 也就是那本日记会被**静默地、永久地**覆盖掉，一句提示都没有。
+ * 没有后端、没有回收站、她也还没有导出备份的习惯，这是这个 App
+ * 能造成的最坏结果。
+ *
+ * 现在：读不出来就先把原始那串字节原样抄到这个 key 再说。哪怕我
+ * 解析不了它，那也是她的东西，轮不到我扔。只写一次、永不覆盖——
+ * 第一份才是最接近她真实数据的那份。
+ */
+const RESCUE = 'deskside.v1.rescue'
 
 /**
  * 全部外部数据只经过这一个文件，界面只跟它打交道。
  * 以后要换成后端 API，只改这里，五个屏一行不用动。
  */
 function load(): State {
+  let raw: string | null = null
   try {
-    const raw = localStorage.getItem(KEY)
-    if (!raw) return seed()
+    raw = localStorage.getItem(KEY)
+  } catch {
+    /* 存储被清了、或在隐私模式下读不到 —— 回到种子数据，不崩 */
+    return seed()
+  }
+  if (!raw) return seed()
+  try {
     const parsed = JSON.parse(raw) as Partial<State>
     if (parsed && typeof parsed === 'object' && (parsed.version ?? 0) >= 1) return merge(parsed)
   } catch {
-    /* 存储被清了、或在隐私模式下读不到 —— 回到种子数据，不崩 */
+    /* 落到下面去救 */
   }
+  // 有东西，但读不出来。先留一份原样的，再回种子
+  keepRescue(raw)
   return seed()
+}
+
+/** 原样抄一份。已经有一份了就不动它——先来的那份更接近她真实的数据 */
+function keepRescue(raw: string) {
+  try {
+    if (localStorage.getItem(RESCUE) === null) localStorage.setItem(RESCUE, raw)
+  } catch {
+    /* 配额满了/无痕模式，救不了就算了，至少没让它更糟 */
+  }
+}
+
+function peekRescue(): string | null {
+  try { return localStorage.getItem(RESCUE) } catch { return null }
 }
 
 /**
@@ -59,6 +94,30 @@ function merge(p: Partial<State>): State {
 
 let state: State = load()
 const subs = new Set<() => void>()
+
+/**
+ * 「上次有一份数据没读出来」。
+ *
+ * 每次启动都读一遍，不只是刚出事那一次：出事的时候她多半不在看，
+ * 得让这条一直挂着，直到她自己把那份导出去。
+ */
+let rescued: string | null = peekRescue()
+const rescueSubs = new Set<(r: string | null) => void>()
+
+export function onRescue(cb: (r: string | null) => void) {
+  rescueSubs.add(cb)
+  cb(rescued)
+  return () => { rescueSubs.delete(cb) }
+}
+
+export function rescuedRaw(): string | null { return rescued }
+
+/** 她说存好了才删。这一步是不可逆的，所以只能由她点 */
+export function dropRescue() {
+  try { localStorage.removeItem(RESCUE) } catch { /* 删不掉就留着，不是坏事 */ }
+  rescued = null
+  rescueSubs.forEach((f) => f(null))
+}
 
 /**
  * 写盘失败的处理。
