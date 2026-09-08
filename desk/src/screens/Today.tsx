@@ -3,14 +3,16 @@ import { get, update, useStore, uid } from '../lib/store'
 import { DOMAINS, type Domain } from '../lib/types'
 import * as D from '../lib/date'
 import { askConfirm } from '../lib/confirm'
-import { Section, Check, Chip, Empty, Progress, InstallNotice } from '../components/ui'
-import { usePhotoURL } from '../lib/usePhoto'
-import { IcNote, IcTrip } from '../components/icons'
+import { Section, Check, Chip, Empty, InstallNotice } from '../components/ui'
+import { IcNote, IcWand } from '../components/icons'
+import promptData from '../data/prompts.json'
 import type { Route } from '../components/TabBar'
 
 const ORDER: Domain[] = ['consult', 'byte', 'us', 'me']
+const PROMPT_N = promptData.items.length
+const PART_N = promptData.parts.length
 
-export function Today({ go, onCapture, toast }: { go: (r: Route) => void; onCapture: () => void; toast: (t: string) => void }) {
+export function Today({ go, onCapture, onPromptTool, toast }: { go: (r: Route) => void; onCapture: () => void; onPromptTool: () => void; toast: (t: string) => void }) {
   const today = D.key()
   const s = useStore((x) => x)
   const [editFocus, setEditFocus] = useState(false)
@@ -25,26 +27,7 @@ export function Today({ go, onCapture, toast }: { go: (r: Route) => void; onCapt
   const focus = s.focus[today] ?? ''
   const full = tasks.length >= 3
 
-  const nextMeeting = s.meetings
-    .filter((m) => m.date > today || (m.date === today && D.minutesUntil(m.date, m.start) > -60))
-    .sort((a, b) => (a.date + a.start).localeCompare(b.date + b.start))[0]
-
   const live = s.engagements.filter((e) => !e.archived)
-  const anniv = s.anniversaries
-    .map((a) => ({ a, n: D.nextAnniversary(a.date) }))
-    .sort((x, y) => x.n.days - y.n.days)[0]
-  const wish = s.wishes.find((w) => !w.done)
-  // 一天固定一张，不每次进来都换 —— 回忆不该像老虎机
-  const memory = s.photos.length
-    ? s.photos[Math.floor(Date.now() / 86400000) % s.photos.length]
-    : null
-
-  // 没定日期就整块不出现。parse('') 会兜底成今天，不判断的话
-  // 「清空全部数据」之后首屏会冒出一个「就是今天 09/02 – 09/02」的假期
-  const tripSet = D.isDateKey(s.trip.start) && D.isDateKey(s.trip.end)
-  const tripLeft = tripSet ? D.daysUntil(s.trip.start) : 0
-  const tripOver = tripSet && D.daysUntil(s.trip.end) < 0
-  const tripOn = tripSet && !tripOver && tripLeft <= 60
 
   function saveFocus() {
     const v = draft.trim()
@@ -65,6 +48,23 @@ export function Today({ go, onCapture, toast }: { go: (r: Route) => void; onCapt
       <InstallNotice />
       <p className="eyebrow" style={{ marginTop: 'var(--s3)' }}>{D.longCN()}</p>
       <h1 className="h1">{D.greeting()}</h1>
+
+      {/* 主角。
+          首页原来是六段堆叠的仪表盘（重心/三件事/下一场/两条线/我们俩/国庆），
+          每一段都要人去喂；而她天天真正用的 Prompt 管理器，藏在另一个 tab
+          角落的一个图标里。她的原话是「太不好用了」。
+          所以首页改成简介式的入口，把她最常用的那件事摆在第一屏。 */}
+      <button type="button" className="hero" onClick={onPromptTool}>
+        <span className="hero-h">
+          <IcWand />
+          <span className="hero-t">Prompt 管理器</span>
+          <span className="hero-n">{PROMPT_N} 条 · {PART_N} 个零件</span>
+        </span>
+        <span className="hero-s">
+          开工 · 救火 · 交付验收 · 取数 · 调研 · 成本 · 写东西 · 通用<br />
+          占位符在 App 里填好再复制；叮嘱语和附录可以挂上去一起走。
+        </span>
+      </button>
 
       {/* ① 今天的重心 —— 全屏唯一的深色反底块。一天只允许一句。 */}
       {editFocus ? (
@@ -163,28 +163,8 @@ export function Today({ go, onCapture, toast }: { go: (r: Route) => void; onCapt
         )
       )}
 
-      <div className="grid two" style={{ marginTop: 0 }}>
+      <div>
         <div>
-          {/* ③ 下一场 */}
-          <Section label="下一场" meta={nextMeeting ? whenLabel(nextMeeting.date, nextMeeting.start, today) : '空'} />
-          <div className="card">
-            {nextMeeting ? (
-              <div className="row">
-                <i className="dbar" style={{ background: DOMAINS[nextMeeting.domain].color }} />
-                <span className="grow">
-                  <span className="row-t">{nextMeeting.title}</span>
-                  <span className="row-s">
-                    {nextMeeting.date === today ? '今天' : D.shortCN(nextMeeting.date)} {nextMeeting.start}
-                    {nextMeeting.end ? `–${nextMeeting.end}` : ''}
-                    {nextMeeting.note ? ` · ${nextMeeting.note}` : ''}
-                  </span>
-                </span>
-              </div>
-            ) : (
-              <p className="sub quiet" style={{ margin: 0 }}>接下来没有安排。</p>
-            )}
-          </div>
-
           {/* ④ 两条线 */}
           <Section label="两条线" meta={live.length ? `${live.length} 件在跑` : undefined} />
           {live.length === 0 ? (
@@ -214,67 +194,24 @@ export function Today({ go, onCapture, toast }: { go: (r: Route) => void; onCapt
           )}
         </div>
 
-        <div>
-          {/* ⑤ 我们俩 */}
-          <Section label="我们俩" domain="us" meta={memory ? '那天的我们' : anniv ? `${anniv.n.days} 天后` : undefined} />
-          <button type="button" className="card" style={{ width: '100%', textAlign: 'left' }} onClick={() => go('life')}>
-            {memory ? (
-              <>
-                <Memory id={memory.id} rev={memory.rev ?? 0} />
-                <span className="row-s" style={{ marginTop: 'var(--s3)' }}>{D.archiveCN(memory.date)}</span>
-                <p className="row-t" style={{ margin: '2px 0 0', fontWeight: 600 }}>
-                  {memory.caption || '那天的我们'}
-                </p>
-                {anniv && (
-                  <p className="sub quiet" style={{ margin: '6px 0 0' }}>
-                    {anniv.a.label} 还有 {anniv.n.days} 天
-                  </p>
-                )}
-              </>
-            ) : anniv ? (
-              <>
-                <span className="row-s" style={{ marginTop: 0 }}>{anniv.a.label}</span>
-                <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginTop: 4 }}>
-                  <span className="big" style={{ color: 'var(--us-text)' }}>{anniv.n.days}</span>
-                  <span className="sub">天后 · 第 {anniv.n.nth} 年</span>
-                </div>
-              </>
-            ) : wish ? (
-              <>
-                <span className="row-s" style={{ marginTop: 0 }}>想一起做的事</span>
-                <p className="row-t" style={{ margin: '4px 0 0' }}>{wish.text}</p>
-                <p className="sub quiet" style={{ margin: '6px 0 0' }}>去「生活」加上你们的纪念日 →</p>
-              </>
-            ) : (
-              <p className="sub quiet" style={{ margin: 0 }}>去「生活」加上你们的日子 →</p>
-            )}
-          </button>
-
-          {/* ⑥ 国庆（时令模块，假期结束自动消失） */}
-          {tripOn && (
-            <>
-              <Section label={s.trip.title || '假期'} domain="us" meta={`${s.trip.todos.filter((t) => t.done).length} / ${s.trip.todos.length} 备好`} />
-              <button type="button" className="card" style={{ width: '100%', textAlign: 'left' }} onClick={() => go('life')}>
-                <div className="row" style={{ marginTop: 0 }}>
-                  <IcTrip />
-                  <span className="grow">
-                    <span className="row-t">
-                      {tripLeft > 0 ? `还有 ${tripLeft} 天` : tripLeft === 0 ? '就是今天' : '假期中'}
-                    </span>
-                    <span className="row-s">{D.shortCN(s.trip.start)} – {D.shortCN(s.trip.end)}</span>
-                  </span>
-                </div>
-                <div style={{ marginTop: 'var(--s3)' }}>
-                  <Progress
-                    value={s.trip.todos.length ? (s.trip.todos.filter((t) => t.done).length / s.trip.todos.length) * 100 : 0}
-                    color="var(--us)"
-                  />
-                </div>
-              </button>
-            </>
-          )}
-        </div>
       </div>
+
+      {/* 样例。
+          「一份好报告长什么样」——这是她自己做过的那份持币者波动研究，
+          第七节把六个混杂因素逐个列出来（币种人气 / 周末节律 / 时区错位 /
+          被动曝光 / 前日惯性 / 严格因果），最后老实说了不能给因果。
+          放在这儿是给写材料时当尺子用的，不是装饰。 */}
+      <Section label="样例" meta="你自己做过的" />
+      {/* target=_blank 是必须的：主屏 PWA 是 standalone 窗口，没有浏览器的返回键。
+          同窗口跳过去她就困在报告里出不来了，只能杀掉 App 重进 */}
+      <a className="card sample" href="./sample-report.html" target="_blank" rel="noopener">
+        <span className="row-t">一份好报告长什么样</span>
+        <span className="row-s">
+          持币者会对波动做出反应吗 —— 研究设计 → 剂量反应 → 时序 → 异质性 → 策略含义 →
+          <strong>已排除与未排除</strong>
+        </span>
+        <span className="sample-go">打开看 →</span>
+      </a>
 
       {D.isEvening() && (
         <button type="button" className="btn ghost wide" style={{ marginTop: 'var(--s6)' }} onClick={() => go('review')}>
@@ -287,33 +224,7 @@ export function Today({ go, onCapture, toast }: { go: (r: Route) => void; onCapt
   )
 }
 
-/** 右侧只说「还有多久」；具体日期时间在卡片副行里，别两处重复 */
-function whenLabel(date: string, start: string, today: string): string {
-  if (date !== today) {
-    const d = D.daysUntil(date)
-    return d === 1 ? '明天' : `${d} 天后`
-  }
-  const m = D.minutesUntil(date, start)
-  if (m < 0) return '进行中'
-  return `${D.humanMinutes(m)}后`
-}
-
 export function todayTaskCount(): number {
   const t = D.key()
   return get().tasks.filter((x) => x.date === t).length
-}
-
-/** 今日屏上的回忆缩略图 */
-function Memory({ id, rev }: { id: string; rev: number }) {
-  const url = usePhotoURL(id, rev)
-  return (
-    <span
-      style={{
-        display: 'block', width: '100%', aspectRatio: '4/3',
-        borderRadius: 'var(--r-inner)', overflow: 'hidden', background: 'var(--well)',
-      }}
-    >
-      {url && <img src={url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />}
-    </span>
-  )
 }

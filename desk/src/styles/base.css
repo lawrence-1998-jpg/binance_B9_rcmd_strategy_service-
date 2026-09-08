@@ -673,3 +673,39 @@ button.kw:active { background: var(--line-2); }
 }
 .partrow.on .partbox { background: var(--consult-solid); border-color: var(--consult-solid); }
 .partrow.on .row-t { color: var(--consult-text); }
+
+
+/* ---- 首页主角：Prompt 管理器 ------------------------------------
+   首页原来是六段堆叠的仪表盘，每段都要人去喂；而她天天真正用的
+   Prompt 管理器藏在另一个 tab 角落的一个图标里。原话是「太不好用了」。
+   现在首页做成简介式入口，这一块是第一屏最先看到的东西。
+
+   底色仍用 --card 而不是实心领域色：全屏唯一的深色反底块是「今天的重心」，
+   它就在下面一点，两块都抢眼就等于都不抢眼。这里靠尺寸、左侧色条和
+   投影来拉出层级 —— 领域色不做卡片底色，是这套设计从一开始的规矩 */
+.hero {
+  display: block; width: 100%; text-align: left;
+  background: var(--card); border-radius: var(--r-card);
+  padding: var(--s5) var(--s5) var(--s5) calc(var(--s5) - 3px);
+  border-left: 3px solid var(--consult);
+  box-shadow: var(--sh-m);
+  margin-top: var(--s5);
+}
+.hero:active { transform: scale(.995); }
+.hero-h { display: flex; align-items: center; gap: var(--s2); }
+.hero-h svg { width: 20px; height: 20px; color: var(--consult-text); flex: 0 0 auto; }
+.hero-t {
+  font-family: var(--f-cjk); font-weight: 700; font-size: var(--t-focus);
+  color: var(--ink); margin-right: auto;
+}
+.hero-n { font-family: var(--f-mono); font-size: var(--t-meta); color: var(--ink-2); flex: 0 0 auto; }
+.hero-s { display: block; font-size: var(--t-sub); line-height: 1.7; color: var(--ink-2); margin-top: var(--s3); }
+
+/* 样例报告入口 —— 写材料时当尺子用的那份 */
+.sample { display: block; text-decoration: none; }
+.sample .row-s { display: block; margin-top: var(--s2); line-height: 1.6; }
+.sample .row-s strong { color: var(--ink); }
+.sample-go {
+  display: block; margin-top: var(--s3);
+  font-size: var(--t-sub); font-weight: 700; color: var(--consult-text);
+}
