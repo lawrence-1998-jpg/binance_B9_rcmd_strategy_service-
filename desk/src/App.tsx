@@ -85,7 +85,7 @@ export function App() {
       <RescueNotice toast={toast.show} />
 
       <main className="app">
-        {route === 'today' && <Today go={go} onCapture={() => openSheet('capture')} toast={toast.show} />}
+        {route === 'today' && <Today go={go} onCapture={() => openSheet('capture')} onPromptTool={() => openSheet('prompts')} toast={toast.show} />}
         {route === 'work' && <Work toast={toast.show} onPromptTool={() => openSheet('prompts')} />}
         {route === 'life' && <Life toast={toast.show} />}
         {route === 'review' && <Review go={go} onSettings={() => openSheet('settings')} toast={toast.show} />}
