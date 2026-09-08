@@ -243,7 +243,13 @@ button { cursor: pointer; -webkit-appearance: none; }
   padding: 11px var(--s3); font-size: var(--t-input); color: var(--ink);
   min-height: 44px;
 }
-.field::placeholder { color: var(--ink-3); }
+/* 挂在 input/textarea 上而不是 .field 上：记一笔那个 textarea 没有 .field，
+   于是一直用着浏览器默认的 #757575（3.87:1）—— 全 App 最差的一处，
+   偏偏是她最常点开的那一屏第一眼看到的字。
+   颜色也从 --ink-3 换成 --ink-2：--ink-3 是按「纸底 4.53、卡片 5.10」
+   定的，从来没算过 --well，而占位符正好都坐在 --well 上，只有 4.03 */
+input::placeholder,
+textarea::placeholder { color: var(--ink-2); }
 .field.pill { border-radius: var(--r-pill); padding-inline: var(--s4); }
 textarea.field { resize: none; line-height: 1.5; }
 .field.grow-y { overflow: hidden; }
@@ -522,7 +528,7 @@ textarea.field { resize: none; line-height: 1.5; }
   font-family: var(--f-cjk); font-size: var(--t-eyebrow); font-weight: 700;
   font-style: normal;
 }
-.qdot.s0 { background: var(--well);          color: var(--ink-3); }
+.qdot.s0 { background: var(--well);          color: var(--ink-2); }
 .qdot.s1 { background: var(--consult-tint);  color: var(--consult-text); }
 .qdot.s2 { background: var(--byte-tint);     color: var(--byte-text); }
 .qdot.s3 { background: var(--ok-solid);      color: var(--on-solid); }
@@ -539,7 +545,7 @@ textarea.field { resize: none; line-height: 1.5; }
   width: 24px; height: 24px; border-radius: 50%;
   display: grid; place-items: center; font-style: normal;
   font-family: var(--f-mono); font-size: var(--t-meta); font-weight: 600;
-  background: var(--well); color: var(--ink-3);
+  background: var(--well); color: var(--ink-2);
 }
 .flow-i.done { color: var(--ok-deep); }
 .flow-i.done .flow-d { background: var(--ok-solid); color: var(--on-solid); }

@@ -254,7 +254,9 @@ function Keywords({ q, patch, all }: { q: Q; patch: (p: Partial<Q>) => void; all
             onChange={(e) => setText(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); add(text) } }}
           />
+          {/* 一个字的按钮会缩到 40px 宽，差 4px 不够手指点 */}
           <button type="button" className="btn small" aria-label="加上这个关键词"
+            style={{ minWidth: 44 }}
             disabled={!text.trim()} onClick={() => add(text)}>加</button>
         </div>
         {used.length > 0 && (
