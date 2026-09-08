@@ -285,4 +285,7 @@ export interface State {
   promptUses: Record<string, number>
   /** 常挂的零件 id —— 她多半每次都挂同样那几条，记住比每次重选强 */
   promptParts: string[]
+  /** 上次筛的那一类。同上：她一天开好几次，多半奔着同一类去。
+      null = 全部。搜索词不记（那是一次性的查询，留着只会挡住下次） */
+  promptCat: string | null
 }
