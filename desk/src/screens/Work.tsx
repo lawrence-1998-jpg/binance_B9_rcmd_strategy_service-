@@ -127,9 +127,15 @@ export function Work({ toast, onPromptTool }: { toast: (t: string) => void; onPr
                 </div>
 
                 <div className="row-s" style={{ display: 'flex', justifyContent: 'space-between', marginTop: 'var(--s2)' }}>
-                  <span>{qOf(e.id).length
-                    ? `${done(e.id)} / ${qOf(e.id).length} 条有结论`
-                    : (e.next ? `下一步 ${e.next}` : '还没拆提纲')}</span>
+                  {/* 「下一步」优先。
+                      以前这里是「有调研线就报进度、没调研线才说下一步」——
+                      于是她一贴提纲，下一步就从卡片上消失了；而右上角那个
+                      chip 本来就在报同一个「1 / 3」，等于同一个数隔着 130px
+                      说两遍，把真正该在这儿的那句话顶掉了。
+                      下一步没写，才退回去报进度。 */}
+                  <span>{e.next
+                    ? `下一步 ${e.next}`
+                    : (qOf(e.id).length ? `${done(e.id)} / ${qOf(e.id).length} 条有结论` : '还没拆提纲')}</span>
                   <span>{D.relTime(e.updatedAt)}</span>
                 </div>
               </button>
