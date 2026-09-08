@@ -701,11 +701,12 @@ button.kw:active { background: var(--line-2); }
 .hero-n { font-family: var(--f-mono); font-size: var(--t-meta); color: var(--ink-2); flex: 0 0 auto; }
 .hero-s { display: block; font-size: var(--t-sub); line-height: 1.7; color: var(--ink-2); margin-top: var(--s3); }
 
-/* 样例报告入口 —— 写材料时当尺子用的那份 */
-.sample { display: block; text-decoration: none; }
-.sample .row-s { display: block; margin-top: var(--s2); line-height: 1.6; }
-.sample .row-s strong { color: var(--ink); }
-.sample-go {
+/* 「点这张卡去别处」的通用样式：一行标题、一行说明、一个箭头。
+   首页上的样例报告和复盘入口都用它 —— 别再给每个入口写一套 */
+.gocard { display: block; width: 100%; text-align: left; text-decoration: none; }
+.gocard .row-s { display: block; margin-top: var(--s2); line-height: 1.6; }
+.gocard .row-s strong { color: var(--ink); }
+.gocard-go {
   display: block; margin-top: var(--s3);
   font-size: var(--t-sub); font-weight: 700; color: var(--consult-text);
 }
