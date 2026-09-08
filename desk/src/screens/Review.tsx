@@ -20,6 +20,9 @@ export function Review({ go, onSettings, toast }: { go: (r: Route) => void; onSe
   const [tmTitle, setTmTitle] = useState('')
   const [tmDomain, setTmDomain] = useState<Domain>('consult')
   const [showAllPending, setShowAllPending] = useState(false)
+  /** 展开哪一条待归类。一次只开一条 —— 她一次也只归一条 */
+  const [openNote, setOpenNote] = useState<string | null>(null)
+  const [addingTm, setAddingTm] = useState(false)
 
   const tasks = s.tasks.filter((t) => t.date === today)
   const done = tasks.filter((t) => t.done)
@@ -140,12 +143,26 @@ export function Review({ go, onSettings, toast }: { go: (r: Route) => void; onSe
         ) : (
           (showAllPending ? pending : pending.slice(0, 8)).map((n) => (
             <div key={n.id} style={{ padding: '12px 0', borderTop: '1px solid var(--line)' }}>
-              <p className="row-t" style={{ margin: 0 }}>{n.text}</p>
-              <p className="row-s">{D.relTime(n.createdAt)}</p>
+              {/* 分类 chip 默认收起来。
+                  每条摊开是七个 chip，三条就是二十一个 —— 整屏变成一堵按钮墙，
+                  而她一次只归一条。点哪条展开哪条 */}
+              <button type="button" className="pend" onClick={() => setOpenNote(openNote === n.id ? null : n.id)}
+                aria-expanded={openNote === n.id}>
+                <span className="row-t" style={{ margin: 0 }}>{n.text}</span>
+                {/* 归好类的不能再说「点一下归类」—— classify 只设 kind 不设 handled，
+                    所以归完还留在这张单子上，直到她归档。收起时要照实说它现在是什么 */}
+                <span className="row-s">
+                  {D.relTime(n.createdAt)}
+                  {openNote === n.id ? '' : n.kind
+                    ? ` · 已归为「${NOTE_KINDS.find((k) => k.key === n.kind)?.label ?? n.kind}」，点开可改`
+                    : ' · 点一下归类'}
+                </span>
+              </button>
+              {openNote === n.id && (
               <div className="chips" style={{ marginTop: 'var(--s2)' }}>
                 {NOTE_KINDS.map((k) => (
                   <Chip key={k.key} tap on={n.kind === k.key} tone={k.key === 'us' ? 'us' : undefined}
-                    onClick={() => classify(n.id, k.key)}>
+                    onClick={() => { classify(n.id, k.key); setOpenNote(null) }}>
                     {k.mark} {k.label}
                   </Chip>
                 ))}
@@ -163,6 +180,7 @@ export function Review({ go, onSettings, toast }: { go: (r: Route) => void; onSe
                   }}>→ 明天做</Chip>
                 )}
               </div>
+              )}
             </div>
           ))
         )}
@@ -220,9 +238,15 @@ export function Review({ go, onSettings, toast }: { go: (r: Route) => void; onSe
           ))
         )}
       </div>
-      {tmTasks.length < 3 && (
+      {tmTasks.length < 3 && !addingTm && (
+        <button type="button" className="btn quiet small wide" style={{ marginTop: 'var(--s2)' }}
+          onClick={() => setAddingTm(true)}>
+          ＋ 定明天的（还能加 {3 - tmTasks.length} 件）
+        </button>
+      )}
+      {tmTasks.length < 3 && addingTm && (
         <div className="card" style={{ marginTop: 'var(--s2)' }}>
-          <input className="field" value={tmTitle} placeholder="明天先做什么"
+          <input autoFocus className="field" value={tmTitle} placeholder="明天先做什么"
             onChange={(e) => setTmTitle(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter') addTomorrow() }} />
           <div className="chips" style={{ marginTop: 'var(--s3)' }}>
@@ -232,9 +256,12 @@ export function Review({ go, onSettings, toast }: { go: (r: Route) => void; onSe
               </Chip>
             ))}
           </div>
-          <button type="button" className="btn wide" style={{ marginTop: 'var(--s3)' }} onClick={addTomorrow} disabled={!tmTitle.trim()}>
-            定下来
-          </button>
+          <div style={{ display: 'flex', gap: 'var(--s2)', marginTop: 'var(--s3)' }}>
+            <button type="button" className="btn" style={{ flex: 1 }} onClick={addTomorrow} disabled={!tmTitle.trim()}>
+              定下来
+            </button>
+            <button type="button" className="btn quiet" onClick={() => { setAddingTm(false); setTmTitle('') }}>算了</button>
+          </div>
         </div>
       )}
 
