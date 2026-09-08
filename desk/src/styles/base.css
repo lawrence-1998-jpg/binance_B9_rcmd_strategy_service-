@@ -710,3 +710,15 @@ button.kw:active { background: var(--line-2); }
   display: block; margin-top: var(--s3);
   font-size: var(--t-sub); font-weight: 700; color: var(--consult-text);
 }
+
+
+/* 待归类的一条：整条可点，点开才出分类 chip。
+   每条摊开七个 chip、三条就二十一个，整屏变成一堵按钮墙，
+   而她一次只归一条 */
+.pend {
+  display: block; width: 100%; text-align: left;
+  min-height: var(--tap); padding: 2px 0;
+}
+.pend:active { background: var(--line-2); }
+.pend .row-t { display: block; }
+.pend .row-s { display: block; margin-top: 2px; }
