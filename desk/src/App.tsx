@@ -91,7 +91,8 @@ export function App() {
         {route === 'review' && <Review go={go} onSettings={() => openSheet('settings')} toast={toast.show} />}
       </main>
 
-      <TabBar route={route} onGo={go} onCapture={() => openSheet('capture')} />
+      <TabBar route={route} onGo={go} onCapture={() => openSheet('capture')}
+        onPrompt={() => openSheet('prompts')} promptOn={sheet === 'prompts'} />
 
       {sheet === 'capture' && <Capture onClose={closeSheet} toast={toast.show} />}
       {sheet === 'settings' && <Settings onClose={closeSheet} toast={toast.show} />}

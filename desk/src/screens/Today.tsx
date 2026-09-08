@@ -27,7 +27,6 @@ export function Today({ go, onCapture, onPromptTool, toast }: { go: (r: Route) =
   const focus = s.focus[today] ?? ''
   const full = tasks.length >= 3
 
-  const live = s.engagements.filter((e) => !e.archived)
 
   function saveFocus() {
     const v = draft.trim()
@@ -163,39 +162,6 @@ export function Today({ go, onCapture, onPromptTool, toast }: { go: (r: Route) =
         )
       )}
 
-      <div>
-        <div>
-          {/* ④ 两条线 */}
-          <Section label="两条线" meta={live.length ? `${live.length} 件在跑` : undefined} />
-          {live.length === 0 ? (
-            // 两张写着「0 件在跑 · 都没卡」的卡片占掉一屏，说的却是「什么都没有」。
-            // 空的时候要么别占地方，要么给个入口——不能又占地方又不说事
-            <button type="button" className="card" style={{ width: '100%', textAlign: 'left' }} onClick={() => go('work')}>
-              <span className="row-t">还没有在跑的事</span>
-              <span className="row-s">去「工作」加上手上的项目和需求 →</span>
-            </button>
-          ) : (
-          <button type="button" className="card" style={{ width: '100%', textAlign: 'left' }} onClick={() => go('work')}>
-            {(['consult', 'byte'] as const).map((d, i) => {
-              const list = live.filter((e) => e.domain === d)
-              const stuck = list.filter((e) => e.blocker).length
-              return (
-                <div className="row" key={d} style={i ? undefined : { marginTop: 0 }}>
-                  <i className="dbar" style={{ background: DOMAINS[d].color }} />
-                  <span className="grow">
-                    <span className="row-t">{DOMAINS[d].label}</span>
-                    <span className="row-s">{list.length} 件在跑{stuck ? ` · ${stuck} 件卡住` : ' · 都没卡'}</span>
-                  </span>
-                  {stuck > 0 && <i className="dot dot-warn" aria-label="有卡住的" />}
-                </div>
-              )
-            })}
-          </button>
-          )}
-        </div>
-
-      </div>
-
       {/* 样例。
           「一份好报告长什么样」——这是她自己做过的那份持币者波动研究，
           第七节把六个混杂因素逐个列出来（币种人气 / 周末节律 / 时区错位 /
@@ -204,20 +170,25 @@ export function Today({ go, onCapture, onPromptTool, toast }: { go: (r: Route) =
       <Section label="样例" meta="你自己做过的" />
       {/* target=_blank 是必须的：主屏 PWA 是 standalone 窗口，没有浏览器的返回键。
           同窗口跳过去她就困在报告里出不来了，只能杀掉 App 重进 */}
-      <a className="card sample" href="./sample-report.html" target="_blank" rel="noopener">
+      <a className="card gocard sample" href="./sample-report.html" target="_blank" rel="noopener">
         <span className="row-t">一份好报告长什么样</span>
         <span className="row-s">
           持币者会对波动做出反应吗 —— 研究设计 → 剂量反应 → 时序 → 异质性 → 策略含义 →
           <strong>已排除与未排除</strong>
         </span>
-        <span className="sample-go">打开看 →</span>
+        <span className="gocard-go">打开看 →</span>
       </a>
 
-      {D.isEvening() && (
-        <button type="button" className="btn ghost wide" style={{ marginTop: 'var(--s6)' }} onClick={() => go('review')}>
-          今天到这儿 · 去收尾
-        </button>
-      )}
+      {/* 复盘的常驻入口。
+          它从底栏下去了（位子让给了 Prompt 管理器），所以这条不能再只在
+          傍晚出现 —— 那样白天就没有任何一条路能走到复盘。
+          内容一条没少，只是入口从底栏挪到了这儿。 */}
+      <Section label="复盘" meta={D.isEvening() ? '今天到这儿' : undefined} />
+      <button type="button" className="card gocard" onClick={() => go('review')}>
+        <span className="row-t">{D.isEvening() ? '今天到这儿 · 去收尾' : '今天这三句 · 时间轴'}</span>
+        <span className="row-s">写完今天的三句话，翻以前的每一天</span>
+        <span className="gocard-go">去复盘 →</span>
+      </button>
 
       <button type="button" className="sr" onClick={onCapture}>记一笔</button>
     </div>
