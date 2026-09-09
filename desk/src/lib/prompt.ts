@@ -170,13 +170,34 @@ export function splitAnswer(text: string, count: number): SplitResult | null {
   // 先找出所有标题的位置。一道题的正文，止于**下一个标题**（不管它有没有题号）——
   // 不然结尾那节「还没搞清楚的」会被粘到最后一题的材料里。
   // 那节是整套的产出，不是某一题的答案，混进去等于悄悄污染她的材料
-  const heads: { at: number; end: number; n: number | null }[] = []
-  const re = /^[ \t]*#{1,4}[ \t]*(?:(?:第)?(\d+)[.、)．]?)?[^\n]*$/gm
-  for (let m = re.exec(text); m; m = re.exec(text)) {
-    if (m[0].trim() === '') continue
-    heads.push({ at: m.index, end: re.lastIndex, n: m[1] ? Number(m[1]) : null })
+  const scan = (re: RegExp) => {
+    const out: { at: number; end: number; n: number | null }[] = []
+    for (let m = re.exec(text); m; m = re.exec(text)) {
+      if (m[0].trim() === '') continue
+      out.push({ at: m.index, end: re.lastIndex, n: m[1] ? Number(m[1]) : null })
+    }
+    return out
   }
-  const numbered = heads.filter((h) => h.n !== null && h.n >= 1 && h.n <= count)
+
+  // ① 严格路径：带 # 的标题。提纲里要求的就是这个，能认出来就用它。
+  let heads = scan(/^[ \t]*#{1,4}[ \t]*(?:(?:第)?(\d+)[.、)．]?)?[^\n]*$/gm)
+  let numbered = heads.filter((h) => h.n !== null && h.n >= 1 && h.n <= count)
+
+  // ② 宽松兜底：模型经常回「1. xxx」「**1. xxx**」「问题 1：xxx」——
+  //    一个 # 都没有。以前这些一律认不出，她只能自己手动切，
+  //    等于这一步白做。
+  //
+  //    但「塞错比不塞更糟」这条不能破，所以兜底的门槛设得很死：
+  //    只有严格路径一条都没找到、**而且**扒出来的号正好是
+  //    1、2、…、count 一个不多一个不少、顺序也对，才认。
+  //    正文里偶然出现的编号列表凑不齐这个条件。
+  if (numbered.length === 0) {
+    const loose = scan(/^[ \t]*(?:\*\*)?[ \t]*(?:第|问题)?[ \t]*(\d+)[ \t]*(?:[.、)：:．]|题)[^\n]*$/gm)
+    const ns = loose.map((h) => h.n)
+    const exact = ns.length === count && ns.every((n, i) => n === i + 1)
+    if (exact) { heads = loose; numbered = loose }
+  }
+
   if (numbered.length === 0) return null
 
   const parts: string[] = Array.from({ length: count }, () => '')
