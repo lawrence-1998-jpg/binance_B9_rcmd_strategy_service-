@@ -91,6 +91,8 @@ function merge(p: Partial<State>): State {
     promptUses: obj(p.promptUses) as Record<string, number>,
     promptParts: arr(p.promptParts, []),
     promptCat: typeof p.promptCat === 'string' ? p.promptCat : null,
+    hidden: arr(p.hidden, []),
+    kept: obj(p.kept) as Record<string, number>,
   }
 }
 

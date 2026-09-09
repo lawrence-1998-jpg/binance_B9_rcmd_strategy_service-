@@ -2,11 +2,12 @@ import { useState } from 'react'
 import { update, useStore, uid } from '../lib/store'
 import type { TripTodo, Wish } from '../lib/types'
 import * as D from '../lib/date'
-import { Section, Chip, Check, Empty, Progress, Segmented, InlineAdd } from '../components/ui'
+import { Section, Chip, Check, Empty, Progress, Segmented, InlineAdd, FadeOffer } from '../components/ui'
 import { askConfirm } from '../lib/confirm'
 import { Photos } from '../components/Photos'
 import { SPARKS } from '../data/sparks'
 import { IcLife, IcTrip, IcTrash } from '../components/icons'
+import { FADES, fadedDays } from '../lib/fade'
 
 type Tab = 'us' | 'trip'
 const WHO: Record<Wish['who'], string> = { him: '他想的', me: '我想的', both: '一起' }
@@ -15,6 +16,7 @@ const KIND: Record<TripTodo['kind'], string> = { book: '要订', plan: '要定',
 export function Life({ toast }: { toast: (t: string) => void }) {
   const s = useStore((x) => x)
   const [tab, setTab] = useState<Tab>('us')
+
 
   return (
     <div className="screen">
@@ -39,6 +41,27 @@ export function Life({ toast }: { toast: (t: string) => void }) {
 
 function Us({ toast }: { toast: (t: string) => void }) {
   const s = useStore((x) => x)
+
+  /**
+   * 荒掉的分区：问一次要不要撤，然后闭嘴。
+   * lastAt 是这块最近一次进新东西的时间；null = 一条都没有，一律不问
+   * （她一次都没用过的东西，替她收起来是自作主张）。
+   */
+  const now = Date.now()
+  function fade(key: string, lastAt: number | null) {
+    if (s.hidden.includes(key)) return { gone: true, offer: null as number | null }
+    const spec = FADES.find((f) => f.key === key)
+    if (!spec) return { gone: false, offer: null }
+    return { gone: false, offer: fadedDays(spec, lastAt, s.kept[key], now) }
+  }
+  const hide = (key: string, label: string) => {
+    update((x) => ({ ...x, hidden: [...x.hidden.filter((k) => k !== key), key] }))
+    toast(`「${label}」收起来了 · 设置里能放回来`)
+  }
+  // 「留着」把计时清零 —— 不清零就是问完接着问
+  const keep = (key: string) => update((x) => ({ ...x, kept: { ...x.kept, [key]: Date.now() } }))
+
+  const newest = (xs: { createdAt: number }[]) => (xs.length ? Math.max(...xs.map((x) => x.createdAt)) : null)
   const [adding, setAdding] = useState(false)
   // 用天数当种子：同一天进来看到的是同一张，点一下才换
   const [spark, setSpark] = useState(() => Math.floor(Date.now() / 86400000))
@@ -145,7 +168,9 @@ function Us({ toast }: { toast: (t: string) => void }) {
       </button>
 
       {/* 想对他说的话 */}
+      {(() => { const f = fade('moments', newest(s.moments)); return f.gone ? null : (<>
       <Section label="想对他说" domain="us" meta={s.moments.length ? `${s.moments.length} 条` : undefined} />
+      {f.offer != null && <FadeOffer days={f.offer} onHide={() => hide('moments', '想对他说')} onKeep={() => keep('moments')} />}
       {s.moments.length > 0 && (
         <div className="card">
           {(showAllMoments ? s.moments : s.moments.slice(0, 6)).map((m, i) => (
@@ -180,9 +205,12 @@ function Us({ toast }: { toast: (t: string) => void }) {
           toast('记下了 ♡')
         }}
       />
+      </>) })()}
 
       {/* 他提过的 —— 速记里标了「给老公」的都汇到这儿 */}
+      {(() => { const f = fade('heard', newest(heard)); return f.gone ? null : (<>
       <Section label="他提过的" domain="us" meta={heard.length ? `${heard.length} 条` : '空'} />
+      {f.offer != null && <FadeOffer days={f.offer} onHide={() => hide('heard', '他提过的')} onKeep={() => keep('heard')} />}
       <div className={heard.length ? 'card flush' : 'card'}>
         {heard.length === 0 ? (
           <p className="sub quiet" style={{ margin: 0 }}>
@@ -204,8 +232,12 @@ function Us({ toast }: { toast: (t: string) => void }) {
         )}
       </div>
 
+      </>) })()}
+
       {/* 想一起做的事 */}
+      {(() => { const f = fade('wishes', newest(s.wishes)); return f.gone ? null : (<>
       <Section label="想一起做的事" domain="us" meta={`${s.wishes.filter((w) => w.done).length} / ${s.wishes.length}`} />
+      {f.offer != null && <FadeOffer days={f.offer} onHide={() => hide('wishes', '想一起做的事')} onKeep={() => keep('wishes')} />}
       <div className={s.wishes.length ? 'card flush' : 'card'}>
         {s.wishes.length === 0 ? (
           <p className="sub quiet" style={{ margin: 0 }}>还没写。想到一件就加一件。</p>
@@ -229,6 +261,7 @@ function Us({ toast }: { toast: (t: string) => void }) {
         placeholder="想和他一起做什么"
         onAdd={(text) => update((x) => ({ ...x, wishes: [...x.wishes, { id: uid(), text, who: 'both', done: false, createdAt: Date.now() }] }))}
       />
+      </>) })()}
     </>
   )
 }

@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
-import { resetToEmpty, useStore } from '../lib/store'
+import { resetToEmpty, update, useStore } from '../lib/store'
 import { buildBackup, restoreBackup, backupName, humanBytes } from '../lib/backup'
 import { pruneOrphans, usage } from '../lib/media'
 import { isStandalone } from '../lib/install'
 import { checkForUpdate } from '../lib/update'
 import { saveFile } from '../lib/save'
+import { FADES } from '../lib/fade'
 import { Section } from '../components/ui'
 import { IcClose } from '../components/icons'
 
@@ -163,6 +164,33 @@ export function Settings({ onClose, toast }: { onClose: () => void; toast: (t: s
             </div>
           )}
         </div>
+
+        {/* 收起来的分区。
+            「收起来」必须是可逆的，否则它就不是「体面的退路」，是删除 ——
+            而一个删不得的东西，你下次就不敢按那个按钮了。 */}
+        {s.hidden.length > 0 && (<>
+          <Section label="收起来的" meta={`${s.hidden.length} 块`} />
+          <div className="card flush">
+            {s.hidden.map((k) => (
+              <div key={k} className="row">
+                <span className="grow">
+                  <span className="row-t">{FADES.find((f) => f.key === k)?.label ?? k}</span>
+                  <span className="row-s">内容一条都没删，放回来就在原来的位置</span>
+                </span>
+                <button type="button" className="btn quiet small"
+                  onClick={() => {
+                    update((x) => ({
+                      ...x,
+                      hidden: x.hidden.filter((y) => y !== k),
+                      // 放回来的同时把计时清零，免得一放回来又立刻问一遍
+                      kept: { ...x.kept, [k]: Date.now() },
+                    }))
+                    toast('放回来了')
+                  }}>放回来</button>
+              </div>
+            ))}
+          </div>
+        </>)}
 
         <Section label="重来一次" />
         <div className="card">

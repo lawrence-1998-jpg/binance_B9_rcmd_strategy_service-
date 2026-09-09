@@ -364,3 +364,22 @@ export function RescueNotice({ toast }: { toast: (t: string) => void }) {
     </div>
   )
 }
+
+/**
+ * 荒掉的分区上那一行。
+ *
+ * 语气是关键：它问的是「要不要撤」，不是催「快去填」。
+ * 催你去填的提示会变成又一件待办；问你要不要撤，是替你减负担。
+ * 所以两个选项都是终点 —— 收起来，或者留着然后闭嘴一整轮。
+ */
+export function FadeOffer({ days, onHide, onKeep }: { days: number; onHide: () => void; onKeep: () => void }) {
+  return (
+    <div className="fade-offer">
+      <span className="fade-t">这块你 {days} 天没动了</span>
+      <span className="fade-a">
+        <button type="button" className="btn quiet small" onClick={onHide}>收起来</button>
+        <button type="button" className="btn quiet small" onClick={onKeep}>留着</button>
+      </span>
+    </div>
+  )
+}
