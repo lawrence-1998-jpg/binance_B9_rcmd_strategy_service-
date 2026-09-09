@@ -740,3 +740,8 @@ button.kw:active { background: var(--line-2); }
 }
 .fade-t { font-size: var(--t-meta); color: var(--ink-2); }
 .fade-a { display: flex; gap: var(--s2); flex: 0 0 auto; }
+/* 按钮得看出来是按钮。
+   .btn.quiet 的底色本来就是 --well，而这个提示框的底也是 --well ——
+   两个按钮跟自己的底融成一片，读起来就是两行粗体字，根本不像能点。 */
+.fade-offer .btn.quiet { background: var(--card); }
+.fade-offer .btn.quiet:active { background: var(--line-2); }
