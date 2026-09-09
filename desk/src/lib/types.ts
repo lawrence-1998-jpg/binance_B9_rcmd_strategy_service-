@@ -288,4 +288,9 @@ export interface State {
   /** 上次筛的那一类。同上：她一天开好几次，多半奔着同一类去。
       null = 全部。搜索词不记（那是一次性的查询，留着只会挡住下次） */
   promptCat: string | null
+  /** 收起来的分区 key（见 lib/fade.ts）。收起来不是删除，设置里能放回来 */
+  hidden: string[]
+  /** 对某块说过「留着」的那一刻。下一轮要重新数够天数才会再开口 ——
+      问完还接着问的提示，就是新的维护成本 */
+  kept: Record<string, number>
 }

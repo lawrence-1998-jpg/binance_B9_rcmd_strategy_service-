@@ -728,3 +728,15 @@ button.kw:active { background: var(--line-2); }
 .pend:active { background: var(--line-2); }
 .pend .row-t { display: block; }
 .pend .row-s { display: block; margin-top: 2px; }
+
+/* ---- 荒掉的分区上那一行 ----
+   刻意做得很轻：它不是警告，是一个可以忽略的提议。
+   做重了就变成催办，那正是这东西要消灭的。 */
+.fade-offer {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
+  gap: var(--s2); margin-top: var(--s2);
+  padding: 10px var(--s3); border-radius: var(--r-inner);
+  background: var(--well);
+}
+.fade-t { font-size: var(--t-meta); color: var(--ink-2); }
+.fade-a { display: flex; gap: var(--s2); flex: 0 0 auto; }
