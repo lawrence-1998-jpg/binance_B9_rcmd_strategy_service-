@@ -26,7 +26,7 @@ const DEFAULT = [
   'flow2', 'fonts', 'home', 'import-guard', 'install', 'ios', 'measure', 'measure-dark',
   'messy', 'nextstep', 'parts', 'pend', 'pill', 'pixel', 'pmstate', 'private', 'rescue',
   'review', 'shapes', 'single', 'stamp', 'swupdate', 'tabs', 'talk', 'tap', 'timeline',
-  'verify', 'verify-backup', 'walk2', 'walk3', 'zoom',
+  'upkeep', 'verify', 'verify-backup', 'walk2', 'walk3', 'zoom',
 ]
 
 const suites = process.argv.slice(2).filter((a) => !a.startsWith('-'))

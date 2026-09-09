@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { update, useStore, uid } from '../lib/store'
 import { DOMAINS, NOTE_KINDS, type Domain, type NoteKind, type Task } from '../lib/types'
 import * as D from '../lib/date'
+import { upkeep, upkeepLine } from '../lib/upkeep'
 import { Section, Check, Chip, Empty, Segmented, GrowText } from '../components/ui'
 import { autoDraft } from '../lib/diary'
 import { askConfirm } from '../lib/confirm'
@@ -265,7 +266,12 @@ export function Review({ go, onSettings, toast }: { go: (r: Route) => void; onSe
         </div>
       )}
 
-      <button type="button" className="btn ghost wide" style={{ marginTop: 'var(--s6)' }} onClick={() => go('today')}>
+      {/* 这东西到底在帮你还是在收你的税。
+          一行灰字，不打分、不催、不画曲线 —— 摆个事实，判断留给她。
+          全从已有的时间戳推出来，一个字节都没多存（见 lib/upkeep.ts）。 */}
+      <p className="upkeep">{upkeepLine(upkeep(s))}</p>
+
+      <button type="button" className="btn ghost wide" style={{ marginTop: 'var(--s4)' }} onClick={() => go('today')}>
         回今日
       </button>
       </>}

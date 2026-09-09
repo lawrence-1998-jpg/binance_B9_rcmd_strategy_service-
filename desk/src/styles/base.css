@@ -759,3 +759,12 @@ button.kw:active { background: var(--line-2); }
 .conf-h { margin: 0; font-size: var(--t-body); color: var(--ink); display: flex; align-items: center; flex-wrap: wrap; }
 .conf-w { margin: 4px 0 0; font-size: var(--t-meta); color: var(--ink-2); line-height: 1.5; }
 .fact-low { color: var(--ink-2); }
+
+/* ---- 「这几天你动了几天」 ----
+   刻意做成最轻的一行：它是一个可以不看的事实，不是成绩单。
+   做重了就变成 KPI，而这个 App 从头到尾都在躲开 KPI。 */
+.upkeep {
+  margin: var(--s6) 0 0;
+  font-family: var(--f-mono); font-size: var(--t-meta);
+  color: var(--ink-3); text-align: center; line-height: 1.6;
+}
