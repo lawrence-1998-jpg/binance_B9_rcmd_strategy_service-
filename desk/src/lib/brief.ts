@@ -1,5 +1,5 @@
 import type { Engagement, Fact, Inquiry } from './types'
-import { CONFIDENCE, isLive, stageOf } from './types'
+import { confOf, CONFIDENCE, isLive, stageOf } from './types'
 import * as D from './date'
 
 /**
@@ -15,8 +15,11 @@ import * as D from './date'
  * 没出处的百分比去跟客户讲 —— 而那个人就是她。
  */
 function factLine(f: Fact): string {
-  const conf = CONFIDENCE.find((c) => c.key === f.confidence)?.label ?? '中'
-  const src = f.source.trim() || '**没有出处**'
+  const conf = CONFIDENCE.find((c) => c.key === confOf(f))?.label ?? '中'
+  // 出处全列出来 —— 交叉验证过的两个来源，是这条数据最有力的部分，
+  // 只写一个等于把她做的功课扔掉一半
+  const clean = (f.sources ?? []).map((x) => x.trim()).filter(Boolean)
+  const src = clean.length ? clean.join('；') : '**没有出处**'
   return `- \`${f.value.trim()}\` —— ${f.what.trim()}　｜　出处：${src}　｜　置信 ${conf}`
 }
 
