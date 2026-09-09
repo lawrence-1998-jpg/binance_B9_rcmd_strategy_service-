@@ -47,6 +47,12 @@ jobs:
         working-directory: desk
         run: npm run typecheck
 
+      - name: 私人照片不许进公开仓库
+        # 这个仓库是公开的，删了也还在历史里 —— 所以必须在合进来之前拦。
+        # 案头的照片按设计只存在她手机上（IndexedDB），一张都不该进 git。
+        run: node desk/scripts-no-private-photos.mjs
+        working-directory: .
+
       - name: 构建（多文件 + PWA）
         working-directory: desk
         run: npm run build
