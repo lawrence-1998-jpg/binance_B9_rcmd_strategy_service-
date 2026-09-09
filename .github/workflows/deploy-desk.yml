@@ -95,9 +95,44 @@ jobs:
   # 所以在功能分支上这个 job 必然在 1 秒内失败、不产出任何日志。
   # 之前没加这个条件，每个功能分支的 PR 上都挂一个红叉，而它跟改动无关 ——
   # 红色必须意味着「有事」，天天红的检查等于没有检查。
+  # 行为测试。以前这一整套只活在一次会话的临时目录里 ——
+  # 也就是说「全绿」除了那次会话谁都复现不了。搬进仓库之后它得真的挡住合并。
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: desk/package-lock.json
+
+      - name: 安装依赖
+        working-directory: desk
+        run: npm ci
+
+      # playwright 的版本在 package.json 里钉死了，必须跟这里装的浏览器对上
+      - name: 装浏览器
+        working-directory: desk
+        run: npx playwright install --with-deps chromium
+
+      - name: 跑全套（31 个套件）
+        working-directory: desk
+        run: npm test
+
+      - name: 失败时把截图捞出来
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: 出问题时的截图
+          path: desk/test/shots/
+          retention-days: 7
+          if-no-files-found: ignore
+
   deploy:
     if: github.ref == 'refs/heads/main'
-    needs: build
+    needs: [build, test]
     runs-on: ubuntu-latest
     environment:
       name: github-pages
