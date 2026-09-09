@@ -27,8 +27,20 @@ BASE=$(stamp "$PRISTINE")
 trap 'rm -rf "$PRISTINE"' EXIT
 
 fail=0; asserts=0; suites=0; probes=0
+# 单条超时。
+# 没有它的话，一条挂住的套件会一直烧到 CI 的上限（好几个小时），
+# 而日志里什么都不会说 —— 比失败还难查。
+# 挂住和失败一样要红，只是理由不同，所以单独标出来。
+TIMEOUT=${SUITE_TIMEOUT:-180}
+
 for f in "$@"; do
-  out=$(node "$f.mjs" 2>&1); code=$?
+  out=$(timeout -k 10 "$TIMEOUT" node "$f.mjs" 2>&1); code=$?
+  if [ $code = 124 ] || [ $code = 137 ]; then
+    printf "%-13s ⏱  卡住了，%s 秒还没跑完（改 SUITE_TIMEOUT 可以放宽）\n" "$f" "$TIMEOUT"
+    echo "$out" | tail -4 | sed 's/^/                /'
+    fail=1
+    continue
+  fi
   y=$(echo "$out" | grep -c '^✓'); n=$(echo "$out" | grep -c '^✗')
   if [ $code -ne 0 ] && [ "$n" = "0" ]; then
     printf "%-13s ✓%-3s 💥 脚本崩了（退出码 %s）\n" "$f" "$y" "$code"

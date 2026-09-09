@@ -1,7 +1,7 @@
 import pkg from 'playwright'
 const { chromium } = pkg
 import { makeState } from './seed.mjs'
-const URL='http://127.0.0.1:8765/index.html'
+const URL=process.env.DESK_URL ?? 'http://127.0.0.1:8765/index.html'
 const today=new Date().toISOString().slice(0,10)
 const b=await chromium.launch()
 for (const scheme of ['light','dark']) {

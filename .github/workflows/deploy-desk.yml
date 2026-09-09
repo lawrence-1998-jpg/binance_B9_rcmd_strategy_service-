@@ -99,6 +99,10 @@ jobs:
   # 也就是说「全绿」除了那次会话谁都复现不了。搬进仓库之后它得真的挡住合并。
   test:
     runs-on: ubuntu-latest
+    # 兜底的兜底。run-all.sh 里每条套件已经有 180 秒上限，
+    # 但万一是 runner 本身或 npm 卡住，那个上限管不到 ——
+    # 而没有这一行的话，一次挂死会一路烧到 GitHub 的 6 小时上限。
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
 
@@ -120,6 +124,10 @@ jobs:
       - name: 跑全套（31 个套件）
         working-directory: desk
         run: npm test
+        env:
+          # 本机最慢的一条也就几十秒；给到 180 秒，卡住的会被单独标出来，
+          # 而不是把整个 job 拖死
+          SUITE_TIMEOUT: '180'
 
       - name: 失败时把截图捞出来
         if: failure()
