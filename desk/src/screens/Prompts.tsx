@@ -63,7 +63,13 @@ export function Prompts({ onClose, toast }: { onClose: () => void; toast: (t: st
   const uses = useStore((x) => x.promptUses)
   const [view, setView] = useState<View>({ kind: 'list' })
   const [q, setQ] = useState('')
-  const [cat, setCat] = useState<string | null>(null)
+  // 记住上次筛的那一类。
+  // 她一天开好几次这一屏，多半奔着同一类去（调研 / 写东西），
+  // 而「全部」是 40 条 5.5 屏 —— 每次回到顶上重新翻一遍，
+  // 等于这个工具不记事。跟下面那句「零件记住比每次重选强」是同一个道理。
+  // 搜索词不记：那是一次性的查询，留着只会挡住下一次。
+  const cat = useStore((x) => x.promptCat)
+  const setCat = (c: string | null) => update((x) => ({ ...x, promptCat: c }))
   /** 占位符填的内容。不落盘 —— 这是每次的具体内容，不是设置 */
   const [fills, setFills] = useState<Record<string, string>>({})
   const picked = useStore((x) => x.promptParts)
