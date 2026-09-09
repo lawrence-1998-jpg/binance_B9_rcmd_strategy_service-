@@ -90,15 +90,51 @@ export interface Engagement {
  * 因为这些数字最终会出现在给客户的材料里。到那个时候，
  * 「15%」和「某篇 2023 年的媒体报道说约 15%，中等置信」是两回事。
  */
+export type Conf = 'high' | 'mid' | 'low'
+
 export interface Fact {
   id: string
   value: string                 // 数字或事实本身：「约 15%」「2021 年上线」
   what: string                  // 它到底是什么
-  source: string                // 出处。空着就是没出处，材料里会照实说
-  confidence: 'high' | 'mid' | 'low'
+  /**
+   * 出处，可以有好几条。
+   *
+   * 以前这里是单数的 `source: string` —— 而 prompt.ts 里发出去的硬约束
+   * 明明写着「每个关键结论至少找 **2 个独立来源**交叉验证」。
+   * 也就是说 App 存不下它自己要求的东西：模型照做了、找了两个来源，
+   * 她也只能挑一个抄进来。
+   */
+  sources: string[]
+  /**
+   * 她手动往下压的档。
+   *
+   * 置信度默认由出处条数推出来（见 confOf）——「支撑的证据越多，
+   * 这个结论越可信」是原子化研究里的通行做法，业内工具也是这么算的，
+   * 而不是让人自己打分。
+   *
+   * 但**只能往下压，不能往上抬**：她可能知道某个来源不靠谱（软文、
+   * 二手转述），那是真信息，得让她表达；而「没出处但我觉得挺准」
+   * 不是信息，是拍脑袋 —— 跟已经砍掉的「拍脑袋填的 62% 进度」同一个病。
+   */
+  lowered?: Conf
 }
 
-export const CONFIDENCE: { key: Fact['confidence']; label: string }[] = [
+const RANK: Record<Conf, number> = { low: 0, mid: 1, high: 2 }
+
+/** 光看出处条数该是几档 */
+export function confFromSources(sources: string[]): Conf {
+  const n = sources.filter((x) => x.trim()).length
+  return n >= 2 ? 'high' : n === 1 ? 'mid' : 'low'
+}
+
+/** 这条数据最终算几档：推出来的档，再让她往下压（压不上去） */
+export function confOf(f: Fact): Conf {
+  const d = confFromSources(f.sources ?? [])
+  if (!f.lowered) return d
+  return RANK[f.lowered] < RANK[d] ? f.lowered : d
+}
+
+export const CONFIDENCE: { key: Conf; label: string }[] = [
   { key: 'high', label: '高' },
   { key: 'mid',  label: '中' },
   { key: 'low',  label: '低' },

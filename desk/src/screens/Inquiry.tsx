@@ -1,13 +1,13 @@
 import { useState } from 'react'
 import { update, useStore, uid } from '../lib/store'
 import {
-  CONFIDENCE, stagesFor, stageOf,
-  type Fact, type Inquiry as Q, type Engagement, type Kind,
+  CONFIDENCE, confFromSources, confOf, stagesFor, stageOf,
+  type Conf, type Fact, type Inquiry as Q, type Engagement, type Kind,
 } from '../lib/types'
 import { buildPrompt, buildInterviewGuide } from '../lib/prompt'
 import { copyText } from '../lib/copy'
 import { askConfirm } from '../lib/confirm'
-import { GrowText, Section, Segmented } from '../components/ui'
+import { Chip, GrowText, Section, Segmented } from '../components/ui'
 import { IcClose, IcCopy, IcTrash } from '../components/icons'
 
 /**
@@ -281,15 +281,21 @@ function Keywords({ q, patch, all }: { q: Q; patch: (p: Partial<Q>) => void; all
  * 因为这些数字最后会出现在给客户的材料里。到那时候，
  * 「15%」和「某篇 2023 年报道说约 15%，中等置信」是两回事。
  */
+/** 只让她往下压，所以要能比大小 */
+const RANKV: Record<Conf, number> = { low: 0, mid: 1, high: 2 }
+
 function Facts({ q, patch, toast }: { q: Q; patch: (p: Partial<Q>) => void; toast: (t: string) => void }) {
   const list = q.facts ?? []
   const [open, setOpen] = useState(false)
-  const [f, setF] = useState<Omit<Fact, 'id'>>({ value: '', what: '', source: '', confidence: 'mid' })
+  const BLANK: Omit<Fact, 'id'> = { value: '', what: '', sources: [''] }
+  const [f, setF] = useState<Omit<Fact, 'id'>>(BLANK)
+  const derived = confFromSources(f.sources)
 
   function save() {
     if (!f.value.trim() || !f.what.trim()) return
-    patch({ facts: [...list, { ...f, id: uid() }] })
-    setF({ value: '', what: '', source: '', confidence: 'mid' })
+    const sources = f.sources.map((x) => x.trim()).filter(Boolean)
+    patch({ facts: [...list, { ...f, sources, id: uid() }] })
+    setF(BLANK)
     setOpen(false)
     toast('记下了')
   }
@@ -302,8 +308,8 @@ function Facts({ q, patch, toast }: { q: Q; patch: (p: Partial<Q>) => void; toas
           <div key={x.id} className="fact">
             <div className="fact-h">
               <span className="fact-v">{x.value}</span>
-              <span className={`fact-c c-${x.confidence}`}>
-                {CONFIDENCE.find((c) => c.key === x.confidence)?.label} 置信
+              <span className={`fact-c c-${confOf(x)}`}>
+                {CONFIDENCE.find((c) => c.key === confOf(x))?.label} 置信
               </span>
               <button type="button" className="tap-del" aria-label="删掉这条数据"
                 onClick={() => askConfirm({
@@ -315,8 +321,9 @@ function Facts({ q, patch, toast }: { q: Q; patch: (p: Partial<Q>) => void; toas
               </button>
             </div>
             <p className="fact-w">{x.what}</p>
-            <p className={`fact-s${x.source.trim() ? '' : ' none'}`}>
-              {x.source.trim() || '没有出处 —— 材料里会照实标出来'}
+            <p className={`fact-s${(x.sources ?? []).some((y) => y.trim()) ? '' : ' none'}`}>
+              {(x.sources ?? []).map((y) => y.trim()).filter(Boolean).join('；') || '没有出处 —— 材料里会照实标出来'}
+              {x.lowered && <span className="fact-low"> · 你手动压低了</span>}
             </p>
           </div>
         ))}
@@ -329,15 +336,40 @@ function Facts({ q, patch, toast }: { q: Q; patch: (p: Partial<Q>) => void; toas
             <input className="field" style={{ marginTop: 'var(--s2)' }} value={f.what} aria-label="它是什么"
               placeholder="它是什么？比如「作者流量反馈的流量占比」"
               onChange={(e) => setF({ ...f, what: e.target.value })} />
-            <input className="field" style={{ marginTop: 'var(--s2)' }} value={f.source} aria-label="出处"
-              placeholder="哪儿来的？没有就空着，材料里会照实说"
-              onChange={(e) => setF({ ...f, source: e.target.value })} />
-            <div style={{ marginTop: 'var(--s3)' }}>
-              <Segmented
-                value={f.confidence}
-                options={CONFIDENCE.map((c) => ({ key: c.key, label: c.label }))}
-                onChange={(c) => setF({ ...f, confidence: c })}
-              />
+            {/* 出处可以有好几条 —— prompt 里要求「至少 2 个独立来源交叉验证」，
+                这里就得存得下两个 */}
+            {f.sources.map((src, i) => (
+              <input key={i} className="field" style={{ marginTop: 'var(--s2)' }} value={src}
+                aria-label={i === 0 ? '出处' : `第 ${i + 1} 个出处`}
+                placeholder={i === 0 ? '哪儿来的？没有就空着，材料里会照实说' : '另一个独立来源'}
+                onChange={(e) => setF({ ...f, sources: f.sources.map((y, j) => (j === i ? e.target.value : y)) })} />
+            ))}
+            {f.sources.length < 4 && (
+              <button type="button" className="btn quiet small wide" style={{ marginTop: 'var(--s2)' }}
+                onClick={() => setF({ ...f, sources: [...f.sources, ''] })}>
+                ＋ 再加一个出处
+              </button>
+            )}
+
+            {/* 置信度是算出来的，不是选出来的。
+                业内做法是让证据的数量决定置信度，而不是让人自己打分 ——
+                手选的置信度跟「拍脑袋填的 62% 进度」是同一个病。 */}
+            <div className="conf-box" style={{ marginTop: 'var(--s3)' }}>
+              <p className="conf-h">
+                按 {f.sources.filter((x) => x.trim()).length} 个出处算：
+                <b className={`fact-c c-${derived}`} style={{ marginLeft: 6 }}>
+                  {CONFIDENCE.find((c) => c.key === derived)?.label} 置信
+                </b>
+              </p>
+              <p className="conf-w">两个及以上独立来源＝高，一个＝中，没有＝低。只能往下压，抬不上去。</p>
+              <div className="chips" style={{ marginTop: 'var(--s2)' }}>
+                {CONFIDENCE.filter((c) => c.key !== derived && RANKV[c.key] < RANKV[derived]).map((c) => (
+                  <Chip key={c.key} tap on={f.lowered === c.key}
+                    onClick={() => setF({ ...f, lowered: f.lowered === c.key ? undefined : c.key })}>
+                    压到「{c.label}」
+                  </Chip>
+                ))}
+              </div>
             </div>
             <div style={{ display: 'flex', gap: 'var(--s2)', marginTop: 'var(--s3)' }}>
               <button type="button" className="btn small" style={{ flex: 1 }}

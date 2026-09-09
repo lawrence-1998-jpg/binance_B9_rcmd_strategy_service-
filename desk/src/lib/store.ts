@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from 'react'
-import type { State } from './types'
+import type { Conf, Inquiry, State } from './types'
+import { confFromSources } from './types'
 import { seed, empty } from './seed'
 
 const KEY = 'deskside.v1'
@@ -77,7 +78,7 @@ function merge(p: Partial<State>): State {
     tasks: arr(p.tasks, base.tasks),
     notes: arr(p.notes, base.notes),
     engagements: arr(p.engagements, base.engagements),
-    inquiries: arr(p.inquiries, []),
+    inquiries: arr<Inquiry>(p.inquiries, []).map(migrateFacts),
     meetings: arr(p.meetings, base.meetings),
     anniversaries: arr(p.anniversaries, base.anniversaries),
     wishes: arr(p.wishes, base.wishes),
@@ -136,6 +137,36 @@ const failSubs = new Set<(f: boolean) => void>()
 export function onPersistFail(f: (failed: boolean) => void) {
   failSubs.add(f)
   return () => { failSubs.delete(f) }
+}
+
+
+/**
+ * 老数据里每条 Fact 只有一个 `source` 和一个**手选**的 confidence。
+ * 现在置信度是从出处条数推出来的（见 types.ts confOf），所以要翻译：
+ *
+ * - `source` 非空 → `sources: [source]`；空 → `[]`
+ * - 她当年**往下压**的档留着（那是真信息：她知道某个来源不靠谱）
+ * - 她当年**往上抬**的档丢掉 —— 「没出处但我觉得挺准」不是信息，是拍脑袋
+ *
+ * 所以迁移之后，一条没出处却被标成「高置信」的老数据会变成「低」。
+ * 这是有意的：那个「高」本来就没有任何东西撑着。
+ */
+function migrateFacts (q: Inquiry): Inquiry {
+  const facts = q.facts
+  if (!Array.isArray(facts)) return q
+  const RANK: Record<string, number> = { low: 0, mid: 1, high: 2 }
+  return {
+    ...q,
+    facts: facts.map((f) => {
+      const old = f as unknown as { source?: string; confidence?: Conf; sources?: string[]; lowered?: Conf }
+      if (Array.isArray(old.sources)) return f            // 已经是新结构
+      const sources = old.source?.trim() ? [old.source.trim()] : []
+      const derived = confFromSources(sources)
+      const picked = old.confidence
+      const lowered = picked && RANK[picked] < RANK[derived] ? picked : undefined
+      return { id: f.id, value: f.value, what: f.what, sources, ...(lowered ? { lowered } : {}) }
+    }),
+  }
 }
 
 function persist() {

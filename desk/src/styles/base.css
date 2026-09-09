@@ -740,8 +740,22 @@ button.kw:active { background: var(--line-2); }
 }
 .fade-t { font-size: var(--t-meta); color: var(--ink-2); }
 .fade-a { display: flex; gap: var(--s2); flex: 0 0 auto; }
-/* 按钮得看出来是按钮。
-   .btn.quiet 的底色本来就是 --well，而这个提示框的底也是 --well ——
-   两个按钮跟自己的底融成一片，读起来就是两行粗体字，根本不像能点。 */
-.fade-offer .btn.quiet { background: var(--card); }
+/* ⚠️ 这是一条会反复踩的坑，写在这儿：
+   `.chip` 和 `.btn.quiet` 的默认底色都是 --well。
+   把它们放进一个**底色也是 --well** 的容器里（.fade-offer / .conf-box
+   这类内嵌槽），控件就跟自己的底融成一片 —— 看起来是几行粗体字，
+   根本不像能点。两次都是截图才发现的，测试全绿也照样漏。
+
+   规矩：任何坐在 --well 上的控件，底色改 --card。 */
+.fade-offer .btn.quiet,
+.conf-box .chip { background: var(--card); }
 .fade-offer .btn.quiet:active { background: var(--line-2); }
+.conf-box .chip.on { background: var(--night); color: var(--on-night); }
+
+/* ---- 置信度是算出来的那一块 ----
+   刻意把「怎么算的」写在旁边：这条规则只有她知道了才站得住，
+   否则下次她就会想「为什么我不能选高」。 */
+.conf-box { background: var(--well); border-radius: var(--r-inner); padding: 11px var(--s3); }
+.conf-h { margin: 0; font-size: var(--t-body); color: var(--ink); display: flex; align-items: center; flex-wrap: wrap; }
+.conf-w { margin: 4px 0 0; font-size: var(--t-meta); color: var(--ink-2); line-height: 1.5; }
+.fact-low { color: var(--ink-2); }

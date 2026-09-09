@@ -48,9 +48,14 @@ export function makeState (todayKey) {
         conclusion:'出现过，抖音的解法是把流量反馈前置到发布后 2 小时内，先给一个确定性的小曝光。',
         keywords:['作者流失','流量反馈','冷启动曝光','腰部作者'],
         facts:[
-          { value:'约 15%', what:'2021 年腰部作者季度投稿量环比降幅', source:'抖音创作者生态报告 2021Q3', confidence:'mid' },
-          { value:'2 小时', what:'发布后首次流量反馈的时间窗', source:'', confidence:'low' },
-          { value:'2021 年 9 月', what:'创作者激励改版上线时间', source:'公开发布会实录', confidence:'high' },
+          // 两个独立来源 → 推出来就是「高」
+          { value:'约 15%', what:'2021 年腰部作者季度投稿量环比降幅',
+            sources:['抖音创作者生态报告 2021Q3','36氪 2021-10 报道'] },
+          // 一个都没有 → 低
+          { value:'2 小时', what:'发布后首次流量反馈的时间窗', sources:[] },
+          // 一个来源 → 中；她知道这个来源是二手转述，手动压到低
+          { value:'2021 年 9 月', what:'创作者激励改版上线时间',
+            sources:['公开发布会实录'], lowered:'low' },
         ],
         createdAt:Date.now()-86400000*3, updatedAt:Date.now()-3600000 },
       // 访谈那条路，走到一半
