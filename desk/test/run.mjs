@@ -56,7 +56,18 @@ if (!process.env.DESK_URL) {
       res.end(buf)
     } catch { res.writeHead(404); res.end('nope') }
   })
-  await new Promise((r) => server.listen(PORT, '127.0.0.1', r))
+  await new Promise((ok, no) => {
+    // 端口被占是最常见的一种失败，别甩一堆栈给人看
+    server.once('error', (e) => {
+      if (e.code === 'EADDRINUSE') {
+        console.error(`端口 ${PORT} 被占了。换一个：DESK_PORT=8766 npm test`)
+        console.error(`或者指着已经跑起来的那份：DESK_URL=http://127.0.0.1:${PORT}/index.html npm test`)
+        process.exit(2)
+      }
+      no(e)
+    })
+    server.listen(PORT, '127.0.0.1', ok)
+  })
   console.log(`· 服务起在 http://127.0.0.1:${PORT}`)
 }
 

@@ -1,4 +1,25 @@
-import { readCaptureDate } from '/tmp/exifmod.mjs'
+// 直接编译 App 真正在跑的那个模块来测。
+//
+// 原来这行是 `from '/tmp/exifmod.mjs'` —— 一份 2026-09-02 手抄的副本。
+// 两个后果，都很糟：
+//   ① 干净机器上那个文件根本不存在，CI 一跑就崩（就是这么被抓到的）；
+//   ② 更糟的是，就算它在，这 16 条断言测的也是**一份跟源码脱钩的副本**，
+//      源码怎么改它都照样绿 —— 又一种假绿，而且是最难发现的那种。
+// 现在用 esbuild 把 src/lib/exifdate.ts 现编译现导入，测的就是发出去的那段。
+import { build } from 'esbuild'
+import { mkdirSync, existsSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
+
+const SRC = fileURLToPath(new URL('../src/lib/exifdate.ts', import.meta.url))
+const OUTDIR = fileURLToPath(new URL('./shots', import.meta.url))
+if (!existsSync(SRC)) {
+  console.log(`✗ 找不到被测的源码 ${SRC} —— 这条测的是 App 真代码，不是副本`)
+  process.exit(1)
+}
+mkdirSync(OUTDIR, { recursive: true })
+const OUTFILE = `${OUTDIR}/_exifdate.mjs`
+await build({ entryPoints: [SRC], outfile: OUTFILE, format: 'esm', bundle: false, logLevel: 'silent' })
+const { readCaptureDate } = await import(`file://${OUTFILE}`)
 
 class FakeBlob {
   constructor(buf){ this.buf = Buffer.from(buf) }
@@ -61,3 +82,6 @@ for (const [name, blob, want] of cases) {
   console.log(`${ok?'✓':'✗'} ${name.padEnd(20)} → ${err?'抛异常: '+err:JSON.stringify(got)}  (${ms}ms)`)
 }
 console.log(`\n${bad?'✗ '+bad+' 项有问题':'✓ 全部通过：不崩、不死循环、坏输入一律返回 null'}`)
+// 单独跑的时候也得给出退出码。
+// 原来失败也退 0，批量跑靠数 ✗ 才变红 —— 单跑就看着像过了
+process.exit(bad ? 1 : 0)
