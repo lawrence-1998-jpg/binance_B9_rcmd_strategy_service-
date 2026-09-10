@@ -66,7 +66,20 @@ function peekRescue(): string | null {
  * 所以这两个嵌套对象单独再合一层，数组字段逐个兜底成数组。
  */
 function merge(p: Partial<State>): State {
-  const base = seed()
+  // 底座是 empty() 不是 seed()。
+  //
+  // merge 的两个调用点都是「她已经有数据了」：load() 读她存着的，
+  // importState() 恢复她的备份。这两种情况下少了个字段，意思都是
+  // 「这份存档比那个集合还老」或者「那时候她一条都没有」——
+  // **不是「该来点演示数据了」**。
+  //
+  // 以前用 seed() 当底座，于是一份缺字段的老备份恢复完，
+  // 「会员体系诊断 · 客户 A」「订往返机票」会当成她的数据出现在屏幕上：
+  // 不报错、不留空，凭空多出几个她从没建过的项目。
+  //
+  // 真正该给种子数据的是全新安装，而那条路根本不走这儿 ——
+  // load() 在 `!raw` 的时候直接 `return seed()`。
+  const base = empty()
   const arr = <T>(v: unknown, fallback: T[]): T[] => (Array.isArray(v) ? (v as T[]) : fallback)
   const obj = (v: unknown): Record<string, unknown> =>
     v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : {}
