@@ -2,6 +2,10 @@ import pkg from 'playwright'
 const OUT = new globalThis.URL('./shots', import.meta.url).pathname
 const { chromium, devices } = pkg
 const URL = process.env.DESK_URL ?? 'http://127.0.0.1:8765/index.html'
+// 同源判断要从 URL 推，不能写死端口。
+// 写死的话 DESK_PORT=8766 会让「本地的」也被判成外部请求、整页被 abort，
+// 套件直接崩在 goto 上。注意这儿必须用 globalThis.URL —— 上面那行把 URL 遮住了
+const ORIGIN = new globalThis.URL(URL).origin
 const t = (n, ok, note = '') => { console.log(`${ok ? '✓' : '✗'} ${n}${note ? ' — ' + note : ''}`); if (!ok) fail++ }
 let fail = 0
 
@@ -15,7 +19,7 @@ const outside = []
 // 除了本机的测试服务器，任何外部请求都算问题
 await ctx.route('**/*', (route, request) => {
   const u = request.url()
-  if (!u.startsWith('http://127.0.0.1:8765')) { outside.push(u); return route.abort() }
+  if (!u.startsWith(ORIGIN)) { outside.push(u); return route.abort() }
   return route.continue()
 })
 const pg = await ctx.newPage()

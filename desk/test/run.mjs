@@ -24,7 +24,7 @@ const PORT = Number(process.env.DESK_PORT ?? 8765)
 const DEFAULT = [
   'bottom', 'click', 'conf', 'fade', 'contrast-install', 'disabled', 'dlg', 'empty', 'exif', 'fills',
   'flow2', 'fonts', 'home', 'import-guard', 'install', 'ios', 'measure', 'measure-dark',
-  'messy', 'nextstep', 'parts', 'pend', 'pill', 'pixel', 'pmstate', 'private', 'prog', 'rescue',
+  'messy', 'nextstep', 'palette', 'parts', 'pend', 'pill', 'pixel', 'pmstate', 'private', 'prog', 'rescue',
   'review', 'shapes', 'single', 'stamp', 'swupdate', 'tabs', 'talk', 'tap', 'timeline',
   'upkeep', 'verify', 'verify-backup', 'walk2', 'walk3', 'zoom',
 ]
@@ -60,7 +60,9 @@ if (!process.env.DESK_URL) {
     // 端口被占是最常见的一种失败，别甩一堆栈给人看
     server.once('error', (e) => {
       if (e.code === 'EADDRINUSE') {
-        console.error(`端口 ${PORT} 被占了。换一个：DESK_PORT=8766 npm test`)
+        // 建议的端口要跟着 PORT 走。写死 8766 的话，
+        // 你照着提示做一次、8766 也被占上，它还会让你再试 8766
+        console.error(`端口 ${PORT} 被占了。换一个：DESK_PORT=${PORT + 1} npm test`)
         console.error(`或者指着已经跑起来的那份：DESK_URL=http://127.0.0.1:${PORT}/index.html npm test`)
         process.exit(2)
       }
@@ -72,7 +74,15 @@ if (!process.env.DESK_URL) {
 }
 
 const code = await new Promise((r) => {
-  const sh = spawn('bash', [join(HERE, 'run-all.sh'), ...list], { stdio: 'inherit', cwd: HERE })
+  // DESK_URL 必须往下传。
+  // 以前不传：DESK_PORT=8766 会把服务起在 8766，而每条套件里写的默认值
+  // 还是 8765 —— 于是服务在这头、套件敲另一头，31 条一起「脚本崩了」。
+  // 而端口被占时打印的那句提示，建议的正是 DESK_PORT=8766，
+  // 也就是说这个 App 在教人用一个不管用的办法。
+  const sh = spawn('bash', [join(HERE, 'run-all.sh'), ...list], {
+    stdio: 'inherit', cwd: HERE,
+    env: { ...process.env, DESK_URL: process.env.DESK_URL ?? `http://127.0.0.1:${PORT}/index.html` },
+  })
   sh.on('exit', r)
 })
 server?.close()
