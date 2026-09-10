@@ -89,6 +89,31 @@ await pg.locator('button:has-text("按题号分到各条")').click(); await pg.w
 const left = await pg.locator('.leftover').count()
 t('没归到题上的那段被摆出来了，没有悄悄扔掉', left > 0,
   left ? (await pg.locator('.leftover').innerText()).replace(/\n/g, ' ').slice(0, 40) : '没显示')
+
+// ---- 分完之后不能还能再分一次 ----
+//
+// 有「没归位的那段」时浮层会继续开着（本来就该开着，好让她看见）。
+// 但以前原文还留在输入框里、按钮也还能点，而这一步是**追加**不是覆盖 ——
+// 再点一下，同一批材料原样再追一遍，中间加条 ———：
+//
+//     ## 1. …⏎答案。⏎⏎———⏎⏎## 1. …⏎答案。
+//
+// 浮层不关本身就像「还没完」，toast 又一闪而过，手机上再点一下太正常了。
+const before = await pg.evaluate(() =>
+  JSON.parse(localStorage.getItem('deskside.v1')).inquiries.map((q) => (q.findings ?? '').length))
+t('分完之后输入框被清空了',
+  (await pg.locator('.sheet textarea').first().inputValue()) === '')
+t('分完之后「按题号分到各条」不能再点了',
+  !(await pg.locator('button:has-text("按题号分到各条")').isEnabled()))
+// 真去点一下，确认材料没有被追第二遍
+await pg.locator('button:has-text("按题号分到各条")').click({ timeout: 1500 }).catch(() => {})
+await pg.waitForTimeout(600)
+const after = await pg.evaluate(() =>
+  JSON.parse(localStorage.getItem('deskside.v1')).inquiries.map((q) => (q.findings ?? '').length))
+t('再点一次，材料长度一个字都没变（没有被追第二遍）',
+  JSON.stringify(before) === JSON.stringify(after), `${before} → ${after}`)
+t('这时候浮层还开着，剩下那段还看得见', await pg.locator('.leftover').count() > 0)
+
 await pg.locator('button:has-text("知道了，关掉")').click(); await pg.waitForTimeout(500)
 
 const rows = await card.locator('.qrow').allInnerTexts()

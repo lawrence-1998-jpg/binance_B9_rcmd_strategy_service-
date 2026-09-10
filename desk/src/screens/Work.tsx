@@ -320,7 +320,21 @@ export function Work({ toast, onPromptTool }: { toast: (t: string) => void; onPr
                   }))
                   setLeftover(r.rest || null)
                   toast(`分好了：${filled} 条填上${appended ? `，${appended} 条追加` : ''}`)
-                  if (!r.rest) { setPasteFor(null); setPasted('') }
+                  // 分完就把输入框清掉 —— **不管有没有剩下的那一段**。
+                  //
+                  // 有剩下的那段时浮层会继续开着（好让她看见没归位的内容），
+                  // 以前这种情况下原文还留在输入框里、按钮也还能点。
+                  // 而这一步是「追加」不是「覆盖」，所以再点一下，
+                  // 同一批材料会原样再追一遍，中间加条 ———：
+                  //
+                  //     ## 1. 一⏎答案一。⏎⏎———⏎⏎## 1. 一⏎答案一。
+                  //
+                  // 而浮层不关本身就像「还没完」，toast 又是一闪而过的，
+                  // 手机上再点一下太正常了。清空之后按钮自己就 disabled 了
+                  // （它本来就是 `disabled={!pasted.trim()}`），顺带也不用
+                  // 让她把同一段内容在输入框和「没归位」两个地方各看一遍。
+                  setPasted('')
+                  if (!r.rest) setPasteFor(null)
                 }}>
                 按题号分到各条
               </button>
