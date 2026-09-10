@@ -709,7 +709,13 @@ button.kw:active { background: var(--line-2); }
 
 /* 「点这张卡去别处」的通用样式：一行标题、一行说明、一个箭头。
    首页上的样例报告和复盘入口都用它 —— 别再给每个入口写一套 */
-.gocard { display: block; width: 100%; text-align: left; text-decoration: none; }
+/* color: inherit 不是可选项。
+   这张卡有两个版本：去复盘那张是 <button>，样例那张是 <a>。
+   button 从 body 继承墨色，<a> 不会 —— 它拿的是浏览器默认的链接蓝
+   （亮色 #0000EE / 暗色 #9E9EFF）。而 .card 自己不设 color，
+   于是同样两张卡、同样的 class，标题一个是墨色一个是蓝的。
+   这套配色里没有蓝。对比度还是过的，所以查对比度的那套测试看不见它 */
+.gocard { display: block; width: 100%; text-align: left; text-decoration: none; color: inherit; }
 .gocard .row-s { display: block; margin-top: var(--s2); line-height: 1.6; }
 .gocard .row-s strong { color: var(--ink); }
 .gocard-go {

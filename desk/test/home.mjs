@@ -3,6 +3,9 @@ const { chromium, devices } = pkg
 import { makeState } from './seed.mjs'
 const URL = process.env.DESK_URL ?? 'http://127.0.0.1:8765/index.html'
 const OUT = new globalThis.URL('./shots', import.meta.url).pathname
+// 同源判断从 URL 推，别写死端口（写死了换端口就会把本地请求也 abort 掉，
+// 断网那一段会对着一张白页做断言 —— 假绿）。URL 被上面遮住了，用 globalThis.URL
+const ORIGIN = new globalThis.URL(URL).origin
 const today = new Date().toISOString().slice(0, 10)
 const t = (n, ok, note = '') => { console.log(`${ok ? '✓' : '✗'} ${n}${note ? ' — ' + note : ''}`); if (!ok) fail++ }
 let fail = 0
@@ -43,7 +46,7 @@ t('文案是对她说话，不是谈论她', !(await pg.locator('.screen').inner
 
 // 断网也要能打开 —— 她说过是在飞机上、地铁里用的
 const off = await ctx.newPage()
-await off.route('**/*', (route, req) => req.url().startsWith('http://127.0.0.1:8765') ? route.continue() : route.abort())
+await off.route('**/*', (route, req) => req.url().startsWith(ORIGIN) ? route.continue() : route.abort())
 await off.goto(URL, { waitUntil: 'load' }); await off.waitForTimeout(2500)
 await off.context().setOffline(true)
 const offRes = await off.evaluate(async () => {
