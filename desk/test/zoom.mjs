@@ -22,6 +22,7 @@ const NEEDS_16 = 'input:not([type=checkbox]):not([type=radio]):not([type=file]),
 
 const routes = [['#/today', '今日'], ['#/work', '工作'], ['#/life', '生活'], ['#/review', '复盘']]
 let bad = 0, total = 0
+const seen = {}
 
 async function scan(where) {
   const r = await pg.evaluate((sel) => {
@@ -61,14 +62,36 @@ for (const [open, name] of [
   [async () => { await pg.goto(URL + '#/today'); await pg.reload(); await pg.waitForTimeout(400); await pg.locator('.cap').click() }, '速记'],
   [async () => { await pg.goto(URL + '#/review'); await pg.reload(); await pg.waitForTimeout(400); await pg.locator('button[aria-label=设置]').click() }, '设置'],
   [async () => { await pg.goto(URL + '#/work'); await pg.reload(); await pg.waitForTimeout(400); await pg.locator('button[aria-label*=Prompt]').first().click() }, 'Prompt'],
+  // 提纲那三个格子在子页里，不在浮层首页 —— 以前一个都没扫到
+  [async () => {
+    await pg.goto(URL + '#/today'); await pg.reload(); await pg.waitForTimeout(400)
+    await pg.getByRole('button', { name: 'Prompt' }).last().click()
+    await pg.waitForTimeout(400)
+    await pg.locator('button.pitem', { hasText: '提纲 → 调研 Prompt' }).click()
+  }, 'Prompt·生成器'],
 ]) {
   await open().catch(() => {})
   await pg.waitForTimeout(500)
   const n = await scan(name)
+  seen[name] = n
   console.log(`${name}: 扫了 ${n} 个`)
 }
 
 console.log(`\n${bad === 0 ? '✓' : '✗'} 共 ${total} 个可输入控件，字号 < 16px 的 ${bad} 个`)
-console.log('页面错误:', errs.length ? errs.slice(0, 3) : '无')
+
+// ⚠️ `bad === 0` 只有在**真的扫到东西**的时候才有意义。
+// 选择器写错、某个浮层没打开（下面那几步都带 .catch 吞异常），
+// 扫到 0 个控件时 bad 也是 0 —— 一条凭空通过的断言。
+// 所以把「扫到了多少」也钉住。
+let fail = bad
+const t = (n, ok, note = '') => { console.log(`${ok ? '✓' : '✗'} ${n}${note ? ' — ' + note : ''}`); if (!ok) fail++ }
+t(`整个 App 一共扫到了足够多的可输入控件`, total >= 15, `扫到 ${total} 个`)
+// 这三处是最容易「浮层没打开却照样通过」的地方，单独钉
+t('速记浮层里扫到了输入框', (seen['速记'] ?? 0) >= 1, `${seen['速记']} 个`)
+t('设置浮层里扫到了输入框', (seen['设置'] ?? 0) >= 1, `${seen['设置']} 个`)
+t('Prompt 生成器子页里扫到了那三个格子',
+  (seen['Prompt·生成器'] ?? 0) >= 3, `${seen['Prompt·生成器']} 个`)
+t('没有页面报错', errs.length === 0, errs.slice(0, 2).join(' | '))
+
 await b.close()
-process.exit(bad === 0 ? 0 : 1)
+process.exit(fail === 0 ? 0 : 1)
