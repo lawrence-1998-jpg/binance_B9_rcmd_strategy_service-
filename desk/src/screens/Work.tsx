@@ -143,9 +143,15 @@ export function Work({ toast, onPromptTool }: { toast: (t: string) => void; onPr
                       chip 本来就在报同一个「1 / 3」，等于同一个数隔着 130px
                       说两遍，把真正该在这儿的那句话顶掉了。
                       下一步没写，才退回去报进度。 */}
+                  {/* 兜底那句不许跟右上角的 chip 重样。
+                      还没拆提纲时 chip 已经写着「还没拆」了，这儿再写一遍
+                      「还没拆提纲」，就是同一句话隔着 130px 说两遍 ——
+                      正是上面那段注释要消灭的东西（我在把 chip 从假的
+                      「0%」换成「还没拆」的时候，把它又搞出来了一次）。
+                      这时候真正缺的是下一步，就说这个：她照着能动手。 */}
                   <span>{e.next
                     ? `下一步 ${e.next}`
-                    : (qOf(e.id).length ? `${done(e.id)} / ${qOf(e.id).length} 条有结论` : '还没拆提纲')}</span>
+                    : (qOf(e.id).length ? `${done(e.id)} / ${qOf(e.id).length} 条有结论` : '还没写下一步')}</span>
                   <span>{D.relTime(e.updatedAt)}</span>
                 </div>
               </button>

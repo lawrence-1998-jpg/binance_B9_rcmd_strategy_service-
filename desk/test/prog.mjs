@@ -25,6 +25,15 @@ const errs = []; pg.on('pageerror', e => errs.push(e.message))
 
 await pg.goto(APP)
 await pg.evaluate((s) => localStorage.setItem('deskside.v1', JSON.stringify(s)), makeState(today))
+// 加一张刚建好、下一步没填、提纲也没拆的卡片。
+// 这正是「＋ 加一件」之后的第一屏，也是唯一会让 chip 和小字重样的状态 ——
+// 不造出来的话，下面那条不重样的断言是凭空通过的
+await pg.evaluate(() => {
+  const s = JSON.parse(localStorage.getItem('deskside.v1'))
+  s.engagements.push({ id: 'zz', name: '刚加的一件', domain: 'consult', client: '',
+    stage: '刚开始', blocker: '', status: 'ok', next: '', updatedAt: Date.now() })
+  localStorage.setItem('deskside.v1', JSON.stringify(s))
+})
 await pg.goto(APP + '#/work'); await pg.reload(); await pg.waitForTimeout(700)
 
 // 每张 engagement 卡片：名字、chip 文字、进度条有没有、条走了多宽
@@ -35,8 +44,9 @@ async function cards () {
     if (!name) continue
     const chip = await c.locator('.chip').first().innerText().catch(() => null)
     const bars = await c.locator('[role=progressbar]').count()
+    const meta = await c.locator('div.row-s').first().innerText().catch(() => '')
     const aria = bars ? Number(await c.locator('[role=progressbar]').first().getAttribute('aria-valuenow')) : null
-    out.push({ name, chip, bars, aria })
+    out.push({ name, chip, bars, aria, meta })
   }
   return out
 }
@@ -53,6 +63,23 @@ for (const c of cs) {
   // 报了数就得有条，有条就得报数 —— 一张卡上不能一个说 45%、一个说 0
   t(`「${c.name}」chip 和进度条要么都报数、要么都不报`,
     reportsNumber === (c.bars > 0), `chip=${c.chip} 条=${c.bars}`)
+}
+
+// ---- 一张卡上不许把同一句话说两遍 ----
+//
+// 这条是被自己咬出来的：我在上一版把 chip 从假的「0%」换成「还没拆」，
+// 而卡片下面那行小字在同样的条件下写的是「还没拆提纲」——
+// 同一句话隔着 130px 说两遍。而 Work.tsx 里本来就有一段注释在讲
+// 这个坑（以前是 chip 和那行都报「1 / 3」），我等于把它又搞出来一次。
+//
+// 所以钉一条比「chip 该显示什么」更一般的：**chip 和那行小字不许重样。**
+for (const c of cs) {
+  const meta = c.meta ?? ''
+  const chip = (c.chip ?? '').trim()
+  // 「还没拆」vs「还没拆提纲」这种一个是另一个的前缀，也算重样
+  const dup = chip.length > 0 && meta.length > 0 &&
+    (meta.startsWith(chip) || chip.startsWith(meta.split(' ')[0]) && meta.includes(chip))
+  t(`「${c.name}」chip 和下面那行小字不重样`, !dup, `chip=${chip} 小字=${meta}`)
 }
 
 // ---- 拆过提纲的：数是真的，而且两处一致 ----
