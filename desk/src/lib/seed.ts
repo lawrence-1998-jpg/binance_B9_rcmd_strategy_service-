@@ -72,16 +72,14 @@ export function seed(): State {
       ],
     },
     logs: [],
-    promptDraft: {
-      outline: [
-        'UGC 投稿用户的流量下滑导致投稿流失，抖音有没有出现过，怎么解决的',
-        '抖音现在做作者流量反馈的流量占比大概有多少，是怎么做的',
-      ].join('\n'),
-      subject: '抖音',
-      context: '我在给一个 UGC 内容社区做投稿量下滑的诊断，要找可借鉴的做法。',
-      target: 'tooled',
-      depth: 'deep',
-    },
+    // 提纲这三格也要清干净，理由跟上面那个「国庆」一模一样：
+    // 它们是 `value=` 填进输入框的，不是 placeholder —— 清空全部数据之后
+    // 打开 Prompt 工具，会看到一份完整的「抖音 UGC 调研提纲」，
+    // 跟她自己写的草稿长得一模一样，而她从没写过。
+    // 三个格子本来就各有 placeholder（「一行一条」「比如：抖音」
+    // 「一句话说清你为什么问这个」），清掉反而露出来了。
+    // target / depth 是选项不是内容，留默认值。
+    promptDraft: { outline: '', subject: '', context: '', target: 'tooled', depth: 'deep' },
     photos: [],
     moments: [],
     entries: [],
@@ -104,16 +102,14 @@ export function empty(): State {
     // 用户就会在「清空全部数据」之后仍然看到一个自己从没设过的假期在倒数
     trip: { title: '', start: '', end: '', budget: 0, days: [], todos: [] },
     logs: [],
-    promptDraft: {
-      outline: [
-        'UGC 投稿用户的流量下滑导致投稿流失，抖音有没有出现过，怎么解决的',
-        '抖音现在做作者流量反馈的流量占比大概有多少，是怎么做的',
-      ].join('\n'),
-      subject: '抖音',
-      context: '我在给一个 UGC 内容社区做投稿量下滑的诊断，要找可借鉴的做法。',
-      target: 'tooled',
-      depth: 'deep',
-    },
+    // 提纲这三格也要清干净，理由跟上面那个「国庆」一模一样：
+    // 它们是 `value=` 填进输入框的，不是 placeholder —— 清空全部数据之后
+    // 打开 Prompt 工具，会看到一份完整的「抖音 UGC 调研提纲」，
+    // 跟她自己写的草稿长得一模一样，而她从没写过。
+    // 三个格子本来就各有 placeholder（「一行一条」「比如：抖音」
+    // 「一句话说清你为什么问这个」），清掉反而露出来了。
+    // target / depth 是选项不是内容，留默认值。
+    promptDraft: { outline: '', subject: '', context: '', target: 'tooled', depth: 'deep' },
     photos: [],
     moments: [],
     entries: [],
