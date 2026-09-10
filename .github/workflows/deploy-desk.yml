@@ -83,6 +83,33 @@ jobs:
             console.log('ok，内联脚本 '+(max/1024|0)+'KB');
           "
 
+      # 仓库里签着一份离线单文件版（web/desk/deskside-standalone.html），
+      # 给人「下载下来双击就能开」用的。它没有任何东西守着，于是**烂了九个 PR**：
+      # 上次更新停在 #30，#31–#39 全没进去 —— 谁拿它打开，看到的还是
+      # 「45% 配一根空条」「点关闭把整个 App 弹走」「备份丢日记」那个版本。
+      #
+      # 一个看起来是最新、其实不是的产物，比没有更糟 —— 跟这个 App 里
+      # 已经砍掉的那些假数字是同一个病。所以这里钉死：**它必须跟源码一致。**
+      #
+      # 注意这一步只在 desk/** 改动时才跑（见顶上的 paths），而那正是
+      # 让它过期的唯一原因，所以覆盖是够的。
+      - name: 仓库里那份离线版不许过期
+        run: |
+          if ! diff -q desk/dist/deskside-standalone.html web/desk/deskside-standalone.html >/dev/null 2>&1; then
+            echo "::error::web/desk/deskside-standalone.html 跟源码对不上了。"
+            echo ""
+            echo "这份文件是签进仓库、给人下载下来离线打开的。源码变了它没变，"
+            echo "别人打开看到的就是旧版本。跑这两条命令，然后把它一起提交："
+            echo ""
+            echo "    cd desk && npx vite build --config vite.config.single.ts && node scripts-postbuild-single.mjs"
+            echo "    cp desk/dist-single/index.html web/desk/deskside-standalone.html"
+            echo ""
+            diff <(wc -c < desk/dist/deskside-standalone.html) <(wc -c < web/desk/deskside-standalone.html) \
+              && echo "（大小一样，但内容不同）" || true
+            exit 1
+          fi
+          echo "ok，仓库里那份跟源码一致"
+
       # base 用的是相对路径（vite.config.ts 里 base: './'），
       # 所以不需要 actions/configure-pages 去算 URL，直接传产物即可。
       - uses: actions/upload-pages-artifact@v3
