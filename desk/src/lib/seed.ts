@@ -28,22 +28,22 @@ export function seed(): State {
       {
         id: id(), name: '会员体系诊断', domain: 'consult', client: '客户 A',
         stage: '访谈完成 · 正在写报告', blocker: '等客户给数据口径', status: 'warn',
-        progress: 62, next: '交初稿', nextDate: addDays(today, 4), updatedAt: Date.now() - 3600000,
+        next: '交初稿', nextDate: addDays(today, 4), updatedAt: Date.now() - 3600000,
       },
       {
         id: id(), name: '增长策略陪跑', domain: 'consult', client: '客户 B',
         stage: '第 3 次工作坊', blocker: '', status: 'ok',
-        progress: 45, next: '出工作坊纪要', nextDate: addDays(today, 1), updatedAt: Date.now() - 172800000,
+        next: '出工作坊纪要', nextDate: addDays(today, 1), updatedAt: Date.now() - 172800000,
       },
       {
         id: id(), name: '推荐位改版', domain: 'byte', client: '增长方向',
         stage: '需求评审中', blocker: '等设计终稿', status: 'warn',
-        progress: 40, next: '评审会', nextDate: addDays(today, 2), updatedAt: Date.now() - 5400000,
+        next: '评审会', nextDate: addDays(today, 2), updatedAt: Date.now() - 5400000,
       },
       {
         id: id(), name: 'Q4 OKR 对齐', domain: 'byte', client: '团队',
         stage: '草稿已发', blocker: '', status: 'ok',
-        progress: 75, next: '和 leader 一对一', nextDate: addDays(today, 3), updatedAt: Date.now() - 86400000,
+        next: '和 leader 一对一', nextDate: addDays(today, 3), updatedAt: Date.now() - 86400000,
       },
     ],
     inquiries: [],

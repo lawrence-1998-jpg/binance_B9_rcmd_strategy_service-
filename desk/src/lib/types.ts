@@ -56,7 +56,6 @@ export interface Engagement {
   stage: string          // 当前阶段
   blocker: string        // 卡在哪 —— 这是手机上真正想看的东西，空字符串表示不卡
   status: Status
-  progress: number       // 0–100
   next: string           // 下一个动作
   nextDate?: string      // YYYY-MM-DD
   updatedAt: number

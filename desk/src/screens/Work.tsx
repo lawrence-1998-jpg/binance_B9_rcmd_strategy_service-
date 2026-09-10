@@ -36,7 +36,7 @@ export function Work({ toast, onPromptTool }: { toast: (t: string) => void; onPr
       ...x,
       engagements: [...x.engagements, {
         id: uid(), name: n, domain: line, client: client.trim() || undefined,
-        stage: '刚开始', blocker: '', status: 'ok', progress: 0,
+        stage: '刚开始', blocker: '', status: 'ok',
         next: '', updatedAt: Date.now(),
       }],
     }))
@@ -109,7 +109,12 @@ export function Work({ toast, onPromptTool }: { toast: (t: string) => void; onPr
                     <span className="row-t">{e.name}</span>
                     <span className="row-s">{e.client ? `${e.client} · ` : ''}{e.stage}</span>
                   </span>
-                  <Chip tone={line}>{qOf(e.id).length ? `${done(e.id)} / ${qOf(e.id).length}` : `${e.progress}%`}</Chip>
+                  {/* 没拆提纲时报的是「状态」，不是「数」。
+                      以前这儿是 `{e.progress}%` —— 一个手填的数，而它正下方那根
+                      进度条走的是 pct()＝有结论条数/总条数，没拆提纲时恒等于 0。
+                      于是同一张卡片上边写「45%」、下边一根空条，自己打自己。
+                      截图看出来的，389 条断言一条都没碰过它。 */}
+                  <Chip tone={line}>{qOf(e.id).length ? `${done(e.id)} / ${qOf(e.id).length}` : '还没拆'}</Chip>
                 </div>
 
                 {/* 卡点是这一屏真正的主角，不是进度 */}
@@ -122,9 +127,14 @@ export function Work({ toast, onPromptTool }: { toast: (t: string) => void; onPr
                   {e.blocker ? `卡在：${e.blocker}` : '没卡住'}
                 </p>
 
-                <div style={{ marginTop: 'var(--s3)' }}>
-                  <Progress value={pct(e.id)} color={DOMAINS[line].color} />
-                </div>
+                {/* 没拆提纲就不画条。空条不是「0%」，是「没有可量的东西」——
+                    而一根空条读起来就是「一点没做」，对一个已经开到第 3 次
+                    工作坊的项目来说那是句假话。有调研线才有真分母 */}
+                {qOf(e.id).length > 0 && (
+                  <div style={{ marginTop: 'var(--s3)' }}>
+                    <Progress value={pct(e.id)} color={DOMAINS[line].color} />
+                  </div>
+                )}
 
                 <div className="row-s" style={{ display: 'flex', justifyContent: 'space-between', marginTop: 'var(--s2)' }}>
                   {/* 「下一步」优先。
@@ -181,17 +191,10 @@ export function Work({ toast, onPromptTool }: { toast: (t: string) => void; onPr
                     onChange={(ev) => patch(e.id, { next: ev.target.value })}
                   />
 
-                  {qOf(e.id).length === 0 && (<>
-                  {/* 只在还没拆提纲时才手填。拆了之后进度 = 有结论条数 / 总条数，
-                      那个数是真的；再留一个手填的滑块只会和它打架 */}
-                  <p className="eyebrow" style={{ marginTop: 'var(--s4)' }}>进度 {e.progress}%</p>
-                  <input
-                    type="range" min={0} max={100} step={5} value={e.progress}
-                    style={{ width: '100%', marginTop: 'var(--s2)', accentColor: DOMAINS[line].color }}
-                    onChange={(ev) => patch(e.id, { progress: Number(ev.target.value) })}
-                    aria-label="进度"
-                  />
-                  </>)}
+                  {/* 这儿原本有一个 0–100 的手填进度滑块。拿掉了：
+                      「没拆提纲但我觉得做了 45%」跟「没出处但我觉得挺准」是同一个病，
+                      而后者在置信度那一版已经判过了。卡片上真正说得出话的是
+                      阶段、卡点、下一步、多久没动 —— 四个都是真的，不缺这个数。 */}
 
                   <div style={{ display: 'flex', gap: 'var(--s2)', marginTop: 'var(--s4)' }}>
                     <button type="button" className="btn quiet small" style={{ flex: 1 }}
