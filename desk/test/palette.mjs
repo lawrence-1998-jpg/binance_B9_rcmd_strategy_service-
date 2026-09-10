@@ -24,15 +24,21 @@ const today = new Date().toISOString().slice(0,10)
 let fail = 0
 const t = (n, ok, note='') => { console.log(`${ok?'✓':'✗'} ${n}${note?' — '+note:''}`); if(!ok) fail++ }
 
-// 七个屏幕状态，两套配色。tab 也要走到 —— 不同 tab 有不同的域色
+// 七个屏幕状态，两套配色。
+//
+// ⚠️ 分段控件的 tab 是组件内部 state，**不吃 URL 参数**。
+// 第一版这里写的是 `#/work?tab=byte` / `#/life?tab=trip` /
+// `#/review?tab=timeline` —— 那三个参数一个都不起作用，
+// 于是「七个屏幕状态」实际上是四个屏，其中三个被原地扫了两遍。
+// 断言是真的，覆盖面是虚的。要切 tab 就得去点那个按钮。
 const ROUTES = [
-  ['今日', '#/today'],
-  ['工作·咨询', '#/work'],
-  ['工作·字节', '#/work?tab=byte'],
-  ['生活·我们俩', '#/life'],
-  ['生活·国庆', '#/life?tab=trip'],
-  ['复盘·今天', '#/review'],
-  ['复盘·时间轴', '#/review?tab=timeline'],
+  ['今日', '#/today', null],
+  ['工作·咨询', '#/work', null],
+  ['工作·字节', '#/work', '字节产品'],
+  ['生活·我们俩', '#/life', null],
+  ['生活·假期', '#/life', /国庆|假期/],
+  ['复盘·今天', '#/review', null],
+  ['复盘·时间轴', '#/review', '时间轴'],
 ]
 
 const SCAN = () => {
@@ -78,8 +84,12 @@ for (const scheme of ['light', 'dark']) {
 
   let totalScanned = 0
   let paletteSize = 0
-  for (const [label, hash] of ROUTES) {
+  for (const [label, hash, tab] of ROUTES) {
     await pg.goto(APP + hash); await pg.reload(); await pg.waitForTimeout(700)
+    if (tab) {
+      await pg.getByRole('button', { name: tab }).first().click()
+      await pg.waitForTimeout(500)
+    }
     const r = await pg.evaluate(SCAN)
     paletteSize = r.legal
     totalScanned += r.scanned

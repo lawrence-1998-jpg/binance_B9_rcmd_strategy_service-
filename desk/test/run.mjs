@@ -24,7 +24,7 @@ const PORT = Number(process.env.DESK_PORT ?? 8765)
 const DEFAULT = [
   'bottom', 'click', 'coldsheet', 'conf', 'fade', 'contrast-install', 'disabled', 'dlg', 'empty', 'exif', 'fills',
   'flow2', 'fonts', 'home', 'import-guard', 'install', 'ios', 'measure', 'measure-dark',
-  'messy', 'nextstep', 'palette', 'parts', 'pend', 'pill', 'pixel', 'pmstate', 'private', 'prog', 'rescue',
+  'messy', 'nextstep', 'palette', 'partial', 'parts', 'pend', 'pill', 'pixel', 'pmstate', 'private', 'prog', 'rescue',
   'review', 'shapes', 'single', 'stamp', 'swupdate', 'tabs', 'talk', 'tap', 'timeline',
   'upkeep', 'verify', 'verify-backup', 'walk2', 'walk3', 'zoom',
 ]
