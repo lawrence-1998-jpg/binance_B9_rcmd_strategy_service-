@@ -121,7 +121,7 @@ jobs:
         working-directory: desk
         run: npx playwright install --with-deps chromium
 
-      - name: 跑全套（36 个套件）
+      - name: 跑全套（37 个套件）
         working-directory: desk
         run: npm test
         env:

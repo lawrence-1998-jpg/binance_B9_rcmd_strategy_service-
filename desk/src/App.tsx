@@ -29,6 +29,29 @@ export function App() {
   useEffect(() => onPersistFail(setStorageBroken), [])
 
   /**
+   * 冷启动时先把 hash 里挂着的 `?sheet=…` 抹掉。
+   *
+   * 浮层状态只在 hashchange 里读，**初次挂载不读** —— 所以 App 被系统杀掉时
+   * 如果正开着速记（hash 停在 `#/today?sheet=capture`），从桌面图标重开就是：
+   * 屏幕上没有浮层，而 URL 说有。
+   *
+   * 光是对不上还不算什么，真正咬人的是下一步：这时候点 ＋ 开速记，
+   * `location.hash` 要写的值**跟现在一模一样**，赋值不触发跳转、
+   * history 里不会多出一格；而 closeSheet 走的是 `history.back()`，
+   * 于是那一下弹掉的是 App 自己 —— 实测直接落到 about:blank。
+   * 主屏 PWA 是 standalone 窗口，没有浏览器返回键，她只能杀掉重进。
+   *
+   * 抹掉就行，不用把浮层恢复出来：草稿本来就没存，恢复出来也是个空壳，
+   * 而「重开 App 弹出一个空速记框」比直接回到今日更奇怪。
+   * 用 replaceState：不触发 hashchange，也不往 history 里加东西。
+   */
+  useEffect(() => {
+    if (location.hash.includes('sheet=')) {
+      history.replaceState(null, '', `#/${readHash()}`)
+    }
+  }, [])
+
+  /**
    * 自己写的 hash 路由：五个屏不值得引一个路由库，
    * 而且 hash 路由在 file:// 下也能用（桌面快捷方式直接打开 dist/index.html）。
    *

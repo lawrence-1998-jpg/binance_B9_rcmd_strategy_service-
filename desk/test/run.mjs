@@ -22,7 +22,7 @@ const PORT = Number(process.env.DESK_PORT ?? 8765)
 // migrate 不在里面 —— 它要拿两个历史版本的构建产物当基线（见文件顶部），
 // 那是本地专用的，缺基线时它会直接报错而不是悄悄跳过。
 const DEFAULT = [
-  'bottom', 'click', 'conf', 'fade', 'contrast-install', 'disabled', 'dlg', 'empty', 'exif', 'fills',
+  'bottom', 'click', 'coldsheet', 'conf', 'fade', 'contrast-install', 'disabled', 'dlg', 'empty', 'exif', 'fills',
   'flow2', 'fonts', 'home', 'import-guard', 'install', 'ios', 'measure', 'measure-dark',
   'messy', 'nextstep', 'palette', 'parts', 'pend', 'pill', 'pixel', 'pmstate', 'private', 'prog', 'rescue',
   'review', 'shapes', 'single', 'stamp', 'swupdate', 'tabs', 'talk', 'tap', 'timeline',
