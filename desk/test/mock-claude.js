@@ -2,7 +2,8 @@
  * 假的 claude.ai 运行时：在浏览器里装一个 window.claude，让测试能在本地把
  * 「在 claude.ai 里打开」那条路完整走一遍。
  *
- *   sample.json —— 假 Claude。按原文里的关键词回一张固定的卡；
+ *   sample      —— 「问一问」：按提示里的卡片回答，带 [编号]，分几段流出来（onText）。
+ *   sample.json —— 假 Claude。按原文里的关键词回一张固定的卡；带图就当读截图；
  *                  window.__mock.fail = 'not_granted' | 'rate_limited' | 'invalid_json' … 让它按那种方式失败。
  *                  window.__mock.calls 记着每一次调用（带 modelTier），测试拿来核对。
  *   db          —— 假数据库。路径、文档奇偶、update 必须先存在、onSnapshot 推送，
@@ -12,7 +13,7 @@
  * 用法：page.addInitScript({ path: 'test/mock-claude.js' })
  */
 (() => {
-  const M = (window.__mock = window.__mock || { fail: null, delay: 350, calls: [], writes: [] })
+  const M = (window.__mock = window.__mock || { fail: null, askFail: null, noImages: false, delay: 350, calls: [], asks: [], writes: [] })
   const KEY = '__mockdb'
   const load = () => { try { return JSON.parse(sessionStorage.getItem(KEY) || '{}') } catch { return {} } }
   let docs = load()
@@ -74,15 +75,42 @@
   ]
   const FALLBACK = { kind: 'note', title: '一条笔记', summary: '一段随手记下的内容。', fields: [], todos: [], tags: ['笔记'], prompt: '帮我提炼这段内容的要点。' }
 
+  // 读截图：图里「写着」一条报价
+  const SHOT = { raw: '报价单\n年费版 ¥36,000/年（含 20 席）\n有效期至 10 月 15 日', kind: 'data', title: '年费报价截图', summary: '20 席年费 3.6 万，10 月 15 日前有效。', fields: [{ label: '年费', value: '¥36,000/年' }, { label: '有效期', value: '10 月 15 日' }], todos: [], tags: ['报价'], prompt: '帮我判断这份报价贵不贵。' }
+
   async function json(input, opts = {}) {
-    M.calls.push({ input, tier: opts.modelTier ?? 'default', cache: opts.cache })
+    const images = opts.images ? [].concat(opts.images) : []
+    M.calls.push({ input, tier: opts.modelTier ?? 'default', cache: opts.cache, images: images.length, imageTypes: images.map((b) => b.type) })
     await new Promise((r) => setTimeout(r, M.delay))
     if (M.fail) throw { code: M.fail, message: 'mock ' + M.fail }
+    if (images.length) return JSON.parse(JSON.stringify(SHOT))
     const raw = String(input).split('<<<').pop() || ''
     const hit = CARDS.find(([re]) => re.test(raw))
     return JSON.parse(JSON.stringify(hit ? hit[1] : FALLBACK))
   }
-  const sample = Object.assign(async (input, opts) => ({ text: JSON.stringify(await json(input, opts)), truncated: false }), { json })
+
+  // 「问一问」：从提示里的卡片找沾边的那张，照着规定格式回答（带 [编号]），分几段流出来
+  async function ask(input, opts = {}) {
+    M.asks.push({ input, cache: opts.cache })
+    const text = String(input)
+    const q = (text.match(/我的问题：(.*)$/s) || [])[1] || ''
+    const lines = [...text.matchAll(/^\[(\d+)\] (.+)$/gm)]
+    const words = q.replace(/[？?的是多少哪些有吗呢]/g, ' ').split(/\s+/).filter((w) => w.length >= 2)
+    const hit = lines.find(([, , l]) => words.some((w) => l.includes(w)))
+    const answer = M.askFail ? '' : hit ? `找到了：${hit[2].split('｜')[1]}。电话是 138 1234 5678 [${hit[1]}]。` : '你收的东西里没有这个。'
+    const chunks = answer.match(/.{1,8}/gs) || []
+    let so = ''
+    for (const c of chunks) {
+      await new Promise((r) => setTimeout(r, 60))
+      if (opts.signal?.aborted) throw { code: 'cancelled', message: 'mock cancelled', text: so || undefined }
+      so += c
+      opts.onText?.({ text: so, delta: c })
+    }
+    if (M.askFail) throw { code: M.askFail, message: 'mock ' + M.askFail }
+    return { text: so, truncated: false, modelTierApplied: 'default' }
+  }
+  const limits = async () => ({ maxPromptBytes: 65536, ...(M.noImages ? {} : { images: { maxCount: 5, maxInputBytes: 20e6, mediaTypes: ['image/jpeg', 'image/png', 'image/webp', 'image/gif'] } }) })
+  const sample = Object.assign(ask, { json, limits })
 
   const user = Object.freeze({ id: async () => 'u_test', isOwner: async () => true, canEdit: async () => true, can: async () => true })
 

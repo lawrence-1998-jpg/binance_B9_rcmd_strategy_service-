@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
-  KINDS, aiPrompt, asAi, asText, dayGroup, fromAi, manyAi, manyText, matches, newId, quick, stamp, tidy,
+  IMG_PLACEHOLDER, KINDS, aiPrompt, asAi, asText, dayGroup, fromAi, manyAi, manyText, matches, newId, quick, stamp, tidy,
   type Item, type Kind,
 } from './lib/card'
+import { askPrompt, pick, pieces, plainAnswer } from './lib/ask'
+import { dataUrlToBlob, isImage, shrink } from './lib/image'
 import { connect, type Runtime } from './lib/store'
 import { copyText } from './lib/copy'
 import { applyUpdate, useUpdate } from './lib/update'
@@ -20,6 +22,7 @@ import { EXAMPLES } from './examples'
  */
 
 type Toast = { msg: string; undo?: () => void; id: number }
+type Ask = { q: string; text: string; busy: boolean; chosen: Item[]; err?: string }
 /** 这几种错误说明这个视图里用不了 Claude：别再问了，整理降级成本地 */
 const AI_OFF = new Set(['not_granted', 'sampling_disabled', 'not_declared', 'capability_disabled', 'capability_removed'])
 
@@ -40,6 +43,9 @@ export function App() {
   const [draft, setDraft] = useState('')
   const [storeErr, setStoreErr] = useState<string | null>(null)
   const [now, setNow] = useState(() => Date.now())
+  const [ask, setAsk] = useState<Ask | null>(null)
+  const askCtl = useRef<AbortController | null>(null)
+  const fileRef = useRef<HTMLInputElement>(null)
 
   const rtRef = useRef<Runtime | null>(null)
   const readyWaiters = useRef<((r: Runtime) => void)[]>([])
@@ -100,15 +106,28 @@ export function App() {
     try { await rtRef.current?.store.patch(id, { ...p, updatedAt: Date.now() }) } catch { /* 已经被删了 */ }
   }
 
-  const organize = async (it: Item, again = false) => {
+  /** file：刚收进来的截图原件（第一次整理用它，清楚）；重新整理时用卡里存的那份 */
+  const organize = async (it: Item, again = false, file?: Blob) => {
     const r = await whenReady()
-    if (!r.sample || aiOffRef.current) { await patch(it.id, { status: 'local', note: '' }); return }
+    const shot = !!it.img || !!file
+    if (!r.sample || aiOffRef.current || (shot && !r.images)) {
+      await patch(it.id, shot
+        ? { status: 'failed', note: '这里读不了图 —— 在 claude.ai 里打开，再点「重新整理」' }
+        : { status: 'local', note: '' })
+      return
+    }
     if (again) await patch(it.id, { status: 'pending', note: '' })
     try {
-      const j = await r.sample.json(aiPrompt(it.raw), again ? { modelTier: 'default', cache: false } : { modelTier: 'quick' })
+      const images = shot ? (file ?? dataUrlToBlob(it.img!)) : undefined
+      const j = await r.sample.json(aiPrompt(shot ? '' : it.raw, new Date(), shot), {
+        ...(again ? { modelTier: 'default' as const, cache: false } : { modelTier: 'quick' as const }),
+        ...(images ? { images } : {}),
+      })
       const card = fromAi(j)
       if (!card) throw { code: 'invalid_json' }
-      await patch(it.id, { ...card, status: 'done', note: '' })
+      // 读文字时不许 Claude 改原文；读截图时，它转写出来的字就是原文
+      const { raw, ...rest } = card
+      await patch(it.id, { ...rest, ...(shot && raw ? { raw } : {}), status: 'done', note: '' })
     } catch (e) {
       const code = (e as { code?: string })?.code ?? 'upstream_error'
       if (code === 'cancelled') return
@@ -121,6 +140,7 @@ export function App() {
         code === 'rate_limited' ? 'Claude 这会儿忙，过一会儿点「重新整理」'
         : code === 'prompt_too_large' ? '太长了，Claude 一次读不完 —— 可以分几段收'
         : code === 'refused' ? 'Claude 没接这条，先做了基础整理'
+        : code === 'image_rejected' ? '这张图 Claude 读不了，换一张试试'
         : code === 'session_expired' ? '登录过期了，重新登录 claude.ai 后点「重新整理」'
         : '这次没整理成，点「重新整理」再试'
       await patch(it.id, { status: 'failed', note })
@@ -160,6 +180,53 @@ export function App() {
   const addRef = useRef(add)
   addRef.current = add
 
+  /** 收一张截图：先压一份小的存进卡片，原图交给 Claude 去读 */
+  const addImage = async (file: Blob) => {
+    const r = await whenReady()
+    if (!r.sample || aiOffRef.current || !r.images) {
+      say('截图要在 claude.ai 里打开才能收 —— 得让 Claude 读图')
+      return
+    }
+    let img: string
+    try { img = await shrink(file) } catch { say('这张图读不了，换一张试试'); return }
+    const t = Date.now()
+    const it: Item = {
+      id: newId(), raw: IMG_PLACEHOLDER, createdAt: t, updatedAt: t, status: 'pending', pinned: false,
+      kind: 'other', title: '一张截图', summary: '', fields: [], todos: [], tags: [], prompt: '', img,
+    }
+    setKind('all'); setQ(''); setSearching(false); setOpen(it.id)
+    try {
+      await r.store.put(it)
+    } catch (e) {
+      const code = (e as { code?: string })?.code
+      say(code === 'quota_exceeded' ? '库满了，删掉一些旧的再收' : '没存上，再试一次')
+      return
+    }
+    // 原图格式 Claude 不收、或者太大，就给它压过的那份
+    const direct = r.images.mediaTypes.includes(file.type) && file.size <= r.images.maxInputBytes
+    void organize(it, false, direct ? file : dataUrlToBlob(img))
+  }
+  const addImageRef = useRef(addImage)
+  addImageRef.current = addImage
+
+  // 拖进来：图就当截图收，字就当文字收
+  useEffect(() => {
+    const over = (e: DragEvent) => { if (e.dataTransfer?.types.includes('Files') || e.dataTransfer?.types.includes('text/plain')) e.preventDefault() }
+    const drop = (e: DragEvent) => {
+      const dt = e.dataTransfer
+      if (!dt) return
+      const imgs = [...dt.files].filter(isImage)
+      const text = dt.getData('text/plain')
+      if (!imgs.length && !text) return
+      e.preventDefault()
+      imgs.forEach((f) => void addImageRef.current(f))
+      if (!imgs.length && text) void addRef.current(text)
+    }
+    window.addEventListener('dragover', over)
+    window.addEventListener('drop', drop)
+    return () => { window.removeEventListener('dragover', over); window.removeEventListener('drop', drop) }
+  }, [])
+
   // 页面任何地方粘贴都算收下；在别的输入框里粘贴不抢
   useEffect(() => {
     const on = (e: ClipboardEvent) => {
@@ -171,10 +238,12 @@ export function App() {
         const whole = !ta.value.trim() || (ta.selectionStart === 0 && ta.selectionEnd === ta.value.length)
         if (!whole) return // 在框里接着编辑，不是收新的一条
       }
+      const imgs = [...(e.clipboardData?.files ?? [])].filter(isImage)
       const text = e.clipboardData?.getData('text/plain') ?? ''
       e.preventDefault()
       setDraft('')
       if (touch) capRef.current?.blur() // 收下了就把键盘收起来，让她看到卡片
+      if (imgs.length) { imgs.forEach((f) => void addImageRef.current(f)); return }
       void addRef.current(text)
     }
     document.addEventListener('paste', on)
@@ -200,6 +269,46 @@ export function App() {
 
   const toggleTodo = (it: Item, i: number) =>
     patch(it.id, { todos: it.todos.map((t, j) => (j === i ? { ...t, done: !t.done } : t)) })
+
+  // ---------------------------------------------------------------- 问
+
+  const doAsk = async () => {
+    const r = rtRef.current
+    const question = q.trim()
+    if (!r?.sample || aiOffRef.current || !question) return
+    askCtl.current?.abort()
+    const ctl = new AbortController()
+    askCtl.current = ctl
+    const chosen = pick(question, itemsRef.current)
+    const mine = (a: Ask | null) => !!a && a.q === question && askCtl.current === ctl
+    setAsk({ q: question, text: '', busy: true, chosen })
+    try {
+      const res = await r.sample(askPrompt(question, chosen), {
+        cache: false,
+        signal: ctl.signal,
+        onText: ({ text }) => setAsk((a) => (mine(a) ? { ...a!, text } : a)),
+      })
+      setAsk((a) => (mine(a) ? { ...a!, text: res.text, busy: false } : a))
+    } catch (e) {
+      const { code, text } = (e ?? {}) as { code?: string; text?: string }
+      if (AI_OFF.has(code ?? '')) setAiOff(true)
+      const err =
+        code === 'cancelled' ? undefined
+        : AI_OFF.has(code ?? '') ? '这里没开 Claude，问不了 —— 上面的搜索结果照样能用'
+        : code === 'rate_limited' ? 'Claude 这会儿忙，过一会儿再问'
+        : code === 'prompt_too_large' ? '收的东西太多了，换个更具体的问法试试'
+        : '没问成，再问一次试试'
+      setAsk((a) => (mine(a) ? { ...a!, text: text ?? a!.text, busy: false, err } : a))
+    }
+  }
+  const stopAsk = () => { askCtl.current?.abort() }
+  const closeSearch = () => { setSearching(false); setQ(''); askCtl.current?.abort(); setAsk(null) }
+  useEffect(() => () => askCtl.current?.abort(), [])
+
+  const jumpTo = (id: string) => {
+    setQ(''); setKind('all'); setOpen(id)
+    requestAnimationFrame(() => document.getElementById('c-' + id)?.scrollIntoView({ block: 'start', behavior: 'smooth' }))
+  }
 
   // ---------------------------------------------------------------- 看
 
@@ -236,7 +345,7 @@ export function App() {
         if (inField) (el as HTMLElement).blur()
         else if (picked) setPicked(null)
         else if (open) setOpen(null)
-        else if (searching) { setSearching(false); setQ('') }
+        else if (searching) closeSearch()
       } else if (e.key === '/' && !inField) {
         e.preventDefault()
         setSearching(true)
@@ -246,9 +355,12 @@ export function App() {
     return () => window.removeEventListener('keydown', on)
   }, [picked, open, searching])
 
+  const canAsk = !!rt?.sample && !aiOff && lib.length > 0
+  const canShot = !!rt?.sample && !!rt.images && !aiOff
+
   const status =
     !rt ? '正在打开你的收藏…'
-    : rt.sample && !aiOff ? (rt.store.mode === 'cloud' ? '粘贴即收下 · Claude 帮你整理 · 手机电脑同一份' : '粘贴即收下 · Claude 帮你整理')
+    : rt.sample && !aiOff ? `粘贴即收下 · ${rt.images ? '文字截图都行 · ' : ''}Claude 帮你整理${rt.store.mode === 'cloud' ? ' · 手机电脑同一份' : ''}`
     : aiOff ? '粘贴即收下 · 这里没开 Claude，只做基础整理'
     : '粘贴即收下 · 只存在这台设备 · 在 Claude 里打开能用 AI 整理'
 
@@ -263,7 +375,7 @@ export function App() {
         <div className="top-a">
           {lib.length > 0 && (
             <button type="button" className="ghost" aria-label="搜索" aria-pressed={searching}
-              onClick={() => { setSearching((s) => !s); if (searching) setQ('') }}>
+              onClick={() => (searching ? closeSearch() : setSearching(true))}>
               <SearchIcon />
             </button>
           )}
@@ -285,12 +397,73 @@ export function App() {
             id="search"
             type="search"
             autoFocus
+            enterKeyHint={canAsk ? 'send' : 'search'}
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="搜标题、原文、电话、地点……"
-            aria-label="搜索"
+            onKeyDown={(e) => { if (e.key === 'Enter' && canAsk) { e.preventDefault(); void doAsk() } }}
+            placeholder={canAsk ? '搜，或者直接问：Lily 的电话？这周有哪些会？' : '搜标题、原文、电话、地点……'}
+            aria-label="搜索或提问"
           />
         </div>
+      )}
+
+      {searching && canAsk && q.trim() && !(ask && ask.q === q.trim() && !ask.err) && (
+        <button type="button" className="ask-go" onClick={() => void doAsk()}>
+          <SparkIcon />
+          <span>问 Claude：<b>{q.trim()}</b></span>
+        </button>
+      )}
+
+      {ask && (
+        <section className="answer" aria-live="polite" aria-label="Claude 的回答">
+          <div className="answer-h">
+            <span className="answer-q">{ask.q}</span>
+            {ask.busy ? (
+              <button type="button" className="mini" onClick={stopAsk}>停止</button>
+            ) : ask.text ? (
+              <button type="button" className={'mini' + (copied === 'ask' ? ' ok' : '')}
+                onClick={() => copy(plainAnswer(ask.text, ask.chosen), 'ask', '回答')}>
+                {copied === 'ask' ? '已复制' : '复制回答'}
+              </button>
+            ) : null}
+            <button type="button" className="mini x" aria-label="关掉回答" onClick={() => { stopAsk(); setAsk(null) }}>✕</button>
+          </div>
+          <div className="answer-b">
+            {!ask.text && ask.busy && <p className="answer-wait">正在翻你收的 {ask.chosen.length} 条……</p>}
+            {ask.text && (() => {
+              const ps = pieces(ask.text, ask.chosen.length)
+              // 出处按第一次出现的顺序编 1、2、3 —— 不用提示里那一长串的原编号
+              const order: number[] = []
+              for (const pc of ps) if ('ref' in pc && !order.includes(pc.ref)) order.push(pc.ref)
+              return (
+                <>
+                  <p className="answer-t">
+                    {ps.map((pc, i) =>
+                      'ref' in pc ? <span key={i} className="ref" aria-label={`出处 ${order.indexOf(pc.ref) + 1}`}>{order.indexOf(pc.ref) + 1}</span>
+                        : <span key={i}>{pc.text}</span>,
+                    )}
+                  </p>
+                  {order.length > 0 && !ask.busy && (
+                    <div className="srcs" aria-label="出处">
+                      {order.map((ref, i) => {
+                        const it = ask.chosen[ref - 1]
+                        return (
+                          <button key={ref} type="button" className="src" data-k={it.kind} onClick={() => jumpTo(it.id)}>
+                            <span className="ref">{i + 1}</span>
+                            <span className="src-k">{KINDS[it.kind]}</span>
+                            <span className="src-t">{it.title}</span>
+                            <span className="src-go" aria-hidden="true">↗</span>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  )}
+                </>
+              )
+            })()}
+            {ask.err && <p className="answer-err">{ask.err}</p>}
+          </div>
+        </section>
       )}
 
       {!picked && !searching && (
@@ -307,6 +480,27 @@ export function App() {
           />
           <div className="cap-foot">
             <span className={'cap-hint' + (rt?.sample && !aiOff ? ' ai' : '')}>{status}</span>
+            {canShot && !draft.trim() && (
+              <>
+                <input
+                  id="shot"
+                  ref={fileRef}
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  hidden
+                  onChange={(e) => {
+                    const fs = [...(e.target.files ?? [])].filter(isImage)
+                    fs.forEach((f) => void addImage(f))
+                    e.target.value = ''
+                  }}
+                />
+                <button type="button" className="shot-btn" onClick={() => fileRef.current?.click()}>
+                  <ImageIcon />
+                  <span>截图</span>
+                </button>
+              </>
+            )}
             {draft.trim() && (
               <button type="button" className="take" onClick={takeDraft}>收下</button>
             )}
@@ -346,8 +540,11 @@ export function App() {
           </>
         )}
 
-        {!empty && items !== null && shown.length === 0 && (
-          <p className="none">{q ? `没找到「${q}」` : '这一类还没有'}</p>
+        {/* 刚问过同一句、Claude 已经在上面回答了：下面就别再说「没找到」，两句话打架 */}
+        {!empty && items !== null && shown.length === 0 && !(ask && ask.q === q.trim()) && (
+          <p className="none">
+            {!q ? '这一类还没有' : canAsk ? `没有卡片同时包含「${q}」—— 点上面「问 Claude」试试` : `没找到「${q}」`}
+          </p>
         )}
 
         {groups.map((g) => (
@@ -438,6 +635,7 @@ function Card(p: CardProps) {
   const [editing, setEditing] = useState(false)
   const [title, setTitle] = useState(it.title)
   const [showRaw, setShowRaw] = useState(false)
+  const [bigShot, setBigShot] = useState(false)
   useEffect(() => { if (!editing) setTitle(it.title) }, [it.title, editing])
   useEffect(() => { if (!open) { setEditing(false); setShowRaw(false) } }, [open])
 
@@ -469,6 +667,7 @@ function Card(p: CardProps) {
         )}
         <span className="kind">{KINDS[it.kind]}</span>
         {p.example && <span className="badge">示例</span>}
+        {it.img && <span className="badge">截图</span>}
         {it.pinned && <span className="badge">置顶</span>}
         {busy && <span className="busy-t"><i aria-hidden="true" />Claude 在整理</span>}
         <span className="when">{p.example ? '' : stamp(it.createdAt, p.now)}</span>
@@ -522,6 +721,13 @@ function Card(p: CardProps) {
         <div className="detail">
           {it.note && <p className="note">{it.note}</p>}
 
+          {it.img && (
+            <button type="button" className={'shot' + (bigShot ? ' big' : '')} onClick={() => setBigShot((b) => !b)}
+              aria-label={bigShot ? '收起截图' : '看完整截图'}>
+              <img src={it.img} alt="收进来的截图" />
+            </button>
+          )}
+
           {it.fields.length > 0 && (
             <div className="rows" role="list">
               {it.fields.map((f, i) => (
@@ -562,7 +768,7 @@ function Card(p: CardProps) {
 
           <div className="raw">
             <button type="button" className="raw-t" aria-expanded={showRaw} onClick={() => setShowRaw((s) => !s)}>
-              {showRaw ? '收起原文 ▴' : '看原文 ▾'}
+              {showRaw ? '收起原文 ▴' : it.img ? '看图里的字 ▾' : '看原文 ▾'}
             </button>
             {showRaw && <pre>{it.raw}</pre>}
           </div>
@@ -620,6 +826,23 @@ function CheckIcon() {
   return (
     <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M5 12.5 10 17.5 19 7" />
+    </svg>
+  )
+}
+function ImageIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3.5" y="4.5" width="17" height="15" rx="3" />
+      <circle cx="9" cy="10" r="1.8" />
+      <path d="m20.5 16-4.5-4.5-8 8" />
+    </svg>
+  )
+}
+function SparkIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="currentColor">
+      <path d="M12 2.5c.5 4.6 2.9 7 7.5 7.5-4.6.5-7 2.9-7.5 7.5-.5-4.6-2.9-7-7.5-7.5 4.6-.5 7-2.9 7.5-7.5Z" />
+      <path d="M19 15.5c.2 1.8 1.2 2.8 3 3-1.8.2-2.8 1.2-3 3-.2-1.8-1.2-2.8-3-3 1.8-.2 2.8-1.2 3-3Z" opacity=".7" />
     </svg>
   )
 }

@@ -12,8 +12,17 @@ import { KINDS, type Item, type Kind } from './card'
  * 存在这台设备的浏览器里，只做本地整理。页面照样能用，只是少了 AI。
  */
 
-export type SampleJson = <T = unknown>(input: string, opts?: { modelTier?: 'quick' | 'default' | 'complex'; cache?: boolean; signal?: AbortSignal }) => Promise<T>
-interface Sample { json: SampleJson }
+export interface SampleOpts {
+  modelTier?: 'quick' | 'default' | 'complex'
+  cache?: boolean
+  signal?: AbortSignal
+  images?: Blob | Blob[]
+  onText?: (u: { text: string; delta: string }) => void
+}
+export type Sample = ((input: string, opts?: SampleOpts) => Promise<{ text: string; truncated: boolean }>) & {
+  json: <T = unknown>(input: string, opts?: SampleOpts) => Promise<T>
+  limits?: () => Promise<{ maxPromptBytes: number; images?: { maxCount: number; maxInputBytes: number; mediaTypes: string[] } }>
+}
 
 interface Snap { id: string; exists: boolean; data(): Record<string, unknown> | undefined }
 interface DocRef {
@@ -45,17 +54,21 @@ export interface Runtime {
   store: Store
   /** null：这里没有 Claude 可用 */
   sample: Sample | null
+  /** 这个视图能不能把图片发给 Claude（能的话，截图也能收） */
+  images: { maxInputBytes: number; mediaTypes: string[] } | null
 }
 
 export async function connect(): Promise<Runtime> {
   const rt = typeof window !== 'undefined' ? window.claude : undefined
-  if (!rt || typeof rt.use !== 'function') return { store: local(), sample: null }
+  if (!rt || typeof rt.use !== 'function') return { store: local(), sample: null, images: null }
   const [sample, db, user] = await Promise.all(
     ['sample', 'db', 'user'].map((n) => rt.use(n).catch(() => null)),
   ) as [Sample | null, DB | null, User | null]
   const uid = await user?.id().catch(() => null)
   const store = db && uid ? cloud(db, uid) : local()
-  return { store, sample: sample && typeof sample.json === 'function' ? sample : null }
+  const ok = sample && typeof sample === 'function' && typeof sample.json === 'function' ? sample : null
+  const lim = ok?.limits ? await ok.limits().catch(() => null) : null
+  return { store, sample: ok, images: lim?.images ?? null }
 }
 
 /** 数据库里读出来的东西不一定是自己写的那个样子：补齐每一格 */
@@ -82,6 +95,7 @@ export function normalize(id: string, d: Record<string, unknown>): Item | null {
     prompt: s(d.prompt),
     pinned: !!d.pinned,
     note: s(d.note) || undefined,
+    img: s(d.img).startsWith('data:image/') ? s(d.img) : undefined,
   }
 }
 

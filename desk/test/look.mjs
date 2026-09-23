@@ -123,6 +123,31 @@ for (const [name, opts] of CONFIGS) {
   t(`${name}·收了两条：三个复制按钮在卡片里排成一行`, copies && copies.height < 60 && copies.x >= cardBox.x && copies.x + copies.width <= cardBox.x + cardBox.width,
     copies ? `${Math.round(copies.width)}×${Math.round(copies.height)}` : '')
 
+  // ---- 截图卡
+  await pg.evaluate(async () => {
+    const c = document.createElement('canvas'); c.width = 600; c.height = 1300
+    const g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, 600, 1300)
+    g.fillStyle = '#111'; g.font = '40px sans-serif'; g.fillText('报价单 ¥36,000', 40, 120)
+    const blob = await new Promise((r) => c.toBlob(r, 'image/png'))
+    const dt = new DataTransfer(); dt.items.add(new File([blob], 's.png', { type: 'image/png' }))
+    document.querySelector('#capture').dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true }))
+  })
+  await pg.waitForTimeout(800)
+  await check('截图卡')
+  const shot = await pg.locator('.card.open .shot').boundingBox()
+  t(`${name}·截图卡：图先露一截（不把整屏占满）`, shot && shot.height <= 242, shot ? `${Math.round(shot.height)}px 高` : '没有图')
+
+  // ---- 问答
+  await pg.locator('.ghost[aria-label="搜索"]').click()
+  await pg.locator('#search').fill('Lily 电话')
+  await pg.locator('.ask-go').click()
+  await pg.waitForTimeout(900)
+  await check('问答')
+  const ansBox = await pg.locator('.answer').boundingBox()
+  t(`${name}·问答：回答在第一屏里`, ansBox && ansBox.y + 60 < vh, ansBox ? `顶 ${Math.round(ansBox.y)}，屏高 ${vh}` : '')
+  await pg.locator('.ghost[aria-label="搜索"]').click()
+  await pg.waitForTimeout(200)
+
   // ---- 多选
   await pg.locator('.ghost', { hasText: '选择' }).click()
   await pg.locator('.list .card .tick').first().click()

@@ -2,7 +2,7 @@
 
 **随手复制的信息，贴进来就被整理成一张卡片 —— 收着、找得到、随时复制出去用。**
 
-聊天里的会议时间、名片、报价、链接、报错、一段想法……粘贴即收下。
+聊天里的会议时间、名片、报价、链接、报错、一段想法……粘贴即收下。**截图也行** —— Claude 会先读图里的字。
 Claude 读懂它，拆成：标题、一句话要点、字段（时间 / 地点 / 电话 / 金额…）、要做的事，
 再替你想好「下一步拿去问 AI 的那一句」。
 
@@ -24,6 +24,8 @@ web/desk/deskside-standalone.html   （双击即用）
 | 想做的 | 怎么做 |
 |---|---|
 | 收 | 长按收件框粘贴 ／ 电脑上在页面任何地方 ⌘V ／ 打字后点「收下」 |
+| 收截图 | 点「截图」从相册挑 ／ 直接粘贴一张图 ／ 电脑上拖进来（要在 claude.ai 里，得让 Claude 读图） |
+| 问 | 🔍 里直接打一句话：「Lily 的电话？」「这周有哪些会？」→「问 Claude」，用你收的卡片回答，下面列出处，点一下跳到那张卡 |
 | 复制一格 | 点字段那一行（或卡片上的字段小条）—— 只复制那个值 |
 | 复制整张 | 右上角复制按钮 = 整理版；展开后「复制整理版 / 复制给 AI / 复制原文」 |
 | 拿去问 AI | 「复制给 AI」= Claude 想好的那句指令 + 整理好的信息 + 原文，贴进哪家 AI 都能直接用 |
@@ -64,7 +66,9 @@ npx vite build --config vite.config.single.ts && node scripts-postbuild-single.m
 src/
   App.tsx          整个页面：收件框、筛选、卡片列表、多选
   examples.ts      库还空着时的三张示例卡
-  lib/card.ts      纯逻辑：本地认字段、给 Claude 的指令、核 Claude 的回复、复制出去的样子
+  lib/card.ts      纯逻辑：本地认字段、给 Claude 的指令（文字 / 截图）、核 Claude 的回复、复制出去的样子
+  lib/ask.ts       问一问：挑哪些卡塞给 Claude（64 KiB 以内）、回答里的 [编号] 变回卡片
+  lib/image.ts     截图压成一份存得进数据库的小图
   lib/store.ts     存在哪：claude.ai 的数据库（她自己那一格）或浏览器
   lib/copy.ts      写剪贴板（带 execCommand 兜底）
   lib/update.ts    GitHub Pages 装成 App 时，新版本怎么到手上（在 claude.ai 里不启用）

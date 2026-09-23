@@ -45,7 +45,12 @@ export interface Item {
   pinned: boolean
   /** 整理失败时给人看的一句话 */
   note?: string
+  /** 截图收进来的：压缩过的图（data URL）。重新整理时再给 Claude 看一次 */
+  img?: string
 }
+
+/** 截图还没被 Claude 读出字时，raw 先放这个 */
+export const IMG_PLACEHOLDER = '［截图］'
 
 export const MAX_FIELDS = 8
 const MAX_RAW_FOR_AI = 12_000
@@ -137,10 +142,16 @@ export function today(now = new Date()): string {
   return `${now.getFullYear()}-${p(now.getMonth() + 1)}-${p(now.getDate())}（星期${WEEK[now.getDay()]}）`
 }
 
-export function aiPrompt(input: string, now = new Date()): string {
+export function aiPrompt(input: string, now = new Date(), image = false): string {
   const raw = tidy(input).slice(0, MAX_RAW_FOR_AI)
-  return `你是一个信息整理助手。用户随手复制了一段内容，请把它整理成一张结构化的信息卡片，方便他以后查找、以及直接复制去用。
+  const lead = image
+    ? `你是一个信息整理助手。用户随手截了一张图（聊天截图、海报、名片、网页……），请先读图，再把它整理成一张结构化的信息卡片，方便他以后查找、以及直接复制去用。
 
+第 0 步：把图里的文字按阅读顺序原样转写，放进 raw 字段，保留换行。聊天截图写成一行一条「名字：内容」；看不清的字用□代替，不要猜。图里没有字，就用一两句话描述图的内容。
+`
+    : `你是一个信息整理助手。用户随手复制了一段内容，请把它整理成一张结构化的信息卡片，方便他以后查找、以及直接复制去用。
+`
+  return `${lead}
 今天是 ${today(now)}。
 
 规则：
@@ -155,12 +166,14 @@ export function aiPrompt(input: string, now = new Date()): string {
 9. 用中文写 title、summary、todos、tags、prompt；原文是外语时，fields 的值保留原文。
 
 只回复一个 JSON 对象，不要任何别的文字：
-{"kind":"event","title":"…","summary":"…","fields":[{"label":"时间","value":"…"}],"todos":["…"],"tags":["…"],"prompt":"…"}
-
+${image
+    ? '{"raw":"图里的文字……","kind":"event","title":"…","summary":"…","fields":[{"label":"时间","value":"…"}],"todos":["…"],"tags":["…"],"prompt":"…"}'
+    : '{"kind":"event","title":"…","summary":"…","fields":[{"label":"时间","value":"…"}],"todos":["…"],"tags":["…"],"prompt":"…"}'}
+${image ? '' : `
 原文：
 <<<
 ${raw}
->>>`
+>>>`}`.trimEnd()
 }
 
 const str = (x: unknown) => (typeof x === 'string' ? x.trim() : typeof x === 'number' ? String(x) : '')
@@ -169,7 +182,7 @@ const str = (x: unknown) => (typeof x === 'string' ? x.trim() : typeof x === 'nu
  * Claude 回来的东西逐项核一遍。它偶尔会：少字段、kind 写成中文、fields 写成对象、
  * 塞一堆「无」「未提及」进来。宁可少一格，不要一格假的。
  */
-export function fromAi(x: unknown): Pick<Item, 'kind' | 'title' | 'summary' | 'fields' | 'todos' | 'tags' | 'prompt'> | null {
+export function fromAi(x: unknown): (Pick<Item, 'kind' | 'title' | 'summary' | 'fields' | 'todos' | 'tags' | 'prompt'> & { raw?: string }) | null {
   if (!x || typeof x !== 'object' || Array.isArray(x)) return null
   const o = x as Record<string, unknown>
   const empty = /^(?:无|暂无|未提及|未知|不详|n\/?a|none|null|-|—)$/i
@@ -209,6 +222,8 @@ export function fromAi(x: unknown): Pick<Item, 'kind' | 'title' | 'summary' | 'f
     todos: list(o.todos, 5, 60).map((text) => ({ text, done: false })),
     tags: list(o.tags, 3, 10).map((t) => t.replace(/^#/, '')),
     prompt: clip(str(o.prompt), 120),
+    // 只有读截图时 Claude 才回 raw（图里的字）；读文字时不许它改原文
+    ...(str(o.raw) ? { raw: tidy(str(o.raw)).slice(0, 20_000) } : {}),
   }
 }
 
