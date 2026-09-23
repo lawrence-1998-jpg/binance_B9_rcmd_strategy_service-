@@ -11,7 +11,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 const dir = mkdtempSync(join(tmpdir(), 'card-'))
 const out = join(dir, 'm.mjs')
 await esbuild({
-  stdin: { contents: "export * from './card'; export { normalize } from './store'", resolveDir: fileURLToPath(new URL('../src/lib/', import.meta.url)), loader: 'ts' },
+  stdin: { contents: "export * from './card'; export { normalize } from './store'; export * as A from './ask'", resolveDir: fileURLToPath(new URL('../src/lib/', import.meta.url)), loader: 'ts' },
   outfile: out, format: 'esm', bundle: true, logLevel: 'warning',
 })
 const C = await import(pathToFileURL(out).href)
@@ -102,6 +102,34 @@ t('搜：按原文找得到', C.matches(item, '原文在'))
 const n = C.normalize('x1', { raw: 'r', kind: 'weird', fields: [{ label: 'a', value: 'b' }, { label: 1 }], todos: [{ text: 't' }, 'bad'], tags: ['ok', 3] })
 t('读回来的脏数据补齐', n && n.kind === 'other' && n.fields.length === 1 && n.todos.length === 1 && n.todos[0].done === false && n.tags.length === 1)
 t('没有原文的记录不认', C.normalize('x2', { title: 'x' }) === null)
+
+// ---------------------------------------------------------------- 截图
+
+const ip = C.aiPrompt('', now, true)
+t('读截图的指令：先把图里的字原样转写进 raw', ip.includes('原样转写') && ip.includes('"raw"'))
+t('读截图的指令：不带空的「原文」段', !ip.includes('<<<'))
+t('读截图：Claude 转写的字收下', C.fromAi({ title: '报价', raw: '报价单\r\n年费 ¥36,000  ' }).raw === '报价单\n年费 ¥36,000')
+t('读文字：Claude 没回 raw 就不带 raw（原文不许它改）', !('raw' in C.fromAi({ title: 'x' })))
+
+// ---------------------------------------------------------------- 问一问
+
+const T0 = new Date(2026, 8, 23, 15, 0).getTime()
+const mk = (i, title, extra = {}) => ({ id: 'i' + i, raw: '原文' + i, createdAt: T0 - i * 1000, updatedAt: 0, status: 'done', pinned: false,
+  kind: 'note', title, summary: '', fields: [], todos: [], tags: [], prompt: '', ...extra })
+const lib = [mk(1, '周会纪要'), mk(2, 'Lily Chen', { kind: 'contact', fields: [{ label: '手机', value: '138 1234 5678' }] }), mk(3, '报价')]
+const chosen = C.A.pick('Lily 的电话', lib)
+t('问一问：跟问题沾边的卡排在最前面', chosen[0].title === 'Lily Chen', chosen.map((x) => x.title).join(','))
+t('问一问：其余的也带上（它可能要对比）', chosen.length === 3)
+const ap = C.A.askPrompt('Lily 的电话？', chosen, now)
+t('问一问的提示：卡片带编号、带字段', ap.includes('[1] 联系人｜Lily Chen') && ap.includes('手机：138 1234 5678'))
+t('问一问的提示：要求标出处、不许编', ap.includes('[3] 这样') && ap.includes('不要编'))
+const big = Array.from({ length: 3000 }, (_, i) => mk(i, '一条很长的笔记' + i, { raw: '内容'.repeat(200) }))
+const bigPick = C.A.pick('随便问问', big)
+const bytes = new TextEncoder().encode(C.A.askPrompt('随便问问', bigPick, now)).length
+t('问一问：收得再多，提示也塞得进 64 KiB', bytes < 60_000 && bigPick.length > 20, `${bigPick.length} 张 / ${bytes} 字节`)
+const ps = C.A.pieces('电话是 138 1234 5678 [1]。另见 [9]。', 3)
+t('回答切片：[1] 变成出处，超出范围的 [9] 照原样当字', ps.filter((p) => 'ref' in p).length === 1 && ps.some((p) => p.text?.includes('[9]')))
+t('复制回答：[编号] 换成卡片标题', C.A.plainAnswer('电话是 138 1234 5678 [1]。', chosen) === '电话是 138 1234 5678（Lily Chen）。')
 
 // ---------------------------------------------------------------- 时间
 

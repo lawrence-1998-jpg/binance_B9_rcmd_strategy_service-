@@ -150,6 +150,80 @@ try {
   await pg.reload({ waitUntil: 'load' }); await wait(700)
   t('刷新之后都还在（存的是数据库，不是这一页）', (await cards().count()) === 2 && (await cards().first().innerText()).includes('Lily · 增长负责人'))
 
+  // ---------------------------------------------------------------- 截图
+  const ICON = new globalThis.URL('../public/icons/icon-192.png', import.meta.url).pathname
+  /** 在页面里画一张 PNG，像真的一样从剪贴板粘贴进来 */
+  const pasteImage = () => pg.evaluate(async () => {
+    const c = document.createElement('canvas'); c.width = 600; c.height = 900
+    const g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, 600, 900)
+    g.fillStyle = '#111'; g.font = '40px sans-serif'; g.fillText('报价单 ¥36,000', 40, 120)
+    const blob = await new Promise((r) => c.toBlob(r, 'image/png'))
+    const dt = new DataTransfer()
+    dt.items.add(new File([blob], 'shot.png', { type: 'image/png' }))
+    document.querySelector('#capture').focus()
+    document.querySelector('#capture').dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true }))
+  })
+  t('能读图的地方，收件框旁边有「截图」按钮', (await pg.locator('.shot-btn').count()) === 1)
+  t('……提示里也说了截图能收', (await pg.locator('.cap-hint').innerText()).includes('截图'))
+  const n0 = await cards().count()
+  await pasteImage(); await wait(150)
+  const s1 = pg.locator('.card.open')
+  t('粘贴一张截图：马上收下，标着「截图」', (await cards().count()) === n0 + 1 && (await s1.locator('.badge', { hasText: '截图' }).count()) === 1)
+  t('……卡上就看得到这张图', ((await s1.locator('.shot img').getAttribute('src')) ?? '').startsWith('data:image/jpeg'))
+  t('……Claude 在读', (await s1.locator('.busy-t').count()) === 1)
+  await wait(700)
+  t('Claude 读完：按图里的内容起了标题、拆了字段', (await s1.locator('h3').innerText()) === '年费报价截图' && (await s1.locator('.row', { hasText: '年费' }).count()) === 1)
+  await s1.locator('.raw-t').click()
+  t('「看图里的字」：Claude 转写出来的原文', (await s1.locator('.raw pre').innerText()).includes('报价单'))
+  const shotCall = await mock(() => window.__mock.calls.at(-1))
+  t('原图直接交给 Claude（PNG 它收）', shotCall.images === 1 && shotCall.imageTypes[0] === 'image/png', JSON.stringify(shotCall.imageTypes))
+  t('给 Claude 的是读图的指令，不是空原文', shotCall.input.includes('读图') && !shotCall.input.includes('<<<'))
+  const shotDoc = Object.values(await docs()).find((d) => d.title === '年费报价截图')
+  t('卡里存了一份压缩过的图（放得进数据库一条）', typeof shotDoc?.img === 'string' && shotDoc.img.length <= 150_000, `${shotDoc?.img?.length ?? 0} 字符`)
+  await s1.locator('.copies .btn', { hasText: '复制原文' }).click(); await wait()
+  t('截图卡「复制原文」= 图里的字', (await clip()).startsWith('报价单'))
+
+  // 从相册挑
+  const n1 = await cards().count()
+  await pg.locator('#shot').setInputFiles(ICON); await wait(900)
+  t('点「截图」从相册挑一张：也收下了', (await cards().count()) === n1 + 1)
+
+  // 读图失败，重新整理用卡里存的那份
+  await mock(() => { window.__mock.fail = 'rate_limited' })
+  await pasteImage(); await wait(700)
+  const s3 = pg.locator('.card.open')
+  t('读图时 Claude 忙：卡留着，说清楚', (await s3.locator('.note').innerText()).includes('忙'))
+  await mock(() => { window.__mock.fail = null })
+  await s3.locator('.acts button', { hasText: '重新整理' }).click(); await wait(900)
+  const again = await mock(() => window.__mock.calls.at(-1))
+  t('重新整理截图：用卡里存的那份图再读一次', again.images === 1 && again.imageTypes[0] === 'image/jpeg' && again.tier === 'default', JSON.stringify(again))
+
+  // ---------------------------------------------------------------- 问一问
+  await pg.locator('.ghost[aria-label="搜索"]').click()
+  await pg.locator('#search').fill('Lily 电话'); await wait()
+  t('搜索框里打一句话：出现「问 Claude」', (await pg.locator('.ask-go').innerText()).includes('Lily 电话'))
+  await pg.locator('.ask-go').click(); await wait(150)
+  t('问的时候先说在翻', (await pg.locator('.answer-wait').count()) === 1 || (await pg.locator('.answer-t').count()) === 1)
+  await wait(900)
+  const ans = await pg.locator('.answer-t').innerText()
+  t('回答：直接给出电话', ans.includes('138 1234 5678'), ans)
+  t('回答里标了出处，下面列出那张卡（整行可点）', (await pg.locator('.answer-t .ref').count()) === 1 && (await pg.locator('.src').innerText()).includes('Lily'))
+  t('答完之后「问 Claude」按钮收起（不重复）', (await pg.locator('.ask-go').count()) === 0)
+  t('Claude 回答了，下面就不再说「没找到」', (await pg.locator('.none').count()) === 0)
+  const askCall = await mock(() => window.__mock.asks.at(-1))
+  t('问的时候带上了她收的卡片，并且不拿缓存', askCall.input.includes('我的问题：Lily 电话') && askCall.input.includes('Lily') && askCall.cache === false)
+  await pg.locator('.answer .mini', { hasText: '复制回答' }).click(); await wait()
+  const ansCopied = await clip()
+  t('复制回答：[编号] 换成了卡片名，贴出去看得懂', ansCopied.includes('138 1234 5678') && !/\[\d+\]/.test(ansCopied) && ansCopied.includes('（Lily'), ansCopied)
+  await pg.locator('.src').first().click(); await wait(400)
+  const lily = card('Lily')
+  t('点出处：跳到那张卡并展开', (await lily.locator('.detail').count()) === 1 && (await pg.locator('#search').inputValue()) === '')
+  await pg.locator('#search').fill('上海办公室地址')
+  await pg.locator('#search').press('Enter'); await wait(900)
+  t('回车也能问；收的东西里没有就直说', (await pg.locator('.answer-t').innerText()).includes('没有'))
+  await pg.locator('.ghost[aria-label="搜索"]').click(); await wait()
+  t('关掉搜索：回答也收起', (await pg.locator('.answer').count()) === 0)
+
   // ---------------------------------------------------------------- Claude 忙
   await mock(() => { window.__mock.fail = 'rate_limited' })
   await pasteInBox(NOTE); await wait(700)
@@ -163,9 +237,10 @@ try {
   t('重新整理用更仔细的档，而且不拿缓存里的旧答案', last.tier === 'default' && last.cache === false, JSON.stringify({ tier: last.tier, cache: last.cache }))
 
   // ---------------------------------------------------------------- 手打的也能收
+  const n2 = await cards().count()
   await pg.locator('#capture').fill('周五前把季度复盘 PPT 发给王总')
   await pg.locator('.take').click(); await wait(700)
-  t('手打的：点「收下」', (await cards().count()) === 4)
+  t('手打的：点「收下」', (await cards().count()) === n2 + 1)
 
   // ---------------------------------------------------------------- Claude 用不了
   await mock(() => { window.__mock.fail = 'not_granted' })
@@ -175,6 +250,10 @@ try {
   t('……顶上的提示改口', (await pg.locator('.cap-hint').innerText()).includes('没开 Claude'), await pg.locator('.cap-hint').innerText())
   await pasteInBox('第二条也不让用'); await wait(700)
   t('……之后不再去问 Claude（不反复弹同意框）', (await mock(() => window.__mock.calls.length)) === before)
+  t('……「截图」按钮收起来（没有 Claude 读不了图）', (await pg.locator('.shot-btn').count()) === 0)
+  await pg.locator('.ghost[aria-label="搜索"]').click()
+  await pg.locator('#search').fill('Lily'); await wait()
+  t('……搜索照样能用，但不再出现「问 Claude」', (await pg.locator('.ask-go').count()) === 0 && (await cards().count()) >= 1)
 
   t('全程没有页面报错', errs.length === 0, errs.slice(0, 2).join(' | '))
 } finally {

@@ -38,6 +38,20 @@ t('一样能点一格复制', (await pg.evaluate(() => navigator.clipboard.readT
 await c.locator('.copies .btn', { hasText: '复制给 AI' }).click(); await wait()
 t('复制给 AI：没有 Claude 起的指令，也有一句兜底的', (await pg.evaluate(() => navigator.clipboard.readText())).startsWith('请帮我理解这条信息'))
 
+t('没有 Claude：不显示「截图」按钮（没人读图）', (await pg.locator('.shot-btn').count()) === 0)
+await pg.evaluate(async () => {
+  const c = document.createElement('canvas'); c.width = 60; c.height = 60
+  const blob = await new Promise((r) => c.toBlob(r, 'image/png'))
+  const dt = new DataTransfer(); dt.items.add(new File([blob], 'x.png', { type: 'image/png' }))
+  document.querySelector('#capture').dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true }))
+})
+await wait()
+t('硬贴一张图进来：不收半张空卡，说清楚要去 claude.ai', (await cards().count()) === 1 && (await pg.locator('.toast').innerText()).includes('claude.ai'))
+await pg.locator('.ghost[aria-label="搜索"]').click()
+await pg.locator('#search').fill('Lily'); await wait()
+t('搜索照样能用，但没有「问 Claude」', (await cards().count()) === 1 && (await pg.locator('.ask-go').count()) === 0)
+await pg.locator('.ghost[aria-label="搜索"]').click()
+
 await pg.reload({ waitUntil: 'load' }); await wait(500)
 t('刷新之后还在（存在这台设备的浏览器里）', (await cards().count()) === 1)
 t('页脚说清楚存在哪', (await pg.locator('.foot').innerText()).includes('这台设备'))

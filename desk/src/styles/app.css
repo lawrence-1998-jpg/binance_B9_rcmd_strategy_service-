@@ -200,6 +200,83 @@ h1, h2, h3, h4, p { margin: 0; }
 }
 .warn { margin: -4px 0 12px; font-size: 14px; color: var(--danger); }
 
+/* 截图按钮：收件框右下角，跟「收下」同一个位置、同一种分量 */
+.shot-btn {
+  flex-shrink: 0;
+  display: inline-flex; align-items: center; gap: 6px;
+  min-height: var(--tap); padding: 0 14px; border-radius: 12px;
+  color: var(--ink-2); font-size: 14.5px; font-weight: 550;
+  border: 1px solid var(--line);
+}
+.shot-btn:hover { background: var(--well); color: var(--ink); }
+
+/* ---------------------------------------------------------------- 问 */
+
+.ask-go {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  min-height: 52px; margin: -2px 0 10px; padding: 8px 14px;
+  border-radius: 14px;
+  background: var(--accent-soft); color: var(--ink);
+  font-size: 15px; text-align: left;
+}
+.ask-go svg { color: var(--accent); flex-shrink: 0; }
+.ask-go span { min-width: 0; overflow-wrap: anywhere; }
+.ask-go b { font-weight: 650; }
+
+.answer {
+  margin: 0 0 14px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+.answer-h {
+  display: flex; align-items: center; gap: 4px;
+  padding: 4px 6px 4px 16px;
+  border-bottom: 1px solid var(--line-2);
+  background: var(--accent-soft);
+}
+.answer-q { flex: 1; min-width: 0; font-size: 13.5px; font-weight: 650; color: var(--accent); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.answer-b { padding: 14px 16px 16px; }
+.answer-t { font-size: 16px; line-height: 1.75; white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; -webkit-user-select: text; }
+.answer-wait { color: var(--ink-3); animation: breathe 1.4s ease-in-out infinite; }
+.answer-err { margin-top: 8px; font-size: 14px; color: var(--danger); }
+/* 回答里的出处：句子里只标一个小号数字，下面列出整行可点的卡片 */
+.ref {
+  display: inline-grid; place-items: center;
+  min-width: 18px; height: 18px; margin: 0 2px; padding: 0 4px; border-radius: 9px;
+  background: var(--accent-soft); color: var(--accent);
+  font-family: var(--f-mono); font-size: 11.5px; font-weight: 700; line-height: 1;
+  vertical-align: 2px;
+}
+.srcs { display: grid; gap: 6px; margin-top: 14px; }
+.src {
+  --kc: var(--k-other);
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  min-height: var(--tap); padding: 6px 12px; border-radius: 12px;
+  background: var(--well); text-align: left;
+}
+.src[data-k="event"] { --kc: var(--k-event); } .src[data-k="contact"] { --kc: var(--k-contact); }
+.src[data-k="todo"] { --kc: var(--k-todo); }   .src[data-k="link"] { --kc: var(--k-link); }
+.src[data-k="data"] { --kc: var(--k-data); }   .src[data-k="note"] { --kc: var(--k-note); }
+.src[data-k="idea"] { --kc: var(--k-idea); }   .src[data-k="quote"] { --kc: var(--k-quote); }
+.src[data-k="question"] { --kc: var(--k-question); } .src[data-k="code"] { --kc: var(--k-code); }
+.src .ref { margin: 0; vertical-align: 0; }
+.src-k { font-size: 12.5px; font-weight: 650; color: var(--kc); white-space: nowrap; }
+.src-t { flex: 1; min-width: 0; font-size: 15px; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.src-go { color: var(--ink-3); }
+.src:hover { background: color-mix(in srgb, var(--well) 70%, var(--line)); }
+
+.mini {
+  flex-shrink: 0;
+  min-height: var(--tap); min-width: var(--tap); padding: 0 12px; border-radius: 10px;
+  font-size: 14px; font-weight: 550; color: var(--ink-2);
+}
+.mini:hover { background: color-mix(in srgb, var(--card) 60%, transparent); color: var(--ink); }
+.mini.ok { color: var(--ok-text); }
+.mini.x { padding: 0; font-size: 15px; }
+
 /* ---------------------------------------------------------------- 类型筛选 */
 
 .kinds {
@@ -337,6 +414,23 @@ h1, h2, h3, h4, p { margin: 0; }
 
 .detail { display: grid; gap: 14px; margin-top: 12px; padding-right: 10px; }
 .note { font-size: 14px; color: var(--ink-2); background: var(--well); padding: 10px 12px; border-radius: 10px; }
+
+/* 截图：先露一截，点开看全图 */
+.shot {
+  display: block; width: 100%;
+  max-height: 240px; overflow: hidden;
+  border-radius: 12px; border: 1px solid var(--line-2);
+  background: var(--well);
+  position: relative;
+}
+.shot img { display: block; width: 100%; height: auto; }
+.shot:not(.big)::after {
+  content: '点开看全图'; position: absolute; left: 0; right: 0; bottom: 0;
+  padding: 28px 12px 10px; text-align: center;
+  font-size: 13px; color: var(--ink-2);
+  background: linear-gradient(to bottom, transparent, var(--card) 70%);
+}
+.shot.big { max-height: none; }
 
 .rows { display: grid; border-top: 1px solid var(--line-2); }
 .row {
