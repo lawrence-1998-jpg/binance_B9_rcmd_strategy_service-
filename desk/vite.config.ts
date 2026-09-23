@@ -24,16 +24,16 @@ export default defineConfig({
       injectRegister: null,
       includeAssets: ['icons/apple-touch-icon.png'],
       manifest: {
-        name: '随手 · 贴进来，拿走 Prompt',
-        short_name: '随手',
+        name: '随手拾',
+        short_name: '随手拾',
         lang: 'zh-CN',
-        description: '复制了什么就贴进来，自动拼好结构化的 AI Prompt，一下复制走。',
+        description: '随手复制的信息贴进来，整理成卡片：收着、找得到、随时复制出去用。',
         start_url: './index.html',
         scope: './',
         display: 'standalone',
         orientation: 'any',
-        background_color: '#f4f2ed',
-        theme_color: '#f4f2ed',
+        background_color: '#eceff3',
+        theme_color: '#eceff3',
         // 安卓上装到桌面之后，在任何 App 里点「分享」都能直接丢进来（App.tsx 读 ?text=）
         share_target: {
           action: './index.html',

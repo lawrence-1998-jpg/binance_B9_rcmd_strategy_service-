@@ -1,11 +1,11 @@
-# 把「随手」发布到 GitHub Pages，好让手机能「添加到主屏幕」装成 App。
+# 把「随手拾」发布到 GitHub Pages，好让手机能「添加到主屏幕」装成 App。
 # 从源码构建而不是直接传仓库里的产物，避免产物过期。
 #
 # ⚠️ 需要先手动开一次 Pages（只需一次）：
 #    仓库 Settings → Pages → Build and deployment → Source 选 "GitHub Actions"
 #    Actions 的 GITHUB_TOKEN 没有创建 Pages 站点的权限，这一步只能由人来点。
 #    开完之后这个流水线每次推送自动发布，不用再管。
-name: Deploy 随手 to Pages
+name: Deploy 随手拾 to Pages
 
 on:
   push:
@@ -159,7 +159,7 @@ jobs:
         working-directory: desk
         run: npx playwright install --with-deps chromium
 
-      - name: 跑全套（6 个套件）
+      - name: 跑全套（7 个套件）
         working-directory: desk
         run: npm test
         env:

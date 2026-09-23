@@ -19,13 +19,14 @@ const DIST = resolve(HERE, '..', 'dist')
 const PORT = Number(process.env.DESK_PORT ?? 8765)
 
 // 默认这一批：能在干净机器上跑起来、且真的出断言的。
-//   unit      识别 + 拼 Prompt（不起浏览器）
-//   flow      整条路：贴进来 → 换用途 → 复制 → 撤销 → 最近，每一步都读真的剪贴板
-//   look      手机 / 电脑 × 浅色 / 深色：对比度、点击区域、不出界、底栏不压字
-//   private   她贴的东西一个字都不出这台设备
+//   unit      纯逻辑：本地认字段、给 Claude 的指令、核 Claude 的回复、复制出去的样子
+//   flow      在 claude.ai 里（假运行时 mock-claude.js）：收 → 整理 → 复制 → 待办 → 筛选搜索 → 多选 → 删 → 刷新；Claude 忙 / 不可用
+//   offline   不在 claude.ai 里：没有 AI 也能收、能认、能复制、刷新还在
+//   look      手机 / 小屏 / 电脑 × 浅色 / 深色：对比度、点击区域、不出界、不裁字
+//   private   不出网；每一笔都写在她自己那一格
 //   single    仓库里那份离线单文件版能双击打开、能用、不乱码
-//   swupdate  新版本打开一次就到她手上（会临时换 dist，run-all.sh 会还原）
-const DEFAULT = ['unit', 'flow', 'look', 'private', 'single', 'swupdate']
+//   swupdate  GitHub Pages 那一版：新版本打开一次就到手上（会临时换 dist，run-all.sh 会还原）
+const DEFAULT = ['unit', 'flow', 'offline', 'look', 'private', 'single', 'swupdate']
 
 const suites = process.argv.slice(2).filter((a) => !a.startsWith('-'))
 const list = suites.length ? suites : DEFAULT
