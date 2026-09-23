@@ -65,7 +65,7 @@ let body = html.match(/<body>([\s\S]*?)<\/body>/)?.[1] ?? ''
 const grab = (src_, re) => src_.match(re) ?? []
 const styleLinks = grab(head, /<link\b[^>]*rel=["']stylesheet["'][^>]*>/g)
 const styles = grab(head, /<style[\s\S]*?<\/style>/g)
-const title = head.match(/<title>[\s\S]*?<\/title>/)?.[0] ?? '<title>案头 Deskside</title>'
+const title = head.match(/<title>[\s\S]*?<\/title>/)?.[0] ?? '<title>随手</title>'
 
 // 脚本必须排在 #root 之后，React 一挂载就找它
 const bodyScripts = grab(body, /<script[\s\S]*?<\/script>/g)

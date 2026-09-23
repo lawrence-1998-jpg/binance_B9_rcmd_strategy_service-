@@ -1,5 +1,4 @@
 import { defineConfig } from 'vite'
-import { execSync } from 'node:child_process'
 import react from '@vitejs/plugin-react'
 import { viteSingleFile } from 'vite-plugin-singlefile'
 
@@ -13,15 +12,14 @@ import { viteSingleFile } from 'vite-plugin-singlefile'
  * 所以这里打成 iife，再由 postbuild 去掉 type="module"。
  */
 
-const sha = (() => {
-  try { return execSync('git rev-parse --short HEAD').toString().trim() } catch { return 'dev' }
-})()
-const built = new Date().toISOString().slice(0, 16).replace('T', ' ')
-
+// 版本戳在这里是固定的，不是提交号 + 构建时间。
+// 仓库里签着一份这个产物，CI 会拿源码重新构建一遍、逐字节比对（不一致就红）——
+// 要是把构建时间印进去，两次构建永远不一样，那条检查就永远是红的。
+// 产物只取决于源码，才比得出「过没过期」。
 export default defineConfig({
   define: {
-    __BUILD_SHA__: JSON.stringify(sha),
-    __BUILD_TIME__: JSON.stringify(built),
+    __BUILD_SHA__: JSON.stringify('offline'),
+    __BUILD_TIME__: JSON.stringify('offline'),
   },
   base: './',
   // removeViteModuleLoader 不能开：iife 下入口脚本本身会被当成 module loader 删掉，

@@ -1,16 +1,14 @@
 {
-  "name": "deskside",
+  "name": "suishou",
   "private": true,
-  "version": "1.0.0",
+  "version": "2.0.0",
   "type": "module",
-  "description": "案头 Deskside — 个人工作台（咨询顾问 / 字节产品经理 / 生活）",
+  "description": "随手 — 复制了什么就贴进来，拿走结构化的 AI Prompt",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview --host --port 4173",
     "typecheck": "tsc -b --noEmit",
-    "prebuild": "node scripts-build-prompts.mjs",
-    "predev": "node scripts-build-prompts.mjs",
     "test": "node test/run.mjs"
   },
   "dependencies": {

@@ -1,248 +1,109 @@
-import { useSyncExternalStore } from 'react'
-import type { Conf, Inquiry, State } from './types'
-import { confFromSources } from './types'
-import { seed, empty } from './seed'
-
-const KEY = 'deskside.v1'
-/**
- * 读不出来的那份原始数据留在这儿。
- *
- * 以前 load() 遇到解析失败、或者对象上没有 version，就直接 return seed()
- * ——回到示例数据。然后她一动，persist() 就把示例数据盖回同一个 key。
- * 也就是那本日记会被**静默地、永久地**覆盖掉，一句提示都没有。
- * 没有后端、没有回收站、她也还没有导出备份的习惯，这是这个 App
- * 能造成的最坏结果。
- *
- * 现在：读不出来就先把原始那串字节原样抄到这个 key 再说。哪怕我
- * 解析不了它，那也是她的东西，轮不到我扔。只写一次、永不覆盖——
- * 第一份才是最接近她真实数据的那份。
- */
-const RESCUE = 'deskside.v1.rescue'
+import type { Intent, Kind, Target } from './shape'
 
 /**
- * 全部外部数据只经过这一个文件，界面只跟它打交道。
- * 以后要换成后端 API，只改这里，五个屏一行不用动。
+ * 只存在这台设备的 localStorage 里，不上传。
+ *
+ * 存三样：正在弄的这一条（切出去再回来还在）、最近复制过的 30 条
+ * （同一段材料常常要换个用途再问一次）、两个偏好。
+ * 读写全包 try：无痕模式、存储满了、被禁用，都不能让页面打不开。
  */
-function load(): State {
-  let raw: string | null = null
+const KEY = 'suishou.v1'
+const MAX_ITEMS = 30
+/** 超过这么长的不进「最近」：一条就能把 localStorage 撑满 */
+const MAX_ITEM_CHARS = 60_000
+
+export interface Draft {
+  material: string
+  /** null = 用推荐的那个 */
+  intent: Intent | null
+  note: string
+  /** 手改过的 Prompt；null = 没改过 */
+  edited: string | null
+}
+
+export interface Item {
+  id: string
+  ts: number
+  material: string
+  intent: Intent
+  note: string
+  kind: Kind
+}
+
+export interface Saved {
+  draft: Draft
+  history: Item[]
+  target: Target
+  /** 贴进来就自动复制推荐的那一版 */
+  auto: boolean
+}
+
+const EMPTY: Saved = {
+  draft: { material: '', intent: null, note: '', edited: null },
+  history: [],
+  target: 'md',
+  auto: true,
+}
+
+export function load(): Saved {
   try {
-    raw = localStorage.getItem(KEY)
+    const raw = localStorage.getItem(KEY)
+    if (!raw) return structuredCloneSafe(EMPTY)
+    const s = JSON.parse(raw) as Partial<Saved>
+    return {
+      draft: { ...EMPTY.draft, ...(s.draft ?? {}) },
+      history: Array.isArray(s.history) ? s.history.filter(isItem).slice(0, MAX_ITEMS) : [],
+      target: s.target === 'xml' ? 'xml' : 'md',
+      auto: s.auto !== false,
+    }
   } catch {
-    /* 存储被清了、或在隐私模式下读不到 —— 回到种子数据，不崩 */
-    return seed()
+    return structuredCloneSafe(EMPTY)
   }
-  if (!raw) return seed()
+}
+
+export function save(s: Saved): boolean {
   try {
-    const parsed = JSON.parse(raw) as Partial<State>
-    if (parsed && typeof parsed === 'object' && (parsed.version ?? 0) >= 1) return merge(parsed)
+    localStorage.setItem(KEY, JSON.stringify(s))
+    return true
   } catch {
-    /* 落到下面去救 */
-  }
-  // 有东西，但读不出来。先留一份原样的，再回种子
-  keepRescue(raw)
-  return seed()
-}
-
-/** 原样抄一份。已经有一份了就不动它——先来的那份更接近她真实的数据 */
-function keepRescue(raw: string) {
-  try {
-    if (localStorage.getItem(RESCUE) === null) localStorage.setItem(RESCUE, raw)
-  } catch {
-    /* 配额满了/无痕模式，救不了就算了，至少没让它更糟 */
+    // 满了：先丢掉一半旧记录再试一次，正在弄的那条最要紧
+    try {
+      localStorage.setItem(KEY, JSON.stringify({ ...s, history: s.history.slice(0, Math.floor(s.history.length / 2)) }))
+      return true
+    } catch {
+      return false
+    }
   }
 }
 
-function peekRescue(): string | null {
-  try { return localStorage.getItem(RESCUE) } catch { return null }
+/** 复制成功的那一刻记一笔。同一段材料只留一条，挪到最前面 */
+export function remember(list: Item[], it: Omit<Item, 'id' | 'ts'>): Item[] {
+  if (!it.material.trim() || it.material.length > MAX_ITEM_CHARS) return list
+  const rest = list.filter((x) => x.material !== it.material)
+  const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 6)
+  return [{ ...it, id, ts: Date.now() }, ...rest].slice(0, MAX_ITEMS)
 }
 
-/**
- * 把存下来的数据合回当前形状。
- *
- * 顶层浅合并（`{...seed(), ...parsed}`）只补得了新增的顶层字段：
- * 老数据里已经存在的 `trip` / `promptDraft` 是整个对象被原样带过来的，
- * 里面新加的字段不会被补上，读到就是 undefined。trip 尤其致命——
- * 少一个 todos 数组，`.map` 直接把屏幕打崩。
- * 所以这两个嵌套对象单独再合一层，数组字段逐个兜底成数组。
- */
-function merge(p: Partial<State>): State {
-  // 底座是 empty() 不是 seed()。
-  //
-  // merge 的两个调用点都是「她已经有数据了」：load() 读她存着的，
-  // importState() 恢复她的备份。这两种情况下少了个字段，意思都是
-  // 「这份存档比那个集合还老」或者「那时候她一条都没有」——
-  // **不是「该来点演示数据了」**。
-  //
-  // 以前用 seed() 当底座，于是一份缺字段的老备份恢复完，
-  // 「会员体系诊断 · 客户 A」「订往返机票」会当成她的数据出现在屏幕上：
-  // 不报错、不留空，凭空多出几个她从没建过的项目。
-  //
-  // 真正该给种子数据的是全新安装，而那条路根本不走这儿 ——
-  // load() 在 `!raw` 的时候直接 `return seed()`。
-  const base = empty()
-  const arr = <T>(v: unknown, fallback: T[]): T[] => (Array.isArray(v) ? (v as T[]) : fallback)
-  const obj = (v: unknown): Record<string, unknown> =>
-    v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : {}
-  return {
-    ...base,
-    ...p,
-    version: 1,
-    focus: obj(p.focus) as Record<string, string>,
-    tasks: arr(p.tasks, base.tasks),
-    notes: arr(p.notes, base.notes),
-    engagements: arr(p.engagements, base.engagements),
-    inquiries: arr<Inquiry>(p.inquiries, []).map(migrateFacts),
-    meetings: arr(p.meetings, base.meetings),
-    anniversaries: arr(p.anniversaries, base.anniversaries),
-    wishes: arr(p.wishes, base.wishes),
-    trip: { ...base.trip, ...obj(p.trip), days: arr(obj(p.trip).days, base.trip.days), todos: arr(obj(p.trip).todos, base.trip.todos) },
-    logs: arr(p.logs, base.logs),
-    promptDraft: { ...base.promptDraft, ...obj(p.promptDraft) },
-    photos: arr(p.photos, []),
-    moments: arr(p.moments, []),
-    entries: arr(p.entries, []),
-    myPrompts: arr(p.myPrompts, []),
-    promptUses: obj(p.promptUses) as Record<string, number>,
-    promptParts: arr(p.promptParts, []),
-    promptCat: typeof p.promptCat === 'string' ? p.promptCat : null,
-    hidden: arr(p.hidden, []),
-    kept: obj(p.kept) as Record<string, number>,
-  }
+function isItem(x: unknown): x is Item {
+  const o = x as Item
+  return !!o && typeof o.material === 'string' && typeof o.intent === 'string' && typeof o.ts === 'number'
 }
 
-let state: State = load()
-const subs = new Set<() => void>()
-
-/**
- * 「上次有一份数据没读出来」。
- *
- * 每次启动都读一遍，不只是刚出事那一次：出事的时候她多半不在看，
- * 得让这条一直挂着，直到她自己把那份导出去。
- */
-let rescued: string | null = peekRescue()
-const rescueSubs = new Set<(r: string | null) => void>()
-
-export function onRescue(cb: (r: string | null) => void) {
-  rescueSubs.add(cb)
-  cb(rescued)
-  return () => { rescueSubs.delete(cb) }
+function structuredCloneSafe(s: Saved): Saved {
+  return { draft: { ...s.draft }, history: [], target: s.target, auto: s.auto }
 }
 
-export function rescuedRaw(): string | null { return rescued }
-
-/** 她说存好了才删。这一步是不可逆的，所以只能由她点 */
-export function dropRescue() {
-  try { localStorage.removeItem(RESCUE) } catch { /* 删不掉就留着，不是坏事 */ }
-  rescued = null
-  rescueSubs.forEach((f) => f(null))
-}
-
-/**
- * 写盘失败的处理。
- *
- * 以前这里是 try/catch 直接吞掉的，那是个很坏的默认：这是本日记，
- * 用户敲完字看到界面更新了就以为记下了，实际一个字都没落盘，
- * 关掉页面就全没。配额写满（照片元数据攒多了）和 iOS 无痕模式
- * 都会真实触发。所以失败必须冒到界面上去说。
- */
-let failed = false
-const failSubs = new Set<(f: boolean) => void>()
-export function onPersistFail(f: (failed: boolean) => void) {
-  failSubs.add(f)
-  return () => { failSubs.delete(f) }
-}
-
-
-/**
- * 老数据里每条 Fact 只有一个 `source` 和一个**手选**的 confidence。
- * 现在置信度是从出处条数推出来的（见 types.ts confOf），所以要翻译：
- *
- * - `source` 非空 → `sources: [source]`；空 → `[]`
- * - 她当年**往下压**的档留着（那是真信息：她知道某个来源不靠谱）
- * - 她当年**往上抬**的档丢掉 —— 「没出处但我觉得挺准」不是信息，是拍脑袋
- *
- * 所以迁移之后，一条没出处却被标成「高置信」的老数据会变成「低」。
- * 这是有意的：那个「高」本来就没有任何东西撑着。
- */
-function migrateFacts (q: Inquiry): Inquiry {
-  const facts = q.facts
-  if (!Array.isArray(facts)) return q
-  const RANK: Record<string, number> = { low: 0, mid: 1, high: 2 }
-  return {
-    ...q,
-    facts: facts.map((f) => {
-      const old = f as unknown as { source?: string; confidence?: Conf; sources?: string[]; lowered?: Conf }
-      if (Array.isArray(old.sources)) return f            // 已经是新结构
-      const sources = old.source?.trim() ? [old.source.trim()] : []
-      const derived = confFromSources(sources)
-      const picked = old.confidence
-      const lowered = picked && RANK[picked] < RANK[derived] ? picked : undefined
-      return { id: f.id, value: f.value, what: f.what, sources, ...(lowered ? { lowered } : {}) }
-    }),
-  }
-}
-
-function persist() {
-  try {
-    localStorage.setItem(KEY, JSON.stringify(state))
-    if (failed) { failed = false; failSubs.forEach((f) => f(false)) }
-  } catch {
-    if (!failed) { failed = true; failSubs.forEach((f) => f(true)) }
-  }
-}
-
-export function get(): State {
-  return state
-}
-
-export function update(fn: (s: State) => State) {
-  state = fn(state)
-  persist()
-  subs.forEach((f) => f())
-}
-
-function subscribe(f: () => void) {
-  subs.add(f)
-  return () => { subs.delete(f) }
-}
-
-export function useStore<T>(select: (s: State) => T): T {
-  return useSyncExternalStore(subscribe, () => select(state), () => select(state))
-}
-
-export const uid = () => Math.random().toString(36).slice(2, 10)
-
-export function resetToEmpty() {
-  update(() => empty())
-}
-
-export function exportJSON(): string {
-  return JSON.stringify(state, null, 2)
-}
-
-/** 一份备份长什么样：状态本体 + 照片二进制（data URL） */
-export interface Backup extends State {
-  exportedAt: string
-  photoData?: Record<string, string>
-}
-
-/**
- * 校验一份导入的数据。
- *
- * 以前只检查 `'tasks' in parsed` 就放行，那等于没检查：
- * `{"tasks": 123}` 能过闸，进来之后第一个 `.filter` 就把整个界面打崩，
- * 而这时旧数据已经被覆盖了，救不回来。
- */
-export function looksLikeBackup(v: unknown): v is Partial<State> {
-  if (!v || typeof v !== 'object' || Array.isArray(v)) return false
-  const o = v as Record<string, unknown>
-  // 认得出是这个 App 导出的：至少要有一个我们认识的数组字段，且形状是对的
-  const known = ['tasks', 'notes', 'engagements', 'inquiries', 'wishes', 'entries', 'photos', 'moments', 'anniversaries']
-  const present = known.filter((k) => k in o)
-  if (present.length === 0) return false
-  return present.every((k) => Array.isArray(o[k]))
-}
-
-export function importState(p: Partial<State>) {
-  update(() => merge(p))
+/** 「3 分钟前」「昨天 14:20」「9月3日」 */
+export function ago(ts: number, now = Date.now()): string {
+  const d = Math.max(0, now - ts)
+  if (d < 60_000) return '刚刚'
+  if (d < 3_600_000) return `${Math.floor(d / 60_000)} 分钟前`
+  const a = new Date(ts)
+  const b = new Date(now)
+  const hm = `${a.getHours()}:${String(a.getMinutes()).padStart(2, '0')}`
+  const day = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime()
+  const diff = Math.round((day(b) - day(a)) / 86_400_000)
+  if (diff === 0) return `今天 ${hm}`
+  if (diff === 1) return `昨天 ${hm}`
+  return `${a.getMonth() + 1}月${a.getDate()}日`
 }

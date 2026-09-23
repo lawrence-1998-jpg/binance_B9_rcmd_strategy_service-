@@ -4,3 +4,4 @@ dist-single
 dev-dist
 *.local
 *.tsbuildinfo
+test/shots

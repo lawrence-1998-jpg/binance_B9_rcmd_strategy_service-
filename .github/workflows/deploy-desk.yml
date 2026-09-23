@@ -1,11 +1,11 @@
-# 把「案头」发布到 GitHub Pages，好让手机能「添加到主屏幕」装成 App。
+# 把「随手」发布到 GitHub Pages，好让手机能「添加到主屏幕」装成 App。
 # 从源码构建而不是直接传仓库里的产物，避免产物过期。
 #
 # ⚠️ 需要先手动开一次 Pages（只需一次）：
 #    仓库 Settings → Pages → Build and deployment → Source 选 "GitHub Actions"
 #    Actions 的 GITHUB_TOKEN 没有创建 Pages 站点的权限，这一步只能由人来点。
 #    开完之后这个流水线每次推送自动发布，不用再管。
-name: Deploy 案头 to Pages
+name: Deploy 随手 to Pages
 
 on:
   push:
@@ -14,6 +14,8 @@ on:
       - claude/personal-dashboard-design-jgjmnb
     paths:
       - 'desk/**'
+      # 有人直接改了仓库里那份离线版，也要跑一遍比对
+      - 'web/desk/**'
       - '.github/workflows/deploy-desk.yml'
   workflow_dispatch:
 
@@ -49,7 +51,7 @@ jobs:
 
       - name: 私人照片不许进公开仓库
         # 这个仓库是公开的，删了也还在历史里 —— 所以必须在合进来之前拦。
-        # 案头的照片按设计只存在她手机上（IndexedDB），一张都不该进 git。
+        # 私人照片一张都不该进 git（这条守的是整个仓库，不只是 desk/）。
         run: node desk/scripts-no-private-photos.mjs
         working-directory: .
 
@@ -91,21 +93,30 @@ jobs:
       # 一个看起来是最新、其实不是的产物，比没有更糟 —— 跟这个 App 里
       # 已经砍掉的那些假数字是同一个病。所以这里钉死：**它必须跟源码一致。**
       #
-      # 注意这一步只在 desk/** 改动时才跑（见顶上的 paths），而那正是
-      # 让它过期的唯一原因，所以覆盖是够的。
+      # 这一步在 desk/** 或 web/desk/** 改动时跑（见顶上的 paths）——
+      # 前者是让它过期的原因，后者是有人直接动了它。
       - name: 仓库里那份离线版不许过期
+        # 注意比的是**提交进仓库的那一份**（git 里的），不是工作区里的文件。
+        # 上一版这里写的是 diff 两个文件 —— 而前面那步 postbuild 会把刚构建的产物
+        # 顺手写进 web/desk/，于是它拿 CI 自己的产物跟自己比，**永远一致，永远是绿的**。
+        # 本地毒化能抓到（本地是先构建、再把旧版塞回去），CI 里从来没真正检查过。
+        #
+        # 这也是单文件版的版本戳为什么是固定的（vite.config.single.ts）：
+        # 印了构建时间的话，两次构建永远不一样，这条就永远是红的。
         run: |
-          if ! diff -q desk/dist/deskside-standalone.html web/desk/deskside-standalone.html >/dev/null 2>&1; then
+          if ! git diff --quiet -- web/desk/deskside-standalone.html; then
             echo "::error::web/desk/deskside-standalone.html 跟源码对不上了。"
             echo ""
             echo "这份文件是签进仓库、给人下载下来离线打开的。源码变了它没变，"
-            echo "别人打开看到的就是旧版本。跑这两条命令，然后把它一起提交："
+            echo "别人打开看到的就是旧版本。跑这一条，然后把它一起提交："
             echo ""
             echo "    cd desk && npx vite build --config vite.config.single.ts && node scripts-postbuild-single.mjs"
-            echo "    cp desk/dist-single/index.html web/desk/deskside-standalone.html"
             echo ""
-            diff <(wc -c < desk/dist/deskside-standalone.html) <(wc -c < web/desk/deskside-standalone.html) \
-              && echo "（大小一样，但内容不同）" || true
+            git diff --stat -- web/desk/deskside-standalone.html || true
+            exit 1
+          fi
+          if ! cmp -s desk/dist/deskside-standalone.html web/desk/deskside-standalone.html; then
+            echo "::error::放进 Pages 的那份和仓库里那份不是同一个文件 —— 构建步骤的拷贝坏了"
             exit 1
           fi
           echo "ok，仓库里那份跟源码一致"
@@ -148,7 +159,7 @@ jobs:
         working-directory: desk
         run: npx playwright install --with-deps chromium
 
-      - name: 跑全套（38 个套件）
+      - name: 跑全套（6 个套件）
         working-directory: desk
         run: npm test
         env:
