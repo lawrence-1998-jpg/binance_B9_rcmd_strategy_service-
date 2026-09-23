@@ -1,109 +1,159 @@
-import type { Intent, Kind, Target } from './shape'
+import { KINDS, type Item, type Kind } from './card'
 
 /**
- * 只存在这台设备的 localStorage 里，不上传。
+ * 东西存在哪、Claude 从哪儿借。
  *
- * 存三样：正在弄的这一条（切出去再回来还在）、最近复制过的 30 条
- * （同一段材料常常要换个用途再问一次）、两个偏好。
- * 读写全包 try：无痕模式、存储满了、被禁用，都不能让页面打不开。
+ * 在 claude.ai 里打开时（页面被 claude.ai 框着，有 window.claude）：
+ *   - 存进这个 artifact 的数据库里、她自己那一格（data/users/<她的 id>/…），
+ *     平台保证只有她本人读得到，连分享出去的人也看不到；手机、电脑同一份。
+ *   - 整理交给 Claude（sample），花的是她自己账号的额度，第一次会问她同不同意。
+ *
+ * 在别处打开（GitHub Pages、下载下来的单文件）：没有 window.claude，
+ * 存在这台设备的浏览器里，只做本地整理。页面照样能用，只是少了 AI。
  */
-const KEY = 'suishou.v1'
-const MAX_ITEMS = 30
-/** 超过这么长的不进「最近」：一条就能把 localStorage 撑满 */
-const MAX_ITEM_CHARS = 60_000
 
-export interface Draft {
-  material: string
-  /** null = 用推荐的那个 */
-  intent: Intent | null
-  note: string
-  /** 手改过的 Prompt；null = 没改过 */
-  edited: string | null
+export type SampleJson = <T = unknown>(input: string, opts?: { modelTier?: 'quick' | 'default' | 'complex'; cache?: boolean; signal?: AbortSignal }) => Promise<T>
+interface Sample { json: SampleJson }
+
+interface Snap { id: string; exists: boolean; data(): Record<string, unknown> | undefined }
+interface DocRef {
+  set(d: Record<string, unknown>): Promise<void>
+  update(d: Record<string, unknown>): Promise<void>
+  delete(): Promise<void>
+}
+interface Query {
+  orderBy(f: string, dir?: 'asc' | 'desc'): Query
+  limit(n: number): Query
+  onSnapshot(next: (s: { docs: Snap[] }) => void, err?: (e: { code: string }) => void): () => void
+}
+interface Collection extends Query { doc(id?: string): DocRef }
+interface DB { doc(path: string): { collection(path: string): Collection } }
+interface User { id(): Promise<string | null> }
+
+interface ClaudeRuntime { use(name: string): Promise<unknown> }
+declare global { interface Window { claude?: ClaudeRuntime } }
+
+export interface Store {
+  mode: 'cloud' | 'local'
+  subscribe(next: (items: Item[]) => void, onError?: (code: string) => void): () => void
+  put(it: Item): Promise<void>
+  patch(id: string, p: Partial<Item>): Promise<void>
+  remove(id: string): Promise<void>
 }
 
-export interface Item {
-  id: string
-  ts: number
-  material: string
-  intent: Intent
-  note: string
-  kind: Kind
+export interface Runtime {
+  store: Store
+  /** null：这里没有 Claude 可用 */
+  sample: Sample | null
 }
 
-export interface Saved {
-  draft: Draft
-  history: Item[]
-  target: Target
-  /** 贴进来就自动复制推荐的那一版 */
-  auto: boolean
+export async function connect(): Promise<Runtime> {
+  const rt = typeof window !== 'undefined' ? window.claude : undefined
+  if (!rt || typeof rt.use !== 'function') return { store: local(), sample: null }
+  const [sample, db, user] = await Promise.all(
+    ['sample', 'db', 'user'].map((n) => rt.use(n).catch(() => null)),
+  ) as [Sample | null, DB | null, User | null]
+  const uid = await user?.id().catch(() => null)
+  const store = db && uid ? cloud(db, uid) : local()
+  return { store, sample: sample && typeof sample.json === 'function' ? sample : null }
 }
 
-const EMPTY: Saved = {
-  draft: { material: '', intent: null, note: '', edited: null },
-  history: [],
-  target: 'md',
-  auto: true,
-}
-
-export function load(): Saved {
-  try {
-    const raw = localStorage.getItem(KEY)
-    if (!raw) return structuredCloneSafe(EMPTY)
-    const s = JSON.parse(raw) as Partial<Saved>
-    return {
-      draft: { ...EMPTY.draft, ...(s.draft ?? {}) },
-      history: Array.isArray(s.history) ? s.history.filter(isItem).slice(0, MAX_ITEMS) : [],
-      target: s.target === 'xml' ? 'xml' : 'md',
-      auto: s.auto !== false,
-    }
-  } catch {
-    return structuredCloneSafe(EMPTY)
+/** 数据库里读出来的东西不一定是自己写的那个样子：补齐每一格 */
+export function normalize(id: string, d: Record<string, unknown>): Item | null {
+  if (typeof d.raw !== 'string' || !d.raw) return null
+  const arr = <T,>(x: unknown, ok: (v: unknown) => v is T): T[] => (Array.isArray(x) ? x.filter(ok) : [])
+  const s = (x: unknown) => (typeof x === 'string' ? x : '')
+  const kind = (s(d.kind) in KINDS ? s(d.kind) : 'other') as Kind
+  const status = ['pending', 'done', 'local', 'failed'].includes(s(d.status)) ? (d.status as Item['status']) : 'local'
+  return {
+    id,
+    raw: d.raw,
+    createdAt: typeof d.createdAt === 'number' ? d.createdAt : 0,
+    updatedAt: typeof d.updatedAt === 'number' ? d.updatedAt : 0,
+    status,
+    kind,
+    title: s(d.title) || d.raw.slice(0, 18),
+    summary: s(d.summary),
+    fields: arr(d.fields, (f): f is Item['fields'][number] =>
+      !!f && typeof (f as Record<string, unknown>).label === 'string' && typeof (f as Record<string, unknown>).value === 'string'),
+    todos: arr(d.todos, (t): t is Item['todos'][number] =>
+      !!t && typeof (t as Record<string, unknown>).text === 'string').map((t) => ({ text: t.text, done: !!t.done })),
+    tags: arr(d.tags, (t): t is string => typeof t === 'string'),
+    prompt: s(d.prompt),
+    pinned: !!d.pinned,
+    note: s(d.note) || undefined,
   }
 }
 
-export function save(s: Saved): boolean {
-  try {
-    localStorage.setItem(KEY, JSON.stringify(s))
-    return true
-  } catch {
-    // 满了：先丢掉一半旧记录再试一次，正在弄的那条最要紧
+const body = (it: Partial<Item>) => {
+  const o: Record<string, unknown> = { ...it }
+  delete o.id
+  for (const k of Object.keys(o)) if (o[k] === undefined) delete o[k]
+  return o
+}
+
+/**
+ * 同一条的写入排队：数据库要求同一个文档一次只写一笔。
+ * 她连点三下待办的勾，Claude 的整理结果又刚好回来 —— 这几笔得一笔一笔来
+ */
+function serial() {
+  const tails = new Map<string, Promise<unknown>>()
+  return <T,>(id: string, fn: () => Promise<T>): Promise<T> => {
+    const prev = tails.get(id) ?? Promise.resolve()
+    const next = prev.catch(() => {}).then(fn)
+    tails.set(id, next)
+    void next.finally(() => { if (tails.get(id) === next) tails.delete(id) }).catch(() => {})
+    return next
+  }
+}
+
+function cloud(db: DB, uid: string): Store {
+  const col = db.doc(`data/users/${uid}/lib`).collection('items')
+  const q = serial()
+  return {
+    mode: 'cloud',
+    subscribe(next, onError) {
+      return col.orderBy('createdAt', 'desc').limit(1000).onSnapshot(
+        (s) => next(s.docs.filter((d) => d.exists).map((d) => normalize(d.id, d.data() ?? {})).filter((x): x is Item => !!x)),
+        (e) => onError?.(e.code),
+      )
+    },
+    put: (it) => q(it.id, () => col.doc(it.id).set(body(it))),
+    patch: (id, p) => q(id, () => col.doc(id).update(body(p))),
+    remove: (id) => q(id, () => col.doc(id).delete()),
+  }
+}
+
+const KEY = 'suishou.items.v2'
+
+function local(): Store {
+  const subs = new Set<(items: Item[]) => void>()
+  const read = (): Item[] => {
     try {
-      localStorage.setItem(KEY, JSON.stringify({ ...s, history: s.history.slice(0, Math.floor(s.history.length / 2)) }))
-      return true
-    } catch {
-      return false
-    }
+      const raw = JSON.parse(localStorage.getItem(KEY) || '[]') as Record<string, unknown>[]
+      return raw.map((d) => normalize(String(d.id ?? ''), d)).filter((x): x is Item => !!x && !!x.id)
+    } catch { return [] }
   }
-}
-
-/** 复制成功的那一刻记一笔。同一段材料只留一条，挪到最前面 */
-export function remember(list: Item[], it: Omit<Item, 'id' | 'ts'>): Item[] {
-  if (!it.material.trim() || it.material.length > MAX_ITEM_CHARS) return list
-  const rest = list.filter((x) => x.material !== it.material)
-  const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 6)
-  return [{ ...it, id, ts: Date.now() }, ...rest].slice(0, MAX_ITEMS)
-}
-
-function isItem(x: unknown): x is Item {
-  const o = x as Item
-  return !!o && typeof o.material === 'string' && typeof o.intent === 'string' && typeof o.ts === 'number'
-}
-
-function structuredCloneSafe(s: Saved): Saved {
-  return { draft: { ...s.draft }, history: [], target: s.target, auto: s.auto }
-}
-
-/** 「3 分钟前」「昨天 14:20」「9月3日」 */
-export function ago(ts: number, now = Date.now()): string {
-  const d = Math.max(0, now - ts)
-  if (d < 60_000) return '刚刚'
-  if (d < 3_600_000) return `${Math.floor(d / 60_000)} 分钟前`
-  const a = new Date(ts)
-  const b = new Date(now)
-  const hm = `${a.getHours()}:${String(a.getMinutes()).padStart(2, '0')}`
-  const day = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime()
-  const diff = Math.round((day(b) - day(a)) / 86_400_000)
-  if (diff === 0) return `今天 ${hm}`
-  if (diff === 1) return `昨天 ${hm}`
-  return `${a.getMonth() + 1}月${a.getDate()}日`
+  let items = read()
+  const sorted = () => [...items].sort((a, b) => b.createdAt - a.createdAt)
+  const emit = () => { const s = sorted(); subs.forEach((f) => f(s)) }
+  const write = () => {
+    try { localStorage.setItem(KEY, JSON.stringify(items)) } catch { /* 无痕 / 满了：这次会话里还在 */ }
+    emit()
+  }
+  // 另一个标签页改了，这边跟着变
+  if (typeof window !== 'undefined') {
+    window.addEventListener('storage', (e) => { if (e.key === KEY) { items = read(); emit() } })
+  }
+  return {
+    mode: 'local',
+    subscribe(next) {
+      subs.add(next)
+      queueMicrotask(() => next(sorted()))
+      return () => { subs.delete(next) }
+    },
+    async put(it) { items = [it, ...items.filter((x) => x.id !== it.id)]; write() },
+    async patch(id, p) { items = items.map((x) => (x.id === id ? { ...x, ...p, id } : x)); write() },
+    async remove(id) { items = items.filter((x) => x.id !== id); write() },
+  }
 }

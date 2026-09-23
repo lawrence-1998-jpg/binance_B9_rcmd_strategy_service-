@@ -1,577 +1,600 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { build, detect, intentInfo, intentsFor, type Intent, type Kind, type Target } from './lib/shape'
+import {
+  KINDS, aiPrompt, asAi, asText, dayGroup, fromAi, manyAi, manyText, matches, newId, quick, stamp, tidy,
+  type Item, type Kind,
+} from './lib/card'
+import { connect, type Runtime } from './lib/store'
 import { copyText } from './lib/copy'
-import { ago, load, remember, save, type Item } from './lib/store'
 import { applyUpdate, useUpdate } from './lib/update'
-import { Preview } from './Preview'
 import { EXAMPLES } from './examples'
 
 /**
- * 随手：复制了什么就贴进来 → 自动认出是什么、拼好 Prompt → 拿走去粘贴。
+ * 随手拾 —— 随手复制的信息，贴进来就被整理成一张卡片，收着、找得到、随时拿出去用。
  *
- * 整个页面只干这一件事。几条定下来的规矩：
- *
- * 1. **贴进来那一下就已经复制好了。** 贴入（按钮、⌘V、长按粘贴）会顺手把推荐的
- *    那一版写回剪贴板 —— 她切回 AI 直接粘贴，一下都不用多点。
- * 2. **选用途 = 复制。** 用途是一排大按钮，点哪个就复制哪个版本，
- *    不存在「先选、再找复制按钮」。
- * 3. **复制的入口到处都是，而且都够大：** 底部整条按钮、整张 Prompt 卡片、
- *    用途按钮、「去 ChatGPT / Claude…」（先复制再打开）、⌘↵。
- * 4. 永远说清楚剪贴板里现在是哪一版：改了一个字，按钮就从「✓ 已复制」
- *    变回「复制新版本」—— 不会让她带着旧的那版去粘贴。
- * 5. 什么都能撤销。换掉、清空、手改被覆盖，都给一个「撤销」。
+ * 三件事，按她用的顺序：
+ *   收：粘贴即收下。不用点「保存」，不用选类型。
+ *   整：Claude 读懂它，拆成标题、要点、字段（时间 / 地点 / 电话 / 金额…）、待办，
+ *       再替她想好下一步拿去问 AI 的那一句。Claude 想的那几秒，本地先认出来的东西已经摆上了。
+ *   用：一张卡上能复制的东西都是按钮 —— 一个字段、整理版、给 AI 的版本、原文；
+ *       多选几张，合成一段再复制。
  */
 
-type ToastT = { msg: string; undo?: () => void; id: number }
-type Snapshot = { material: string; picked: Intent | null; note: string; edited: string | null }
+type Toast = { msg: string; undo?: () => void; id: number }
+/** 这几种错误说明这个视图里用不了 Claude：别再问了，整理降级成本地 */
+const AI_OFF = new Set(['not_granted', 'sampling_disabled', 'not_declared', 'capability_disabled', 'capability_removed'])
 
-const OPENERS: { id: string; label: string; href: (q: string) => string }[] = [
-  // ChatGPT 和 Claude 认 ?q= 预填；太长的放不进网址，就只打开、靠剪贴板
-  { id: 'chatgpt', label: 'ChatGPT', href: (q) => (q ? `https://chatgpt.com/?q=${q}` : 'https://chatgpt.com/') },
-  { id: 'claude', label: 'Claude', href: (q) => (q ? `https://claude.ai/new?q=${q}` : 'https://claude.ai/new') },
-  { id: 'doubao', label: '豆包', href: () => 'https://www.doubao.com/chat/' },
-  { id: 'deepseek', label: 'DeepSeek', href: () => 'https://chat.deepseek.com/' },
-  { id: 'kimi', label: 'Kimi', href: () => 'https://www.kimi.com/' },
-]
-/** 网址预填的上限。再长，有的浏览器/网关会直接截断或拒绝 */
-const Q_MAX = 6000
-
-const touch = typeof window !== 'undefined' && window.matchMedia?.('(pointer: coarse)').matches
-const mac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent)
-const MOD = mac ? '⌘' : 'Ctrl'
+const touch = typeof window !== 'undefined' && !!window.matchMedia?.('(pointer: coarse)').matches
+const MOD = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent) ? '⌘' : 'Ctrl'
 
 export function App() {
-  const init = useMemo(load, [])
-  const [material, setMaterial] = useState(init.draft.material)
-  const [picked, setPicked] = useState<Intent | null>(init.draft.intent)
-  const [note, setNote] = useState(init.draft.note)
-  const [edited, setEdited] = useState<string | null>(init.draft.edited)
-  const [target, setTarget] = useState<Target>(init.target)
-  const [auto, setAuto] = useState(init.auto)
-  const [history, setHistory] = useState<Item[]>(init.history)
-  /** 最后一次真的写进剪贴板的那段文字。跟当前 Prompt 一比，就知道剪贴板是不是最新的 */
+  const [rt, setRt] = useState<Runtime | null>(null)
+  const [items, setItems] = useState<Item[] | null>(null)
+  const [aiOff, setAiOff] = useState(false)
+  const [open, setOpen] = useState<string | null>(null)
+  const [kind, setKind] = useState<Kind | 'all'>('all')
+  const [q, setQ] = useState('')
+  const [searching, setSearching] = useState(false)
+  const [picked, setPicked] = useState<Set<string> | null>(null)
+  const [toast, setToast] = useState<Toast | null>(null)
   const [copied, setCopied] = useState<string | null>(null)
-  const [pulse, setPulse] = useState(0)
-  const [toast, setToast] = useState<ToastT | null>(null)
-  const [sheet, setSheet] = useState(false)
-  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState('')
+  const [storeErr, setStoreErr] = useState<string | null>(null)
+  const [now, setNow] = useState(() => Date.now())
 
-  const det = useMemo(() => detect(material), [material])
-  const has = material.trim().length > 0
-  const intents = useMemo(() => intentsFor(det), [det])
-  const intent: Intent = picked && intents.some((i) => i.id === picked) ? picked : det.picks[0]
-  const info = intentInfo(intent, det)
-  const generated = useMemo(
-    () => (has ? build({ material, intent, note, target, det }) : ''),
-    [has, material, intent, note, target, det],
-  )
-  const prompt = edited ?? generated
-  const fresh = has && copied === prompt
+  const rtRef = useRef<Runtime | null>(null)
+  const readyWaiters = useRef<((r: Runtime) => void)[]>([])
+  const itemsRef = useRef<Item[]>([])
+  itemsRef.current = items ?? []
+  const aiOffRef = useRef(false)
+  aiOffRef.current = aiOff
+  const capRef = useRef<HTMLTextAreaElement>(null)
 
-  const matRef = useRef<HTMLTextAreaElement>(null)
+  // ---------------------------------------------------------------- 连上
 
-  // ---------------------------------------------------------------- 存
-
-  const saved = useRef({ material, picked, note, edited, target, auto, history })
-  saved.current = { material, picked, note, edited, target, auto, history }
-  const flush = useCallback(() => {
-    const s = saved.current
-    save({ draft: { material: s.material, intent: s.picked, note: s.note, edited: s.edited }, history: s.history, target: s.target, auto: s.auto })
+  useEffect(() => {
+    let live = true
+    void connect().then((r) => {
+      if (!live) return
+      rtRef.current = r
+      setRt(r)
+      readyWaiters.current.splice(0).forEach((f) => f(r))
+    })
+    return () => { live = false }
   }, [])
   useEffect(() => {
-    const t = setTimeout(flush, 300)
-    return () => clearTimeout(t)
-  }, [material, picked, note, edited, target, auto, history, flush])
+    if (!rt) return
+    return rt.store.subscribe(setItems, (code) => setStoreErr(code))
+  }, [rt])
   useEffect(() => {
-    // 她复制完马上切走，300ms 的防抖可能还没到 —— 切走那一刻补存一次
-    const on = () => { if (document.visibilityState === 'hidden') flush() }
-    document.addEventListener('visibilitychange', on)
-    window.addEventListener('pagehide', flush)
-    return () => { document.removeEventListener('visibilitychange', on); window.removeEventListener('pagehide', flush) }
-  }, [flush])
+    const t = setInterval(() => setNow(Date.now()), 60_000)
+    return () => clearInterval(t)
+  }, [])
 
-  // ---------------------------------------------------------------- 提示条
+  const whenReady = () => (rtRef.current ? Promise.resolve(rtRef.current) : new Promise<Runtime>((r) => readyWaiters.current.push(r)))
+
+  // ---------------------------------------------------------------- 提示
 
   const say = useCallback((msg: string, undo?: () => void) => setToast({ msg, undo, id: Date.now() }), [])
   useEffect(() => {
     if (!toast) return
-    const t = setTimeout(() => setToast(null), toast.undo ? 6000 : 2600)
+    const t = setTimeout(() => setToast(null), toast.undo ? 6000 : 2200)
     return () => clearTimeout(t)
   }, [toast])
 
-  const snapshot = (): Snapshot => ({ material, picked, note, edited })
-  const restore = (s: Snapshot) => {
-    setMaterial(s.material); setPicked(s.picked); setNote(s.note); setEdited(s.edited); setEditing(false)
+  const copyTimer = useRef<number>()
+  /** 必须在点击 / 按键里同步调用：copyText 第一步就写剪贴板，iOS 只认手势里发起的写入 */
+  const copy = (text: string, key: string, what: string) => {
+    void copyText(text).then((ok) => {
+      if (!ok) { say('没复制上 —— 长按文字自己选一下'); return }
+      setCopied(key)
+      window.clearTimeout(copyTimer.current)
+      copyTimer.current = window.setTimeout(() => setCopied(null), 1600)
+      try { navigator.vibrate?.(10) } catch { /* 不支持就算了 */ }
+      say(`已复制${what}`)
+    })
   }
 
-  // ---------------------------------------------------------------- 复制
+  // ---------------------------------------------------------------- 整理
 
-  /**
-   * 注意：这个函数必须在点击 / 粘贴事件里**同步**调起来。
-   * copyText 的第一行就是 clipboard.writeText —— iOS 只认用户手势里发起的写入，
-   * 前面垫一个 await 就会被拒。
-   */
-  const doCopy = useCallback(
-    (text: string, it: { material: string; intent: Intent; note: string; kind: Kind }, quiet = false) => {
-      if (!text) return Promise.resolve(false)
-      return copyText(text).then((ok) => {
-        if (ok) {
-          setCopied(text)
-          setPulse((n) => n + 1)
-          try { navigator.vibrate?.(12) } catch { /* 不支持就算了 */ }
-          setHistory((h) => remember(h, it))
-        } else if (!quiet) {
-          say('没复制上 —— 点「手改」，全选后自己复制')
-        }
-        return ok
-      })
-    },
-    [say],
-  )
+  const patch = async (id: string, p: Partial<Item>) => {
+    try { await rtRef.current?.store.patch(id, { ...p, updatedAt: Date.now() }) } catch { /* 已经被删了 */ }
+  }
 
-  const copyNow = () => doCopy(prompt, { material, intent, note, kind: det.kind })
+  const organize = async (it: Item, again = false) => {
+    const r = await whenReady()
+    if (!r.sample || aiOffRef.current) { await patch(it.id, { status: 'local', note: '' }); return }
+    if (again) await patch(it.id, { status: 'pending', note: '' })
+    try {
+      const j = await r.sample.json(aiPrompt(it.raw), again ? { modelTier: 'default', cache: false } : { modelTier: 'quick' })
+      const card = fromAi(j)
+      if (!card) throw { code: 'invalid_json' }
+      await patch(it.id, { ...card, status: 'done', note: '' })
+    } catch (e) {
+      const code = (e as { code?: string })?.code ?? 'upstream_error'
+      if (code === 'cancelled') return
+      if (AI_OFF.has(code)) {
+        setAiOff(true)
+        await patch(it.id, { status: 'local', note: '' })
+        return
+      }
+      const note =
+        code === 'rate_limited' ? 'Claude 这会儿忙，过一会儿点「重新整理」'
+        : code === 'prompt_too_large' ? '太长了，Claude 一次读不完 —— 可以分几段收'
+        : code === 'refused' ? 'Claude 没接这条，先做了基础整理'
+        : code === 'session_expired' ? '登录过期了，重新登录 claude.ai 后点「重新整理」'
+        : '这次没整理成，点「重新整理」再试'
+      await patch(it.id, { status: 'failed', note })
+    }
+  }
 
-  // ---------------------------------------------------------------- 贴进来
+  // ---------------------------------------------------------------- 收
 
-  const takeIn = (raw: string, opts: { autoCopy: boolean }) => {
-    const text = raw.replace(/\r\n?/g, '\n')
-    if (!text.trim()) {
-      say('剪贴板里没有文字')
+  const add = async (text: string) => {
+    const raw = tidy(text)
+    if (!raw) { say('剪贴板里没有文字'); return }
+    const r = await whenReady()
+    const dup = itemsRef.current.find((x) => x.raw === raw)
+    if (dup) {
+      setKind('all'); setQ(''); setOpen(dup.id)
+      say('这条已经收过了')
+      requestAnimationFrame(() => document.getElementById('c-' + dup.id)?.scrollIntoView({ block: 'center', behavior: 'smooth' }))
       return
     }
-    const prev = snapshot()
-    setMaterial(text); setPicked(null); setNote(''); setEdited(null); setEditing(false)
-    if (prev.material.trim() && prev.material !== text) say('换成新贴的这段了', () => restore(prev))
-    if (opts.autoCopy && auto) {
-      const d = detect(text)
-      const p = build({ material: text, intent: d.picks[0], note: '', target, det: d })
-      // 静默：自动复制失败不算错，底下那个大按钮还在
-      void doCopy(p, { material: text, intent: d.picks[0], note: '', kind: d.kind }, true)
-    } else {
-      setCopied(null)
+    const t = Date.now()
+    const it: Item = {
+      id: newId(), raw, createdAt: t, updatedAt: t,
+      status: r.sample && !aiOffRef.current ? 'pending' : 'local',
+      pinned: false,
+      ...quick(raw),
     }
-  }
-  const takeInRef = useRef(takeIn)
-  takeInRef.current = takeIn
-
-  const fromClipboard = async () => {
-    const help = () => {
-      matRef.current?.focus()
-      say(touch ? '这台设备不让直接读剪贴板 —— 长按上面的框，点「粘贴」' : `直接按 ${MOD}+V 就能贴进来`)
-    }
-    if (!navigator.clipboard?.readText) return help()
+    setKind('all'); setQ(''); setSearching(false); setOpen(it.id)
     try {
-      const t = await navigator.clipboard.readText()
-      takeIn(t, { autoCopy: true })
-    } catch {
-      help()
+      await r.store.put(it)
+    } catch (e) {
+      const code = (e as { code?: string })?.code
+      say(code === 'quota_exceeded' ? '库满了，删掉一些旧的再收' : '没存上，再贴一次试试')
+      return
     }
+    if (it.status === 'pending') void organize(it)
   }
+  const addRef = useRef(add)
+  addRef.current = add
 
-  // ⌘V 在页面任何地方都算贴进来；在输入框里正常编辑时不抢
+  // 页面任何地方粘贴都算收下；在别的输入框里粘贴不抢
   useEffect(() => {
     const on = (e: ClipboardEvent) => {
       const el = e.target instanceof Element ? e.target : null
       const field = el?.closest('input, textarea, [contenteditable="true"]')
-      const mat = el?.closest('[data-material]') as HTMLTextAreaElement | null
-      if (field && !mat) return
-      if (mat) {
-        // 框是空的、或者整段选中了 —— 这是「换一段」；否则是在中间插字，是编辑
-        const whole = !mat.value.trim() || (mat.selectionStart === 0 && mat.selectionEnd === mat.value.length)
-        if (!whole) return
+      if (field && field !== capRef.current) return
+      if (field === capRef.current) {
+        const ta = capRef.current!
+        const whole = !ta.value.trim() || (ta.selectionStart === 0 && ta.selectionEnd === ta.value.length)
+        if (!whole) return // 在框里接着编辑，不是收新的一条
       }
       const text = e.clipboardData?.getData('text/plain') ?? ''
       e.preventDefault()
-      takeInRef.current(text, { autoCopy: true })
+      setDraft('')
+      if (touch) capRef.current?.blur() // 收下了就把键盘收起来，让她看到卡片
+      void addRef.current(text)
     }
     document.addEventListener('paste', on)
     return () => document.removeEventListener('paste', on)
   }, [])
 
-  // 从别的 App 分享过来（安卓 share target / iOS 快捷指令）：?text=…&url=…
-  useEffect(() => {
-    const q = new URLSearchParams(location.search)
-    const parts = [q.get('title'), q.get('text'), q.get('url')].filter((x): x is string => !!x && !!x.trim())
-    if (!parts.length) return
-    // 安卓常把链接同时塞进 text 和 url，去个重
-    const uniq = parts.filter((p, i) => !parts.slice(0, i).some((o) => o.includes(p.trim())))
-    takeInRef.current(uniq.join('\n'), { autoCopy: false })
-    window.history.replaceState(null, '', location.pathname + location.hash)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
-  // ---------------------------------------------------------------- 动作
-
-  const choose = (id: Intent) => {
-    const hadEdit = edited !== null
-    const prev = snapshot()
-    setPicked(id); setEdited(null); setEditing(false)
-    const p = build({ material, intent: id, note, target, det })
-    void doCopy(p, { material, intent: id, note, kind: det.kind })
-    if (hadEdit) say('手改的那版被换掉了', () => restore(prev))
+  const takeDraft = () => {
+    if (!draft.trim()) return
+    const t = draft
+    setDraft('')
+    void add(t)
   }
 
-  const clear = () => {
-    const prev = snapshot()
-    setMaterial(''); setPicked(null); setNote(''); setEdited(null); setEditing(false); setCopied(null)
-    say('清空了', () => restore(prev))
-    requestAnimationFrame(() => window.scrollTo({ top: 0 }))
+  // ---------------------------------------------------------------- 改 / 删
+
+  const remove = async (list: Item[]) => {
+    const r = rtRef.current
+    if (!r || !list.length) return
+    await Promise.all(list.map((it) => r.store.remove(it.id).catch(() => {})))
+    if (list.some((it) => it.id === open)) setOpen(null)
+    say(list.length > 1 ? `删掉了 ${list.length} 条` : '删掉了', () => { list.forEach((it) => void r.store.put(it).catch(() => {})) })
   }
 
-  const reuse = (it: Item) => {
-    const prev = snapshot()
-    setMaterial(it.material); setPicked(it.intent); setNote(it.note); setEdited(null); setEditing(false); setCopied(null)
-    setSheet(false)
-    say('拿回来了，点复制就能用', prev.material.trim() ? () => restore(prev) : undefined)
-  }
+  const toggleTodo = (it: Item, i: number) =>
+    patch(it.id, { todos: it.todos.map((t, j) => (j === i ? { ...t, done: !t.done } : t)) })
 
-  const forget = (id: string) => {
-    const before = history
-    setHistory((h) => h.filter((x) => x.id !== id))
-    say('删掉了一条', () => setHistory(before))
-  }
+  // ---------------------------------------------------------------- 看
 
-  const forgetAll = () => {
-    const before = history
-    setHistory([])
-    say('最近的记录清空了', () => setHistory(before))
-  }
+  const lib = items ?? []
+  const counts = useMemo(() => {
+    const c = new Map<Kind, number>()
+    for (const it of lib) c.set(it.kind, (c.get(it.kind) ?? 0) + 1)
+    return c
+  }, [lib])
+  const shown = useMemo(() => {
+    const list = lib.filter((it) => (kind === 'all' || it.kind === kind) && matches(it, q))
+    return [...list.filter((x) => x.pinned), ...list.filter((x) => !x.pinned)]
+  }, [lib, kind, q])
+  const groups = useMemo(() => {
+    const out: { name: string; items: Item[] }[] = []
+    for (const it of shown) {
+      const name = it.pinned ? '置顶' : dayGroup(it.createdAt, now)
+      const g = out[out.length - 1]
+      if (g && g.name === name) g.items.push(it)
+      else out.push({ name, items: [it] })
+    }
+    return out
+  }, [shown, now])
 
-  const share = async () => {
-    try {
-      await navigator.share({ text: prompt })
-      setHistory((h) => remember(h, { material, intent, note, kind: det.kind }))
-    } catch { /* 她取消了 */ }
-  }
+  const empty = items !== null && lib.length === 0
+  const pickedItems = picked ? lib.filter((it) => picked.has(it.id)) : []
 
-  // 键盘：⌘↵ 复制、1–9 选用途、Esc 关
-  const keys = useRef({ copyNow, choose, intents, has, sheet })
-  keys.current = { copyNow, choose, intents, has, sheet }
+  // 键盘：/ 搜索，Esc 收起
   useEffect(() => {
     const on = (e: KeyboardEvent) => {
-      const k = keys.current
       const el = e.target instanceof Element ? e.target : null
       const inField = !!el?.closest('input, textarea, [contenteditable="true"]')
-      if ((e.metaKey || e.ctrlKey) && e.key === 'Enter' && k.has) {
+      if (e.key === 'Escape') {
+        if (inField) (el as HTMLElement).blur()
+        else if (picked) setPicked(null)
+        else if (open) setOpen(null)
+        else if (searching) { setSearching(false); setQ('') }
+      } else if (e.key === '/' && !inField) {
         e.preventDefault()
-        void k.copyNow()
-      } else if (e.key === 'Escape') {
-        if (k.sheet) setSheet(false)
-        else if (inField) (el as HTMLElement).blur()
-      } else if (!inField && !k.sheet && k.has && !e.metaKey && !e.ctrlKey && !e.altKey && /^[1-9]$/.test(e.key)) {
-        const it = k.intents[Number(e.key) - 1]
-        if (it) k.choose(it.id)
+        setSearching(true)
       }
     }
     window.addEventListener('keydown', on)
     return () => window.removeEventListener('keydown', on)
-  }, [])
+  }, [picked, open, searching])
 
-  // 输入框跟着内容长高，但有上限，超过就在框里滚。
-  // 手机上贴进来之后压得更矮：这时候要让她不滚动就看到「拿去做什么」——
-  // 材料是她自己刚复制的，不用再读一遍
-  useEffect(() => {
-    const ta = matRef.current
-    if (!ta) return
-    const wide = window.matchMedia?.('(min-width: 900px)').matches
-    const cap = has && !wide ? Math.max(96, window.innerHeight * 0.26) : Math.max(160, window.innerHeight * 0.4)
-    ta.style.height = 'auto'
-    ta.style.height = Math.min(ta.scrollHeight + 2, cap) + 'px'
-  }, [material, has])
-
-  const size = prompt.length
-  const q = size && encodeURIComponent(prompt).length <= Q_MAX ? encodeURIComponent(prompt) : ''
+  const status =
+    !rt ? '正在打开你的收藏…'
+    : rt.sample && !aiOff ? (rt.store.mode === 'cloud' ? '粘贴即收下 · Claude 帮你整理 · 手机电脑同一份' : '粘贴即收下 · Claude 帮你整理')
+    : aiOff ? '粘贴即收下 · 这里没开 Claude，只做基础整理'
+    : '粘贴即收下 · 只存在这台设备 · 在 Claude 里打开能用 AI 整理'
 
   return (
-    <div className={'app' + (has ? ' has' : ' empty')}>
+    <div className={'app' + (picked ? ' picking' : '')}>
       <header className="top">
         <div className="brand">
-          <span className="mark" aria-hidden="true">随</span>
-          <span className="name">随手</span>
-          <span className="tag">复制什么都行，拿走 Prompt</span>
+          <span className="logo" aria-hidden="true">拾</span>
+          <h1>随手拾</h1>
+          {lib.length > 0 && <span className="count">{lib.length} 条</span>}
         </div>
         <div className="top-a">
-          {has && (
-            <button type="button" className="ghost" onClick={clear}>
-              <span aria-hidden="true">＋</span> 新的
+          {lib.length > 0 && (
+            <button type="button" className="ghost" aria-label="搜索" aria-pressed={searching}
+              onClick={() => { setSearching((s) => !s); if (searching) setQ('') }}>
+              <SearchIcon />
             </button>
           )}
-          <button type="button" className="ghost" onClick={() => setSheet(true)} aria-haspopup="dialog">
-            最近{history.length ? <span className="count">{history.length}</span> : null}
-          </button>
+          {lib.length > 0 && (
+            <button type="button" className="ghost txt" aria-pressed={!!picked}
+              onClick={() => setPicked((p) => (p ? null : new Set()))}>
+              {picked ? '完成' : '选择'}
+            </button>
+          )}
         </div>
       </header>
 
       <UpdateBanner />
 
-      <main className="grid">
-        <section className="left">
-          {!has && (
-            <div className="hero">
-              <h1>复制了什么，<br />就贴进来。</h1>
-              <p className="sub">聊天记录、邮件、文章、报错、会议纪要、一个问题 —— 我认出是什么，拼好 Prompt，你拿去粘贴。</p>
-              <button type="button" className="paste-btn" onClick={fromClipboard}>
-                <ClipIcon />
-                <span>
-                  <b>从剪贴板贴入</b>
-                  <small>{touch ? '点一下，再点系统弹出的「粘贴」' : `或者在页面任何地方按 ${MOD}+V`}</small>
-                </span>
-              </button>
-            </div>
-          )}
+      {searching && (
+        <div className="search">
+          <SearchIcon />
+          <input
+            id="search"
+            type="search"
+            autoFocus
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="搜标题、原文、电话、地点……"
+            aria-label="搜索"
+          />
+        </div>
+      )}
 
-          <div className={'mat' + (has ? ' on' : '')}>
-            {has && (
-              <div className="mat-head">
-                <span className="kind" data-kind={det.kind}>
-                  <span className="kind-pre">认出来是 </span><b>{det.label}</b>
-                  {det.meta ? <span className="meta"> · {det.meta}</span> : null}
-                </span>
-                <span className="mat-a">
-                  <button type="button" className="mini" onClick={fromClipboard}>换一段</button>
-                  <button type="button" className="mini x" onClick={clear} aria-label="清空">✕</button>
-                </span>
-              </div>
-            )}
-            <textarea
-              ref={matRef}
-              data-material
-              className="mat-in"
-              value={material}
-              onChange={(e) => { setMaterial(e.target.value); setEdited(null) }}
-              placeholder={has ? '' : touch ? '……或者长按这里，粘贴 / 直接打字' : '……或者直接粘贴 / 打字在这里'}
-              aria-label="要处理的内容"
-              spellCheck={false}
-            />
-            {has && material.length > 24000 && (
-              <p className="warn">这段很长（{Math.round(material.length / 1000)}k 字符），有的 AI 一次装不下，必要时分几次问。</p>
+      {!picked && !searching && (
+        <section className="capture" aria-label="收下一条">
+          <textarea
+            id="capture"
+            ref={capRef}
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); takeDraft() } }}
+            placeholder={touch ? '长按这里，粘贴 —— 聊天、地址、报价、链接、名片都行' : `粘贴到这里，或者在页面任何地方按 ${MOD}+V`}
+            rows={draft ? Math.min(8, draft.split('\n').length + 1) : 2}
+            aria-label="粘贴或输入要收下的内容"
+          />
+          <div className="cap-foot">
+            <span className={'cap-hint' + (rt?.sample && !aiOff ? ' ai' : '')}>{status}</span>
+            {draft.trim() && (
+              <button type="button" className="take" onClick={takeDraft}>收下</button>
             )}
           </div>
+        </section>
+      )}
 
-          {!has && (
-            <div className="try">
-              <span className="try-l">没东西可贴？试试：</span>
-              {EXAMPLES.map((x) => (
-                <button key={x.label} type="button" className="chip soft" onClick={() => takeIn(x.text, { autoCopy: false })}>
-                  {x.label}
+      {storeErr && (
+        <p className="warn" role="status">
+          {storeErr === 'revoked' ? '这个页面的存储权限被收回了，新收的东西不会保存。' : '存储暂时连不上，刚收的可能没保存 —— 刷新一下再看。'}
+        </p>
+      )}
+
+      {lib.length > 0 && (
+        <nav className="kinds" aria-label="按类型看">
+          <button type="button" className={kind === 'all' ? 'on' : ''} aria-pressed={kind === 'all'} onClick={() => setKind('all')}>
+            全部 <span>{lib.length}</span>
+          </button>
+          {(Object.keys(KINDS) as Kind[]).filter((k) => counts.get(k)).map((k) => (
+            <button key={k} type="button" className={kind === k ? 'on' : ''} aria-pressed={kind === k} data-k={k} onClick={() => setKind(kind === k ? 'all' : k)}>
+              {KINDS[k]} <span>{counts.get(k)}</span>
+            </button>
+          ))}
+        </nav>
+      )}
+
+      <main className="list">
+        {items === null && <div className="loading" aria-hidden="true"><i /><i /><i /></div>}
+
+        {empty && (
+          <>
+            <p className="ex-h">示例 · 贴进来的东西会变成这样。收下第一条后这些就不见了。</p>
+            {EXAMPLES.map((it) => (
+              <Card key={it.id} it={it} example open={open === it.id} now={now} copied={copied}
+                onToggle={() => setOpen(open === it.id ? null : it.id)} copy={copy} />
+            ))}
+          </>
+        )}
+
+        {!empty && items !== null && shown.length === 0 && (
+          <p className="none">{q ? `没找到「${q}」` : '这一类还没有'}</p>
+        )}
+
+        {groups.map((g) => (
+          <section key={g.name} className="group" aria-label={g.name}>
+            <h2 className="group-h">{g.name}</h2>
+            {g.items.map((it) => (
+              <Card
+                key={it.id}
+                it={it}
+                now={now}
+                open={!picked && open === it.id}
+                copied={copied}
+                picking={!!picked}
+                picked={!!picked?.has(it.id)}
+                onPick={() => setPicked((p) => {
+                  const n = new Set(p ?? [])
+                  if (n.has(it.id)) n.delete(it.id); else n.add(it.id)
+                  return n
+                })}
+                onToggle={() => setOpen(open === it.id ? null : it.id)}
+                copy={copy}
+                onTodo={(i) => void toggleTodo(it, i)}
+                onPin={() => void patch(it.id, { pinned: !it.pinned })}
+                onRetitle={(title) => void patch(it.id, { title })}
+                onRedo={() => void organize(it, true)}
+                onDelete={() => void remove([it])}
+                aiReady={!!rt?.sample && !aiOff}
+              />
+            ))}
+          </section>
+        ))}
+      </main>
+
+      {picked && (
+        <div className="pickbar" role="toolbar" aria-label="选中的条目">
+          <span className="pick-n">已选 {picked.size} 条</span>
+          <div className="pick-a">
+            <button type="button" className="btn solid" disabled={!picked.size}
+              onClick={() => copy(manyText(pickedItems), 'many-text', ` ${picked.size} 条整理版`)}>复制整理版</button>
+            <button type="button" className="btn" disabled={!picked.size}
+              onClick={() => copy(manyAi(pickedItems), 'many-ai', ` ${picked.size} 条给 AI`)}>复制给 AI</button>
+            <button type="button" className="btn quiet" disabled={!picked.size}
+              onClick={() => { void remove(pickedItems); setPicked(new Set()) }}>删除</button>
+          </div>
+        </div>
+      )}
+
+      <div className={'toast-wrap' + (picked ? ' up' : '')} aria-live="polite">
+        {toast && (
+          <div className="toast" key={toast.id}>
+            <span>{toast.msg}</span>
+            {toast.undo && <button type="button" onClick={() => { toast.undo?.(); setToast(null) }}>撤销</button>}
+          </div>
+        )}
+      </div>
+
+      <footer className="foot">
+        <span>{rt?.store.mode === 'cloud' ? '存在你的 Claude 账号里，只有你看得到。' : '存在这台设备的浏览器里，不上传。'}</span>
+        <span className="ver">{__BUILD_SHA__ === 'offline' ? '单文件版' : `v${__BUILD_SHA__}`}</span>
+      </footer>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------- 一张卡
+
+interface CardProps {
+  it: Item
+  now: number
+  open: boolean
+  copied: string | null
+  copy: (text: string, key: string, what: string) => void
+  onToggle: () => void
+  example?: boolean
+  picking?: boolean
+  picked?: boolean
+  onPick?: () => void
+  onTodo?: (i: number) => void
+  onPin?: () => void
+  onRetitle?: (t: string) => void
+  onRedo?: () => void
+  onDelete?: () => void
+  aiReady?: boolean
+}
+
+function Card(p: CardProps) {
+  const { it, open, copied, copy } = p
+  const [editing, setEditing] = useState(false)
+  const [title, setTitle] = useState(it.title)
+  const [showRaw, setShowRaw] = useState(false)
+  useEffect(() => { if (!editing) setTitle(it.title) }, [it.title, editing])
+  useEffect(() => { if (!open) { setEditing(false); setShowRaw(false) } }, [open])
+
+  // 整理中卡太久（刷新过、或者那次调用丢了）：别一直转圈，给她一个按钮
+  const stale = it.status === 'pending' && p.now - it.updatedAt > 90_000
+  const busy = it.status === 'pending' && !stale
+  const k = (s: string) => `${it.id}:${s}`
+  const done = (s: string) => copied === k(s)
+  const chips = it.fields.slice(0, 3)
+
+  const saveTitle = () => {
+    setEditing(false)
+    const t = title.trim()
+    if (t && t !== it.title) p.onRetitle?.(t)
+  }
+
+  return (
+    <article
+      id={'c-' + it.id}
+      className={'card' + (open ? ' open' : '') + (p.picked ? ' picked' : '') + (busy ? ' busy' : '')}
+      data-k={it.kind}
+      data-status={it.status}
+    >
+      <div className="card-head">
+        {p.picking && (
+          <button type="button" className={'tick' + (p.picked ? ' on' : '')} aria-pressed={p.picked} aria-label="选中这条" onClick={p.onPick}>
+            {p.picked && <CheckIcon />}
+          </button>
+        )}
+        <span className="kind">{KINDS[it.kind]}</span>
+        {p.example && <span className="badge">示例</span>}
+        {it.pinned && <span className="badge">置顶</span>}
+        {busy && <span className="busy-t"><i aria-hidden="true" />Claude 在整理</span>}
+        <span className="when">{p.example ? '' : stamp(it.createdAt, p.now)}</span>
+        {!p.picking && (
+          <button
+            type="button"
+            className={'copy-ic' + (done('text') ? ' done' : '')}
+            aria-label="复制整理版"
+            onClick={() => copy(asText(it), k('text'), '整理版')}
+          >
+            {done('text') ? <CheckIcon /> : <CopyIcon />}
+          </button>
+        )}
+      </div>
+
+      {editing ? (
+        <input
+          id={'t-' + it.id}
+          className="title-in"
+          value={title}
+          autoFocus
+          onChange={(e) => setTitle(e.target.value)}
+          onBlur={saveTitle}
+          onKeyDown={(e) => { if (e.key === 'Enter') saveTitle(); if (e.key === 'Escape') { setTitle(it.title); setEditing(false) } }}
+          aria-label="标题"
+        />
+      ) : (
+        <button type="button" className="card-main" aria-expanded={open} onClick={p.picking ? p.onPick : p.onToggle}>
+          <h3>{it.title}</h3>
+          {it.summary ? <p>{it.summary}</p> : busy ? <p className="dim">{it.raw.replace(/\s+/g, ' ').slice(0, 60)}</p> : null}
+        </button>
+      )}
+
+      {!open && chips.length > 0 && (
+        <div className="chips">
+          {chips.map((f, i) => (
+            <button key={i} type="button" className={'chip' + (done('f' + i) ? ' done' : '')}
+              onClick={() => (p.picking ? p.onPick?.() : copy(f.value, k('f' + i), `「${f.label}」`))}
+              aria-label={`复制${f.label}：${f.value}`}>
+              <span className="chip-l">{f.label}</span>
+              <span className="chip-v">{done('f' + i) ? '已复制' : f.value}</span>
+            </button>
+          ))}
+          {it.fields.length > 3 && !p.picking && (
+            <button type="button" className="chip more" onClick={p.onToggle}>还有 {it.fields.length - 3} 项</button>
+          )}
+        </div>
+      )}
+
+      {open && (
+        <div className="detail">
+          {it.note && <p className="note">{it.note}</p>}
+
+          {it.fields.length > 0 && (
+            <div className="rows" role="list">
+              {it.fields.map((f, i) => (
+                <button key={i} type="button" role="listitem" className={'row' + (done('f' + i) ? ' done' : '')}
+                  onClick={() => copy(f.value, k('f' + i), `「${f.label}」`)}>
+                  <span className="row-l">{f.label}</span>
+                  <span className="row-v">{f.value}</span>
+                  <span className="row-c" aria-hidden="true">{done('f' + i) ? '已复制' : '复制'}</span>
                 </button>
               ))}
             </div>
           )}
 
-          {has && (
-            <>
-              <div className="block">
-                <div className="block-h">
-                  <h2>拿去做什么</h2>
-                  <span className="hint-r">点一下 = 复制这一版</span>
-                </div>
-                <div className="intents" role="group" aria-label="用途">
-                  {intents.map((it, i) => {
-                    const on = it.id === intent
-                    const done = on && fresh
-                    return (
-                      <button
-                        key={it.id}
-                        type="button"
-                        className={'intent' + (on ? ' on' : '') + (done ? ' done' : '')}
-                        aria-pressed={on}
-                        onClick={() => choose(it.id)}
-                      >
-                        {done && <span className="tick" aria-hidden="true">✓</span>}
-                        {it.label}
-                        {i === 0 && <span className="rec">推荐</span>}
-                        {!touch && i < 9 && <kbd>{i + 1}</kbd>}
-                      </button>
-                    )
-                  })}
-                </div>
-                <p className="what">{info.hint}</p>
-              </div>
-
-              <div className="block">
-                <label className="note">
-                  <span className="note-l">补一句 <small>（可选）</small></span>
-                  <input
-                    type="text"
-                    value={note}
-                    onChange={(e) => { setNote(e.target.value); setEdited(null) }}
-                    placeholder={info.note}
-                    enterKeyHint="done"
-                    onKeyDown={(e) => { if (e.key === 'Enter' && !e.metaKey && !e.ctrlKey) (e.target as HTMLInputElement).blur() }}
-                  />
+          {it.todos.length > 0 && (
+            <div className="todos">
+              <h4>要做的</h4>
+              {it.todos.map((t, i) => (
+                <label key={i} className={'todo' + (t.done ? ' did' : '')}>
+                  <input id={`td-${it.id}-${i}`} type="checkbox" checked={t.done} disabled={p.example}
+                    onChange={() => p.onTodo?.(i)} />
+                  <span>{t.text}</span>
                 </label>
-              </div>
-            </>
+              ))}
+            </div>
           )}
 
-          {!has && (
-            <footer className="foot">
-              <label className="switch">
-                <input type="checkbox" checked={auto} onChange={(e) => setAuto(e.target.checked)} />
-                <span className="sw" aria-hidden="true" />
-                <span>贴进来就自动复制推荐的那一版</span>
-              </label>
-              <p>全部只存在这台设备上，不上传。{!touch && ` ${MOD}+V 贴入 · 1–9 选用途 · ${MOD}+↵ 复制`}</p>
-              <p className="ver">{__BUILD_SHA__ === 'offline' ? '离线单文件版' : `v${__BUILD_SHA__} · ${__BUILD_TIME__}`}</p>
-            </footer>
+          {it.tags.length > 0 && (
+            <p className="tags">{it.tags.map((t) => <span key={t}>#{t}</span>)}</p>
           )}
-        </section>
 
-        {has && (
-          <section className="right">
-            <div className="out">
-              <div className="out-h">
-                <span className="out-t">
-                  Prompt <small>{size.toLocaleString('en-US')} 字符{edited !== null && ' · 手改过'}</small>
-                </span>
-                <span className="out-a">
-                  <span className="seg" role="group" aria-label="格式">
-                    <button type="button" aria-pressed={target === 'md'} className={target === 'md' ? 'on' : ''} onClick={() => { setTarget('md'); setEdited(null) }}>通用</button>
-                    <button type="button" aria-pressed={target === 'xml'} className={target === 'xml' ? 'on' : ''} onClick={() => { setTarget('xml'); setEdited(null) }}>Claude</button>
-                  </span>
-                  {edited !== null && !editing && (
-                    <button type="button" className="mini" onClick={() => { setEdited(null) }}>还原</button>
-                  )}
-                  <button type="button" className="mini" onClick={() => { if (editing) setEditing(false); else { setEdited(prompt); setEditing(true) } }}>
-                    {editing ? '改好了' : '手改'}
-                  </button>
-                </span>
-              </div>
-              {editing ? (
-                <textarea
-                  className="out-edit"
-                  value={prompt}
-                  onChange={(e) => setEdited(e.target.value)}
-                  aria-label="手改 Prompt"
-                  autoFocus
-                  spellCheck={false}
-                />
-              ) : (
-                <Preview text={prompt} target={target} fresh={fresh} pulse={pulse} onCopy={() => void copyNow()} />
-              )}
-            </div>
+          {it.prompt && (
+            <button type="button" className={'ask' + (done('ai') ? ' done' : '')}
+              onClick={() => copy(asAi(it), k('ai'), '给 AI 的版本')}>
+              <span className="ask-l">{done('ai') ? '已复制 · 去 AI 那儿粘贴' : '下一步可以这样问 AI'}</span>
+              <span className="ask-t">{it.prompt}</span>
+            </button>
+          )}
 
-            <div className="bar">
-              <div className="bar-row">
-                <button
-                  type="button"
-                  className={'copy' + (fresh ? ' done' : '')}
-                  onClick={() => void copyNow()}
-                  key={fresh ? 'done-' + pulse : 'idle'}
-                >
-                  <span className="copy-t">{fresh ? '✓ 已复制，去粘贴吧' : copied ? '复制新版本' : '复制 Prompt'}</span>
-                  <span className="copy-s">
-                    {fresh ? `剪贴板里是「${info.label}」这一版` : `${info.label} · ${target === 'xml' ? 'Claude 格式' : '通用格式'}${copied ? ' · 刚改过' : ''}`}
-                  </span>
-                </button>
-                {'share' in navigator && (
-                  <button type="button" className="share" onClick={share} aria-label="分享到别的 App">
-                    <ShareIcon />
-                  </button>
-                )}
-              </div>
-              <div className="go" aria-label="复制并打开">
-                <span className="go-l">复制并打开</span>
-                {OPENERS.map((o) => (
-                  <a
-                    key={o.id}
-                    className="go-a"
-                    href={o.href(o.id === 'chatgpt' || o.id === 'claude' ? q : '')}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    onClick={() => void copyNow()}
-                  >
-                    {o.label}
-                  </a>
-                ))}
-              </div>
-            </div>
-          </section>
-        )}
-      </main>
-
-      {sheet && <History items={history} onPick={reuse} onForget={forget} onForgetAll={forgetAll} onClose={() => setSheet(false)} />}
-
-      <div className="toast-wrap" aria-live="polite">
-        {toast && (
-          <div className="toast" key={toast.id}>
-            <span>{toast.msg}</span>
-            {toast.undo && (
-              <button type="button" onClick={() => { toast.undo?.(); setToast(null) }}>撤销</button>
-            )}
+          <div className="raw">
+            <button type="button" className="raw-t" aria-expanded={showRaw} onClick={() => setShowRaw((s) => !s)}>
+              {showRaw ? '收起原文 ▴' : '看原文 ▾'}
+            </button>
+            {showRaw && <pre>{it.raw}</pre>}
           </div>
-        )}
-      </div>
-      <span className="sr" aria-live="polite">{fresh ? '已复制' : ''}</span>
-    </div>
-  )
-}
 
-// ---------------------------------------------------------------- 最近
+          <div className="copies">
+            <button type="button" className={'btn solid' + (done('text') ? ' done' : '')} onClick={() => copy(asText(it), k('text'), '整理版')}>
+              {done('text') ? '✓ 已复制' : '复制整理版'}
+            </button>
+            <button type="button" className={'btn' + (done('ai') ? ' done' : '')} onClick={() => copy(asAi(it), k('ai'), '给 AI 的版本')}>
+              {done('ai') ? '✓ 已复制' : '复制给 AI'}
+            </button>
+            <button type="button" className={'btn' + (done('raw') ? ' done' : '')} onClick={() => copy(it.raw, k('raw'), '原文')}>
+              {done('raw') ? '✓ 已复制' : '复制原文'}
+            </button>
+          </div>
 
-function History(props: {
-  items: Item[]
-  onPick: (it: Item) => void
-  onForget: (id: string) => void
-  onForgetAll: () => void
-  onClose: () => void
-}) {
-  const ref = useRef<HTMLDivElement>(null)
-  useEffect(() => {
-    const prev = document.activeElement as HTMLElement | null
-    ref.current?.focus()
-    document.body.classList.add('locked')
-    return () => { document.body.classList.remove('locked'); prev?.focus?.() }
-  }, [])
-  return (
-    <div className="scrim" onClick={props.onClose}>
-      <div
-        className="sheet"
-        role="dialog"
-        aria-modal="true"
-        aria-label="最近"
-        tabIndex={-1}
-        ref={ref}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="sheet-h">
-          <h2>最近复制过的</h2>
-          <button type="button" className="mini x" onClick={props.onClose} aria-label="关闭">✕</button>
+          {!p.example && (
+            <div className="acts">
+              <button type="button" onClick={() => setEditing(true)}>改标题</button>
+              {p.aiReady && it.status !== 'pending' && <button type="button" onClick={p.onRedo}>重新整理</button>}
+              {stale && p.aiReady && <button type="button" onClick={p.onRedo}>重新整理</button>}
+              <button type="button" onClick={p.onPin}>{it.pinned ? '取消置顶' : '置顶'}</button>
+              <button type="button" className="danger" onClick={p.onDelete}>删除</button>
+            </div>
+          )}
         </div>
-        {props.items.length === 0 ? (
-          <p className="none">还没有。复制过的会留在这儿，同一段材料换个用途再问，点一下就回来了。</p>
-        ) : (
-          <ul className="hist">
-            {props.items.map((it) => (
-              <li key={it.id}>
-                <button type="button" className="hist-b" onClick={() => props.onPick(it)}>
-                  <span className="hist-m">
-                    <b>{intentInfo(it.intent, { kind: it.kind }).label}</b>
-                    <span> · {SHORT[it.kind] ?? ''} · {ago(it.ts)}</span>
-                  </span>
-                  <span className="hist-t">{it.material.replace(/\s+/g, ' ').slice(0, 90)}</span>
-                  {it.note && <span className="hist-n">补：{it.note}</span>}
-                </button>
-                <button type="button" className="mini x" onClick={() => props.onForget(it.id)} aria-label="删掉这条">✕</button>
-              </li>
-            ))}
-          </ul>
-        )}
-        {props.items.length > 0 && (
-          <button type="button" className="link" onClick={props.onForgetAll}>全部清空</button>
-        )}
-      </div>
-    </div>
+      )}
+    </article>
   )
 }
 
-const SHORT: Partial<Record<Kind, string>> = {
-  url: '链接', error: '报错', code: '代码', table: '表格', chat: '聊天', email: '邮件', message: '消息',
-  notes: '纪要', questions: '问题清单', ask: '问题', list: '清单', article: '长文', short: '一句话', text: '文字',
-}
-
-// ---------------------------------------------------------------- 新版本
+// ---------------------------------------------------------------- 新版本（只在 GitHub Pages 装成 App 时有）
 
 function UpdateBanner() {
   const { ready, applying } = useUpdate()
@@ -585,21 +608,26 @@ function UpdateBanner() {
 
 // ---------------------------------------------------------------- 图标
 
-function ClipIcon() {
+function CopyIcon() {
   return (
-    <svg viewBox="0 0 24 24" width="28" height="28" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="6" y="4" width="12" height="17" rx="2.5" />
-      <path d="M9 4.5V3.8A1.8 1.8 0 0 1 10.8 2h2.4A1.8 1.8 0 0 1 15 3.8v.7" />
-      <path d="M12 9v7m0 0-3-3m3 3 3-3" />
+    <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="8.5" y="8.5" width="11" height="11" rx="2.5" />
+      <path d="M15.5 8.5V6.5a2 2 0 0 0-2-2h-7a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h2" />
     </svg>
   )
 }
-
-function ShareIcon() {
+function CheckIcon() {
   return (
-    <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M12 15V3m0 0L8 7m4-4 4 4" />
-      <path d="M7 10H6a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7a2 2 0 0 0-2-2h-1" />
+    <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M5 12.5 10 17.5 19 7" />
+    </svg>
+  )
+}
+function SearchIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+      <circle cx="11" cy="11" r="6.5" />
+      <path d="m16 16 4 4" />
     </svg>
   )
 }

@@ -172,6 +172,9 @@ export function initUpdates(): void {
   if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) return
   // file:// 下没有 SW，单文件版走的就是这条
   if (!location.protocol.startsWith('http')) return
+  // 在 claude.ai 里是被框起来的页面：那里不许注册 Service Worker，
+  // 版本也由平台管（重新发布就自动换），这一整套都不该动
+  if (inFrame() || 'claude' in window) return
 
   started = Date.now()
   hadController = !!navigator.serviceWorker.controller
@@ -200,4 +203,8 @@ export function initUpdates(): void {
     if (document.visibilityState === 'visible') void reg?.update().catch(() => {})
   })
   setInterval(() => { void reg?.update().catch(() => {}) }, POLL_MS)
+}
+
+function inFrame(): boolean {
+  try { return window.top !== window.self } catch { return true }
 }
