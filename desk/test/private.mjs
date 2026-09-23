@@ -1,87 +1,67 @@
-// 这个仓库是**公开**的，而「我们俩」那部分和照片绝不能离开这台设备。
-// 「没有后端」是口头承诺，这条把它变成能失败的检查：
-// 走一遍全 App（含写下我们俩的内容、存一张照片），
-// 记录每一个网络请求，只要有一个不是自家域名就红。
+/**
+ * 她贴进来的是客户的邮件、群里的聊天记录。在她自己拿去问 AI 之前，
+ * 这些东西一个字都不该离开这台手机 —— 「不上传」是写在页面上的承诺，
+ * 这条把它变成能失败的检查：把整条路走一遍，记下每一个请求，
+ * 只要有一个不是自家域名就红。
+ *
+ * 「复制并打开 ChatGPT / Claude」是她主动点的外链，那是她自己要发出去的，
+ * 不算；这里专门不点它们。
+ */
 import pkg from 'playwright'
+import { SAMPLES } from './samples.mjs'
 const { chromium, devices } = pkg
-import { makeState } from './seed.mjs'
 const URL = process.env.DESK_URL ?? 'http://127.0.0.1:8765/index.html'
-const ORIGIN = new globalThis.URL(process.env.DESK_URL ?? 'http://127.0.0.1:8765/index.html').origin
-const today = new Date().toISOString().slice(0,10)
+// 这个文件里 URL 是字符串常量，把全局的 URL 类遮住了；用 globalThis.URL 拿回真的那个
+const ORIGIN = new globalThis.URL(URL).origin
 let fail = 0
-const t = (n, ok, note='') => { console.log(`${ok?'✓':'✗'} ${n}${note?' — '+note:''}`); if(!ok) fail++ }
+const t = (n, ok, note = '') => { console.log(`${ok ? '✓' : '✗'} ${n}${note ? ' — ' + note : ''}`); if (!ok) fail++ }
 
+const SECRET = '客户说预算砍到 30 万，这句话只该留在这台手机上'
 const b = await chromium.launch()
-const ctx = await b.newContext({ ...devices['iPhone 13 Pro Max'] })
+const ctx = await b.newContext({ ...devices['iPhone 13'], permissions: ['clipboard-read', 'clipboard-write'] })
 const seen = new Set()
-// 连 SW 发出去的也算：不放过任何一条
-// 注意：这个文件里的 URL 是个字符串常量，把全局的 URL 类遮住了。
-// 第一版写 new URL(u) 全落进 catch，于是同源请求也被当成「出网」报红 ——
-// 一个自己造出来的假阳性。用 globalThis.URL 把真的那个拿回来。
-const parse = globalThis.URL
+let requests = 0
 ctx.on('request', (r) => {
   const u = r.url()
   if (u.startsWith('data:') || u.startsWith('blob:')) return
-  try { seen.add(new parse(u).origin) } catch { seen.add('解析不了:' + u.slice(0, 60)) }
+  requests++
+  try { seen.add(new globalThis.URL(u).origin) } catch { seen.add('解析不了:' + u.slice(0, 60)) }
 })
 const pg = await ctx.newPage()
 await pg.goto(URL, { waitUntil: 'load' })
-await pg.evaluate((s)=>localStorage.setItem('deskside.v1',JSON.stringify(s)), makeState(today))
+await pg.evaluate(() => localStorage.clear())
+await pg.reload({ waitUntil: 'load' })
 
-// 把最私人的那部分真的走一遍
-for (const h of ['#/today','#/work','#/life','#/review']) {
-  await pg.goto(URL+h, { waitUntil:'load' }); await pg.reload(); await pg.waitForTimeout(500)
+// 把会碰到她内容的每一条路径都走到
+const text = SAMPLES.find((s) => s.name.startsWith('微信群聊')).text + '\n王总：' + SECRET
+await pg.evaluate((x) => navigator.clipboard.writeText(x), text)
+await pg.locator('.paste-btn').click(); await pg.waitForTimeout(300)
+t('那句话确实贴进来了（这条路径真的走到了）', (await pg.locator('[data-material]').inputValue()).includes(SECRET))
+for (const label of ['帮我回', '拆待办', '翻译']) {
+  await pg.locator('.intent', { hasText: label }).click(); await pg.waitForTimeout(150)
 }
-await pg.goto(URL+'#/life'); await pg.reload(); await pg.waitForTimeout(600)
-// 写一句「想对他说」—— 全 App 最私人的写入路径，必须真的走到。
-// 展开的是个内联输入框（不是 sheet），而这一屏本来就有好几个 input，
-// 所以认 autofocus 那个，别按位置猜
-const SECRET = '只该留在这台手机上的一句话'
-const say = pg.locator('button').filter({ hasText: '写一句' })
-t('找得到「写一句」', await say.count() > 0)
-await say.first().click(); await pg.waitForTimeout(400)
-await pg.evaluate((v) => {
-  const el = document.activeElement
-  if (!el || !('value' in el)) return false
-  const setter = Object.getOwnPropertyDescriptor(
-    el.tagName === 'TEXTAREA' ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype, 'value').set
-  setter.call(el, v)
-  el.dispatchEvent(new Event('input', { bubbles: true }))
-  return true
-}, SECRET)
-await pg.waitForTimeout(200)
-await pg.locator('button').filter({ hasText: /^存$/ }).first().click()
-await pg.waitForTimeout(600)
-t('那句话真的写进去了（这条路径确实被走到了）',
-  await pg.evaluate((v) => (localStorage.getItem('deskside.v1')||'').includes(v), SECRET))
-// 存一张照片进 IndexedDB（模拟她从手机加的那张）
-const stored = await pg.evaluate(async () => {
-  const c = document.createElement('canvas'); c.width=c.height=64
-  const x = c.getContext('2d'); x.fillStyle='#c67139'; x.fillRect(0,0,64,64)
-  const blob = await new Promise(r => c.toBlob(r,'image/jpeg',0.9))
-  const db = await new Promise((res,rej)=>{ const q=indexedDB.open('deskside-media',1)
-    q.onupgradeneeded=()=>{ if(!q.result.objectStoreNames.contains('photos')) q.result.createObjectStore('photos') }
-    q.onsuccess=()=>res(q.result); q.onerror=()=>rej(q.error) })
-  await new Promise((res,rej)=>{ const tr=db.transaction('photos','readwrite')
-    const r=tr.objectStore('photos').put(blob,'pp1'); r.onsuccess=()=>res(); r.onerror=()=>rej() })
-  const s = JSON.parse(localStorage.getItem('deskside.v1'))
-  s.photos=[{id:'pp1',caption:'私人照片',date:'2026-09-01',createdAt:Date.now()}]
-  localStorage.setItem('deskside.v1',JSON.stringify(s))
-  return true
+await pg.locator('.note input').fill('语气客气点'); await pg.waitForTimeout(150)
+await pg.locator('.copy').click(); await pg.waitForTimeout(150)
+await pg.locator('.seg button', { hasText: 'Claude' }).click()
+await pg.locator('.card').click({ position: { x: 40, y: 80 } }); await pg.waitForTimeout(150)
+await pg.locator('.ghost', { hasText: '最近' }).click(); await pg.waitForTimeout(200)
+await pg.keyboard.press('Escape')
+await pg.reload({ waitUntil: 'load' }); await pg.waitForTimeout(600)
+t('复制过的进了「最近」（存储路径也真的走到了）',
+  await pg.evaluate((s) => (localStorage.getItem('suishou.v1') || '').includes(s), SECRET))
+
+const outside = [...seen].filter((o) => o !== ORIGIN)
+t('全程没有任何一个请求出过自家域名', outside.length === 0, outside.join(' | ') || `${requests} 个请求，全在 ${ORIGIN}`)
+t('确实记到了请求（不是因为什么都没监听到才「干净」）', requests > 0, String(requests))
+
+// 页面代码里不许藏着能往外发东西的口子
+const code = await pg.evaluate(async () => {
+  const src = [...document.scripts].map((s) => s.src).filter(Boolean)
+  const bodies = await Promise.all(src.map((u) => fetch(u).then((r) => r.text())))
+  return bodies.join('\n')
 })
-await pg.goto(URL+'#/life'); await pg.reload(); await pg.waitForTimeout(900)
-t('照片渲染出来了（确实在用它）', stored && await pg.locator('.pview, img').count() > 0)
-
-const outside = [...seen].filter(o => o !== ORIGIN)
-t('全程没有任何一个请求出过自家域名', outside.length === 0, outside.join(' | ') || `只访问了 ${ORIGIN}`)
-
-// 照片本体不许进 localStorage —— 那份是要被「导出备份」以外的路径读到的
-const inLS = await pg.evaluate(() => {
-  const raw = localStorage.getItem('deskside.v1') || ''
-  return { hasDataURL: /data:image/.test(raw), kb: Math.round(raw.length/1024) }
-})
-t('照片本体不在 localStorage 里（只有 IndexedDB 有）', !inLS.hasDataURL, `deskside.v1 共 ${inLS.kb}KB`)
-
-t('那句话只在本地，没被任何请求带出去', outside.length === 0)
+const leaks = ['sendBeacon', 'XMLHttpRequest', 'WebSocket', 'google-analytics', 'gtag(', 'sentry']
+  .filter((w) => code.includes(w))
+t('打包后的代码里没有埋点 / 上报的口子', leaks.length === 0, leaks.join(', ') || `查了 ${(code.length / 1024) | 0}KB`)
 await b.close()
 process.exit(fail ? 1 : 0)

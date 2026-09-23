@@ -5,7 +5,7 @@ import { execSync } from 'node:child_process'
 
 // 版本戳。手机上 Service Worker 会把旧代码缓存住，而人是看不出
 // 自己停在哪一版的——修了 bug 说「已经修好了」，对面看到的还是旧的。
-// 把它显式印在设置页里，出问题时一眼能对上。
+// 印在首页最底下，出问题时一眼能对上。
 const sha = (() => {
   try { return execSync('git rev-parse --short HEAD').toString().trim() } catch { return 'dev' }
 })()
@@ -24,16 +24,22 @@ export default defineConfig({
       injectRegister: null,
       includeAssets: ['icons/apple-touch-icon.png'],
       manifest: {
-        name: '案头 Deskside',
-        short_name: '案头',
+        name: '随手 · 贴进来，拿走 Prompt',
+        short_name: '随手',
         lang: 'zh-CN',
-        description: '个人工作台：咨询 · 字节 · 我们俩',
+        description: '复制了什么就贴进来，自动拼好结构化的 AI Prompt，一下复制走。',
         start_url: './index.html',
         scope: './',
         display: 'standalone',
-        orientation: 'portrait',
-        background_color: '#f5ead8',
-        theme_color: '#f5ead8',
+        orientation: 'any',
+        background_color: '#f4f2ed',
+        theme_color: '#f4f2ed',
+        // 安卓上装到桌面之后，在任何 App 里点「分享」都能直接丢进来（App.tsx 读 ?text=）
+        share_target: {
+          action: './index.html',
+          method: 'GET',
+          params: { title: 'title', text: 'text', url: 'url' },
+        },
         icons: [
           { src: 'icons/icon-192.png', sizes: '192x192', type: 'image/png' },
           { src: 'icons/icon-512.png', sizes: '512x512', type: 'image/png' },
@@ -47,9 +53,8 @@ export default defineConfig({
         // ——换版本会永远卡在「正在换……」
         clientsClaim: true,
         skipWaiting: false,
-        // woff2 必须在里面：字体现在是自带的，跟着 precache 一起装，
-        // 装完之后飞机上、地铁里打开都是完整的样子
-        globPatterns: ['**/*.{js,css,html,png,svg,woff2}'],
+        // 装完之后飞机上、地铁里打开也能用 —— 它本来就不需要网
+        globPatterns: ['**/*.{js,css,html,png,svg}'],
       },
     }),
   ],

@@ -15,15 +15,17 @@ import fs from 'node:fs'
  */
 const DESK = new globalThis.URL('..', import.meta.url).pathname
 const URL = process.env.DESK_URL ?? 'http://127.0.0.1:8765/index.html'
-const TODAY = DESK + '/src/screens/Today.tsx'
+const APP = DESK + '/src/App.tsx'
 const t = (n, ok, note = '') => { console.log(`${ok ? '✓' : '✗'} ${n}${note ? ' — ' + note : ''}`); if (!ok) fail++ }
 let fail = 0
 
-const orig = fs.readFileSync(TODAY, 'utf8')
+const orig = fs.readFileSync(APP, 'utf8')
 /** 往源码里塞一个能认出来的标记，重新构建 = 造一个「新版本」 */
 function deploy(mark) {
-  fs.writeFileSync(TODAY, orig.replace('<InstallNotice />', `<InstallNotice />\n      <span data-swtest>${mark}</span>`))
-  try { execSync('npm run build', { cwd: DESK, stdio: 'ignore' }) } finally { fs.writeFileSync(TODAY, orig) }
+  const marked = orig.replace('<UpdateBanner />', `<UpdateBanner />\n      <span data-swtest>${mark}</span>`)
+  if (marked === orig) throw new Error('App.tsx 里找不到 <UpdateBanner />，塞不进标记 —— 这条测试会测了个寂寞')
+  fs.writeFileSync(APP, marked)
+  try { execSync('npm run build', { cwd: DESK, stdio: 'ignore' }) } finally { fs.writeFileSync(APP, orig) }
 }
 const markOf = (pg) => pg.evaluate(() => document.querySelector('[data-swtest]')?.textContent ?? null)
 
@@ -97,7 +99,7 @@ try {
 } finally {
   // dist 必须还原成干净的版本，否则下一次跑测试的「基线」自带上一轮的标记，
   // 结果全是假的（踩过一次，白查了半小时）
-  fs.writeFileSync(TODAY, orig)
+  fs.writeFileSync(APP, orig)
   execSync('npm run build', { cwd: DESK, stdio: 'ignore' })
   await b.close()
 }

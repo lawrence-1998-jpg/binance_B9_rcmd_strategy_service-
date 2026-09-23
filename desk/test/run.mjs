@@ -19,15 +19,13 @@ const DIST = resolve(HERE, '..', 'dist')
 const PORT = Number(process.env.DESK_PORT ?? 8765)
 
 // 默认这一批：能在干净机器上跑起来、且真的出断言的。
-// migrate 不在里面 —— 它要拿两个历史版本的构建产物当基线（见文件顶部），
-// 那是本地专用的，缺基线时它会直接报错而不是悄悄跳过。
-const DEFAULT = [
-  'bottom', 'click', 'coldsheet', 'conf', 'fade', 'contrast-install', 'disabled', 'dlg', 'empty', 'exif', 'fills',
-  'flow2', 'fonts', 'home', 'import-guard', 'install', 'ios', 'measure', 'measure-dark',
-  'messy', 'nextstep', 'palette', 'partial', 'parts', 'pend', 'pill', 'pixel', 'pmstate', 'private', 'prog', 'rescue',
-  'review', 'shapes', 'single', 'stamp', 'swupdate', 'tabs', 'talk', 'tap', 'timeline',
-  'upkeep', 'verify', 'verify-backup', 'walk2', 'walk3', 'zoom',
-]
+//   unit      识别 + 拼 Prompt（不起浏览器）
+//   flow      整条路：贴进来 → 换用途 → 复制 → 撤销 → 最近，每一步都读真的剪贴板
+//   look      手机 / 电脑 × 浅色 / 深色：对比度、点击区域、不出界、底栏不压字
+//   private   她贴的东西一个字都不出这台设备
+//   single    仓库里那份离线单文件版能双击打开、能用、不乱码
+//   swupdate  新版本打开一次就到她手上（会临时换 dist，run-all.sh 会还原）
+const DEFAULT = ['unit', 'flow', 'look', 'private', 'single', 'swupdate']
 
 const suites = process.argv.slice(2).filter((a) => !a.startsWith('-'))
 const list = suites.length ? suites : DEFAULT
