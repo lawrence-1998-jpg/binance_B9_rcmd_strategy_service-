@@ -25,7 +25,7 @@ export interface Todo { text: string; done: boolean }
 export type Status =
   | 'pending'   // 刚收下，Claude 在整理
   | 'done'      // Claude 整理好了
-  | 'local'     // 没有 Claude 可用，只做了本地整理
+  | 'local'     // 没开 Claude（没填 API Key），只做了本地整理
   | 'failed'    // Claude 这次没整理成，可以再试
 
 export interface Item {
@@ -45,7 +45,7 @@ export interface Item {
   pinned: boolean
   /** 整理失败时给人看的一句话 */
   note?: string
-  /** 截图收进来的：压缩过的图（data URL）。重新整理时再给 Claude 看一次 */
+  /** 截图收进来的：压缩过的图（data URL）。能复制出去贴给别的 AI，开了 Claude 也拿它来读 */
   img?: string
 }
 
@@ -77,15 +77,67 @@ const EMAIL_RE = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g
 // 大陆手机号、带区号的座机、+86 / 国际号码
 const PHONE_RE = /(?:\+?\d{1,3}[ -]?)?(?:1[3-9]\d[ -]?\d{4}[ -]?\d{4}|0\d{2,3}[ -]?\d{7,8})(?!\d)/g
 const MONEY_RE = /(?:[¥￥$€£]\s?\d[\d,]*(?:\.\d+)?\s?(?:万|亿|千|k|K|w|W)?|\d[\d,]*(?:\.\d+)?\s?(?:万元|亿元|元|块|万|美元|美金|USD|RMB|CNY|USDT))/g
-const DATE_RE = /(?:\d{4}[-/.年]\d{1,2}[-/.月]\d{1,2}日?|\d{1,2}月\d{1,2}[日号]|(?:今天|明天|后天|今晚|明早|明晚|下周[一二三四五六日天]|本周[一二三四五六日天]|周[一二三四五六日天]|星期[一二三四五六日天]))(?:\s*(?:上午|下午|晚上|中午|早上)?\s*\d{1,2}\s*(?:[:：]\s*\d{2}|点半?|点\s*\d{1,2}\s*分?))?|(?:上午|下午|晚上|中午|早上)\s*\d{1,2}\s*(?:[:：]\s*\d{2}|点半?)|\b\d{1,2}:\d{2}\b/g
+const DATE_RE = /(?:\d{4}\s?[-/.年]\s?\d{1,2}\s?[-/.月]\s?\d{1,2}\s?日?|\d{1,2}\s?月\s?\d{1,2}\s?[日号]|(?:今天|明天|后天|今晚|明早|明晚|下周[一二三四五六日天]|本周[一二三四五六日天]|周[一二三四五六日天]|星期[一二三四五六日天]))(?:\s*(?:上午|下午|晚上|中午|早上)?\s*\d{1,2}\s*(?:[:：]\s*\d{2}|点半?|点\s*\d{1,2}\s*分?))?|(?:上午|下午|晚上|中午|早上)\s*\d{1,2}\s*(?:[:：]\s*\d{2}|点半?)|\b\d{1,2}:\d{2}\b/g
 /** 光一个「今天」「周五」、后面没跟钟点：只有在像是约时间、定期限的话里才算数 */
 const BARE_DAY = /^(?:今天|明天|后天|今晚|明早|明晚|(?:下|本)?周.|星期.)$/
-const SCHEDULING = /开会|会议|[的个场]会|约了?[时见吃聊]|见面|面试|截止|之前|前完成|到期|提交|交付|碰一下|聊一下|deadline|due|call|meeting/i
+const SCHEDULING = /开会|会议|[的个场]会|约了?[时见吃聊]|见面|面试|截止|之前|前完成|到期|提交|交付|碰一下|聊一下|通电话|打电话|电话会|视频会|面谈|拜访|航班|高铁|接机|饭局|聚餐|deadline|due|call|meeting/i
 const CODE_RE = /(?:验证码|校验码|动态码|code)[^\d]{0,6}(\d{4,8})/i
+/** 「周五前」「月底之前」：截止时间 */
+const DUE_RE = /(?:今天|明天|后天|今晚|(?:下|本)?周[一二三四五六日天]|星期[一二三四五六日天]|\d{1,2}月\d{1,2}[日号]|\d{1,2}[日号]|月底|月初|年底|下班)(?:之|以)?前/g
+/** 只认明说了的地点：「地点还是国贸三期 B 座 1208」「地址：xx 路 88 号」 */
+const PLACE_RE = /(?:地点|地址|位置)(?:还是|改为|改在|改到|定在|是|在)?\s*[:：]?\s*([^，。；;！!？?\n]{2,40})/
+/** 让「我」去做的事：「记得带上…」「别忘了…」「麻烦…」 */
+const TODO_CUE = /(?:记得|别忘了?|不要忘了?|务必|麻烦(?:你)?|请(?:你)?|帮我|需要|要去|得去|待办|TODO|to-?do)\s*[:：]?\s*/i
+/** 「周五前把 PPT 发给王总」这种：有期限、有动作 */
+const DUE_TASK = /(?:之|以)?前(?:要|得|需要)?(?:把|将)?.{0,24}?(?:发|交|提交|完成|给|做|准备|回复|确认|整理|写|改|订|约|联系|打电话|付|报)/
+/** 清单的一行：「- [ ] 买牛奶」「1. xxx」「• xxx」 */
+const LIST_LINE = /^\s*(?:[-*•·]\s*)?(?:\[( |x|X)\]|[-*•·]|\d{1,2}[.、)）])\s*(\S.*)$/
+const IDEA_RE = /^(?:(?:今天|刚才|突然)?想到|想法|灵感|脑洞|idea)\s*[:：]\s*/i
+const NOTE_HEAD = /纪要|笔记|总结|复盘|记录|要点|摘要/
+/** 「改到周五」：改之前的那个时间不算 */
+const MOVED = /(?:挪|改|推|延|换|提前)到/
+
+/** 本地整理时，「复制给 AI」开头那一句：按类型给一句能直接用的 */
+export const LOCAL_ASK: Record<Kind, string> = {
+  event: '帮我把这件事整理成日程（时间、地点、参加的人、要准备什么），缺的信息或可能的冲突提醒我，再起草一句确认的回复。',
+  todo: '帮我把这些事排个优先级，估一下各要多久，给我一个今天就能照着做的顺序。',
+  contact: '帮我把这个人整理成通讯录格式（姓名、公司职位、电话、邮箱），再起草一句得体的初次联系消息。',
+  link: '帮我看看这个链接讲了什么：三句话概括要点，再告诉我值不值得细读。',
+  data: '帮我把这些数字整理成一张表，算出总额和关键差异，指出需要注意或可以谈的地方。',
+  code: '帮我看看这段代码 / 报错：哪里出了问题、最可能的原因、怎么修，给出改好的代码。',
+  question: '帮我回答这个问题：先给结论，再说理由和需要注意的地方。',
+  quote: '帮我解读这段话：核心观点是什么，对我有什么启发。',
+  idea: '帮我把这个想法展开：成立的前提是什么、有哪些风险、下一步怎么最快验证。',
+  note: '帮我提炼这段内容的要点（不超过 5 条），并列出需要我跟进的事。',
+  other: '请帮我理解这条信息，提炼要点，并告诉我接下来该做什么。',
+}
 
 function uniq(xs: string[]): string[] {
   const seen = new Set<string>()
   return xs.map((x) => x.trim()).filter((x) => x && !seen.has(x) && seen.add(x))
+}
+
+/** 从原文里找出要「我」去做的事 */
+function findTodos(raw: string): { todos: Todo[]; list: boolean } {
+  const lines = raw.split('\n')
+  const listed = lines.map((l) => l.match(LIST_LINE)).filter((m): m is RegExpMatchArray => !!m && [...m[2]].length <= 60)
+  // 打了勾框的，或者明说是清单 / 待办 / 要买的：每一行就是一件事
+  const boxes = listed.some((m) => m[1] !== undefined)
+  if (listed.length >= 2 && (boxes || /待办|to-?do|清单|要做|要买|任务/i.test(raw))) {
+    return { todos: listed.slice(0, 8).map((m) => ({ text: clip(m[2], 40), done: /x/i.test(m[1] ?? '') })), list: true }
+  }
+  const out: string[] = []
+  for (const line of raw.split(/[。！!；;\n]+/)) {
+    const sent = line.match(LIST_LINE)?.[2] ?? line
+    const cue = sent.match(TODO_CUE)
+    if (cue && cue.index !== undefined) {
+      const what = sent.slice(cue.index + cue[0].length).split(/[，,]/)[0].trim()
+      if ([...what].length >= 2) out.push(clip(what, 40))
+    } else if (DUE_TASK.test(sent) && [...sent.trim()].length <= 60) {
+      out.push(clip(sent.trim(), 40))
+    }
+  }
+  return { todos: uniq(out).slice(0, 5).map((text) => ({ text, done: false })), list: false }
 }
 
 export function quick(input: string): Pick<Item, 'kind' | 'title' | 'summary' | 'fields' | 'todos' | 'tags' | 'prompt'> {
@@ -95,12 +147,24 @@ export function quick(input: string): Pick<Item, 'kind' | 'title' | 'summary' | 
   const phones = uniq((raw.replace(URL_RE, ' ').match(PHONE_RE) ?? []).map((p) => p.trim()))
     .filter((p) => p.replace(/\D/g, '').length >= 7)
   const money = uniq(raw.replace(URL_RE, ' ').match(MONEY_RE) ?? [])
-  const dates = uniq(raw.match(DATE_RE) ?? []).filter((d) => !BARE_DAY.test(d) || SCHEDULING.test(raw))
+  const isCode = /^\s*(?:Traceback|at |Error|Exception|\w*Error:|npm ERR!)/m.test(raw) || /[;{}]\s*$/m.test(raw)
+  // 报错里的「App.tsx:42:13」不是钟点
+  const moved = raw.search(MOVED)
+  const dates = isCode ? [] : uniq(raw.match(DATE_RE) ?? [])
+    .filter((d) => !BARE_DAY.test(d) || SCHEDULING.test(raw))
+    .filter((d) => moved < 0 || raw.indexOf(d) > moved || !raw.slice(moved).match(DATE_RE))
+  const due = uniq(raw.match(DUE_RE) ?? [])
+  const place = raw.match(PLACE_RE)?.[1]?.trim()
   const code = raw.match(CODE_RE)?.[1]
+  const { todos, list } = code ? { todos: [], list: false } : findTodos(raw)
 
   const fields: Field[] = []
   if (code) fields.push({ label: '验证码', value: code })
-  dates.slice(0, 2).forEach((d) => fields.push({ label: '时间', value: d }))
+  // 「有效期至 10 月 15 日」「截止 3 月 1 日」：是期限，不是约的时间
+  const dueish = (d: string) => /(?:截止|有效期|到期|deadline|due)[^，。；\n]{0,4}$/i.test(raw.slice(0, raw.indexOf(d)))
+  dates.slice(0, 2).forEach((d) => fields.push({ label: dueish(d) ? '截止' : '时间', value: d }))
+  if (due[0] && !dates.some((d) => due[0].startsWith(d))) fields.push({ label: '截止', value: due[0] })
+  if (place) fields.push({ label: '地点', value: place })
   phones.slice(0, 2).forEach((p) => fields.push({ label: '电话', value: p }))
   emails.slice(0, 2).forEach((e) => fields.push({ label: '邮箱', value: e }))
   money.slice(0, 2).forEach((m) => fields.push({ label: '金额', value: m }))
@@ -110,17 +174,47 @@ export function quick(input: string): Pick<Item, 'kind' | 'title' | 'summary' | 
   const kind: Kind =
     code ? 'data'
     : urls.length && bare.length < 30 ? 'link'
+    : list ? 'todo'
     : dates.length && SCHEDULING.test(raw) ? 'event'
     : (phones.length || emails.length) && raw.length < 200 ? 'contact'
-    : /^\s*(?:Traceback|at |Error|Exception|npm ERR!)/m.test(raw) || /[;{}]\s*$/m.test(raw) ? 'code'
+    : isCode ? 'code'
+    : raw.includes('\n') && [...raw.split('\n')[0]].length <= 12 && NOTE_HEAD.test(raw.split('\n')[0]) ? 'note'
+    : todos.length && !raw.includes('\n') && [...raw].length <= 60 ? 'todo'
     : /[?？]\s*$/.test(raw) && raw.length < 200 ? 'question'
+    : IDEA_RE.test(raw) ? 'idea'
     : money.length ? 'data'
     : 'note'
 
-  // 只有一个链接的时候，拿域名当标题，比一串网址好认
-  const first = bare.split('\n').find((l) => l.trim()) ?? ''
-  const title = clip(first.replace(/^[#>*\-\s•·]+/, ''), 18) || (urls[0] ? hostOf(urls[0]) : clip(raw, 18) || '一条信息')
-  return { kind, title, summary: '', fields: fields.slice(0, MAX_FIELDS), todos: [], tags: [], prompt: '' }
+  // 标题：第一行。太长就取第一句（6 到 18 个字的话）；只有一个链接时拿域名，比一串网址好认
+  const lines = bare.split('\n').map((l) => l.trim()).filter(Boolean)
+  const first = (lines[0] ?? '').replace(IDEA_RE, '').replace(/^[#>*\-\s•·]+/, '').replace(/[:：]$/, '').trim()
+  const clause = [...first].length > 18 ? first.match(/^(.{6,18}?)[，。！？!?；]/)?.[1] : undefined
+  const head =
+    list && LIST_LINE.test(lines[0] ?? '') ? `${todos[0].text} 等 ${todos.length} 件`
+    : clause ?? first
+  const title = clip(head, 18) || (urls[0] ? hostOf(urls[0]) : clip(raw, 18) || '一条信息')
+
+  // 要点：标题没说完的往下露一段，收起来的卡上也认得出是哪条。
+  // 标题被截断的，从下一句（或下一个逗号后）开始，别从半个词开始
+  const flat = (x: string) => x.replace(/\s+/g, ' ').trim()
+  const body = flat(bare.replace(IDEA_RE, ''))
+  let rest = ''
+  if (!clause && [...head].length <= 18) rest = body.slice(flat(head).length)
+  else {
+    const cut = body.slice(clause ? flat(clause).length : [...title].length - 1)
+    const next = cut.search(/[。！？!?；\n]/)
+    rest = next >= 0 && cut.slice(next + 1).trim() ? cut.slice(next + 1) : cut.slice(Math.max(0, cut.search(/[，,]/)) + 1)
+  }
+  rest = rest.replace(/^[\s，。！？!?；;,.：:、|｜]+/, '')
+  const summary = ['contact', 'link', 'data', 'code'].includes(kind) || list ? '' : clip(rest, 48)
+
+  return {
+    kind, title, summary,
+    fields: fields.slice(0, MAX_FIELDS),
+    todos,
+    tags: [],
+    prompt: code ? '' : LOCAL_ASK[kind],
+  }
 }
 
 function hostOf(u: string): string {
@@ -130,7 +224,13 @@ function hostOf(u: string): string {
 /** 按「字」截断：一个汉字算一个，别把 emoji 劈成两半 */
 export function clip(s: string, n: number): string {
   const cs = [...s.trim()]
-  return cs.length <= n ? cs.join('') : cs.slice(0, n).join('') + '…'
+  if (cs.length <= n) return cs.join('')
+  // 别把「10」「Linda」这种劈成两半：往回退到词的边上（最多退 6 个）
+  const w = /[A-Za-z0-9]/
+  let k = n
+  while (k > n - 6 && w.test(cs[k - 1]) && w.test(cs[k])) k--
+  if (k === n - 6 && w.test(cs[k - 1])) k = n
+  return cs.slice(0, k).join('').trimEnd() + '…'
 }
 
 // ---------------------------------------------------------------- 交给 Claude

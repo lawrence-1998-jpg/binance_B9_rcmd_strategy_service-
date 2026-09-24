@@ -1,5 +1,6 @@
 /**
- * 纯逻辑：本地先认一遍认得准不准、Claude 回来的东西核得严不严、复制出去的样子对不对。
+ * 纯逻辑：本地整理认得准不准（没开 Claude 时它就是全部）、Claude 回来的东西核得严不严、
+ * 复制出去的样子对不对、备份导出导入合得对不对。
  * 不起浏览器，直接把 src/lib/card.ts 编译了跑。
  */
 import { build as esbuild } from 'esbuild'
@@ -11,7 +12,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 const dir = mkdtempSync(join(tmpdir(), 'card-'))
 const out = join(dir, 'm.mjs')
 await esbuild({
-  stdin: { contents: "export * from './card'; export { normalize } from './store'; export * as A from './ask'", resolveDir: fileURLToPath(new URL('../src/lib/', import.meta.url)), loader: 'ts' },
+  stdin: { contents: "export * from './card'; export { normalize, toBackup, fromBackup, merge } from './store'; export * as A from './ask'", resolveDir: fileURLToPath(new URL('../src/lib/', import.meta.url)), loader: 'ts' },
   outfile: out, format: 'esm', bundle: true, logLevel: 'warning',
 })
 const C = await import(pathToFileURL(out).href)
@@ -28,9 +29,15 @@ t('名片：认出电话', val(contact, '电话').includes('138 1234 5678'), JSO
 t('名片：认出邮箱', val(contact, '邮箱')[0] === 'lily.chen@example.com')
 t('名片：类型是联系人', contact.kind === 'contact', contact.kind)
 
-const meet = C.quick('王总：周四下午的会挪到周五上午 10 点吧，地点还是国贸三期 B 座 1208')
-t('会议：认出时间', val(meet, '时间').some((v) => v.includes('周五')), JSON.stringify(val(meet, '时间')))
+const meet = C.quick('王总：周四下午的会挪到周五上午 10 点吧，地点还是国贸三期 B 座 1208。记得带上次那版竞品分析，财务的 Linda 也会来。')
+t('会议：认出改到的那个时间', val(meet, '时间').length === 1 && val(meet, '时间')[0] === '周五上午 10 点', JSON.stringify(val(meet, '时间')))
+t('会议：「挪到周五」之前的「周四」不算时间', !val(meet, '时间').includes('周四'))
+t('会议：认出明说的地点', val(meet, '地点')[0] === '国贸三期 B 座 1208', JSON.stringify(val(meet, '地点')))
 t('会议：类型是日程', meet.kind === 'event', meet.kind)
+t('会议：「记得带…」变成一条待办', meet.todos.length === 1 && meet.todos[0].text === '带上次那版竞品分析', JSON.stringify(meet.todos))
+t('会议：要点接着标题往下露，不从半个词开始', meet.summary.startsWith('记得带上次那版竞品分析'), meet.summary)
+t('会议：标题不把「10」劈成两半', !/1…$/.test(meet.title) && [...meet.title].length <= 19, meet.title)
+t('会议：配好一句按日程问 AI 的话', meet.prompt.startsWith('帮我把这件事整理成日程'), meet.prompt)
 
 const price = C.quick('报价：年费版 ¥36,000/年（含 20 个席位），超出部分每席 ¥1,500/年；首年 8 折。')
 t('报价：认出两个金额', val(price, '金额').length === 2 && val(price, '金额')[0].startsWith('¥36,000'), JSON.stringify(val(price, '金额')))
@@ -45,6 +52,27 @@ t('验证码：单独拎出来', val(otp, '验证码')[0] === '482913')
 const plain = C.quick('今天想到：会员体系的核心问题可能不是权益，而是用户根本不知道自己有哪些权益。')
 t('普通一段话：没有乱认出字段', plain.fields.length === 0, JSON.stringify(plain.fields))
 t('标题按字截断，不超过 18 个字（加省略号）', [...plain.title].length <= 19, plain.title)
+t('「今天想到：」开头：是想法，标题去掉这个前缀', plain.kind === 'idea' && plain.title.startsWith('会员体系'), `${plain.kind} / ${plain.title}`)
+t('「今天想到」里的「今天」不当成时间', val(plain, '时间').length === 0)
+
+const due = C.quick('周五前把季度复盘 PPT 发给王总')
+t('「周五前把 PPT 发给王总」：待办，截止周五前', due.kind === 'todo' && val(due, '截止')[0] === '周五前' && due.todos[0]?.text === '周五前把季度复盘 PPT 发给王总', JSON.stringify(due))
+
+const boxes = C.quick('- [ ] 订周五的会议室\n- [x] 发邮件给 Linda\n- [ ] 准备报价单')
+t('勾框清单：每行一条待办，打了勾的算做完', boxes.kind === 'todo' && boxes.todos.length === 3 && boxes.todos[1].done && !boxes.todos[0].done, JSON.stringify(boxes.todos))
+t('勾框清单：标题是「第一件 等 N 件」', boxes.title === '订周五的会议室 等 3 件', boxes.title)
+const shop = C.quick('周末要买：\n- 牛奶\n- 鸡蛋\n- 咖啡豆')
+t('「要买」清单：每行一条，标题去掉冒号', shop.kind === 'todo' && shop.todos.map((x) => x.text).join() === '牛奶,鸡蛋,咖啡豆' && shop.title === '周末要买', `${shop.title} ${JSON.stringify(shop.todos)}`)
+const minutes = C.quick('会议纪要\n1. 下季度重点是留存\n2. 预算不变\n3. Linda 负责数据看板，月底前给初版')
+t('会议纪要：是笔记不是清单，里面「月底前给初版」拎成待办', minutes.kind === 'note' && minutes.todos.length === 1 && minutes.todos[0].text.startsWith('Linda'), JSON.stringify(minutes))
+
+const call = C.quick('明天下午 3 点和 Lily 通电话 138 1234 5678，聊报价 ¥36,000')
+t('「明天 3 点通电话」：是日程，时间、电话、金额都在', call.kind === 'event' && val(call, '时间')[0] === '明天下午 3 点' && val(call, '电话').length === 1 && val(call, '金额').length === 1, JSON.stringify(call))
+
+const err = C.quick("TypeError: Cannot read properties of undefined (reading 'map')\n    at App (App.tsx:42:13)")
+t('报错：类型是代码，「42:13」不当成钟点', err.kind === 'code' && val(err, '时间').length === 0, JSON.stringify(err.fields))
+t('每种类型都配了一句拿去问 AI 的话（验证码除外）', ['event', 'todo', 'contact', 'link', 'data', 'code', 'question', 'quote', 'idea', 'note', 'other'].every((k) => C.LOCAL_ASK[k].length > 10) && otp.prompt === '')
+t('报价里的「36,000」不当成句子的逗号截断标题', !/¥36$/.test(price.title), price.title)
 
 // ---------------------------------------------------------------- 交给 Claude 的指令
 
@@ -102,6 +130,31 @@ t('搜：按原文找得到', C.matches(item, '原文在'))
 const n = C.normalize('x1', { raw: 'r', kind: 'weird', fields: [{ label: 'a', value: 'b' }, { label: 1 }], todos: [{ text: 't' }, 'bad'], tags: ['ok', 3] })
 t('读回来的脏数据补齐', n && n.kind === 'other' && n.fields.length === 1 && n.todos.length === 1 && n.todos[0].done === false && n.tags.length === 1)
 t('没有原文的记录不认', C.normalize('x2', { title: 'x' }) === null)
+
+// ---------------------------------------------------------------- 备份：导出 / 导入
+
+const mine = [
+  { ...item, id: 'a1', raw: '第一条', updatedAt: 10 },
+  { ...item, id: 'a2', raw: '第二条', updatedAt: 10, status: 'pending' },
+  { ...item, id: 'a3', raw: '第三条', updatedAt: 10, img: 'data:image/jpeg;base64,AAAA' },
+]
+const file = C.toBackup(mine, new Date(2026, 8, 23))
+const back = C.fromBackup(file)
+t('导出再导入：一条不少，截图也在', back.length === 3 && back[2].img === 'data:image/jpeg;base64,AAAA')
+t('导出时整理到一半的不带「在整理」（换台设备不会一直转圈）', back.find((x) => x.id === 'a2').status === 'failed')
+t('导出的文件认得出是随手拾的', JSON.parse(file).app === 'suishou' && JSON.parse(file).version === 1)
+let threw = ''
+try { C.fromBackup('{"hello":1}') } catch (e) { threw = e.message }
+t('别的 JSON 不认，不瞎猜', threw === 'not_backup')
+try { C.fromBackup('不是 JSON') } catch (e) { threw = e.message }
+t('不是 JSON 的不认', threw === 'not_json')
+const m1 = C.merge(mine, back)
+t('导入同一份：全部跳过，不重复', m1.add.length === 0 && m1.skipped === 3)
+const newer = { ...mine[0], title: '改过的', updatedAt: 99 }
+const m2 = C.merge(mine, [newer, { ...mine[1], id: 'zz' }, { ...item, id: 'b9', raw: '全新的一条' }])
+const shots = [{ ...item, id: 's1', raw: '［截图］', img: 'data:image/jpeg;base64,AAAA' }, { ...item, id: 's2', raw: '［截图］', img: 'data:image/jpeg;base64,BBBB' }]
+t('导入：两张不同的截图（原文都是「［截图］」）都收下', C.merge([], shots).add.length === 2)
+t('导入：同一条留改得更晚的；原文一样但 id 不同的不重复收；新的收下', m2.add.map((x) => x.id).join() === 'a1,b9' && m2.skipped === 1, JSON.stringify(m2.add.map((x) => x.id)))
 
 // ---------------------------------------------------------------- 截图
 

@@ -1,14 +1,14 @@
 /**
  * 看得清、点得到、不出界：手机 / 小屏 / 电脑 × 浅色 / 深色，
- * 空着（示例卡）、收了几条（一张展开）、多选三种状态都量一遍。
+ * 空着（示例卡）、收了几条（本地整理，一张展开）、设置、截图卡（开了 Claude）、问答、多选都量一遍。
  * 截图落在 test/shots/，CI 挂了会把它们捞出来。
  */
 import pkg from 'playwright'
 import { mkdirSync } from 'node:fs'
+import { mockAnthropic, TEST_KEY } from './mock-anthropic.mjs'
 const { chromium, devices } = pkg
 
 const URL = process.env.DESK_URL ?? 'http://127.0.0.1:8765/index.html'
-const MOCK = new globalThis.URL('./mock-claude.js', import.meta.url).pathname
 const SHOTS = new globalThis.URL('./shots/', import.meta.url).pathname
 mkdirSync(SHOTS, { recursive: true })
 let fail = 0
@@ -52,7 +52,7 @@ const CONFIGS = [
 
 for (const [name, opts] of CONFIGS) {
   const ctx = await b.newContext({ ...opts, permissions: ['clipboard-read', 'clipboard-write'] })
-  await ctx.addInitScript({ path: MOCK })
+  await mockAnthropic(ctx)
   const pg = await ctx.newPage()
   const errs = []
   pg.on('pageerror', (e) => errs.push(e.message))
@@ -123,7 +123,20 @@ for (const [name, opts] of CONFIGS) {
   t(`${name}·收了两条：三个复制按钮在卡片里排成一行`, copies && copies.height < 60 && copies.x >= cardBox.x && copies.x + copies.width <= cardBox.x + cardBox.width,
     copies ? `${Math.round(copies.width)}×${Math.round(copies.height)}` : '')
 
-  // ---- 截图卡
+  // ---- 设置（没开 Claude 时的样子），在这里填上 Key 开启
+  await pg.locator('.ghost[aria-label="设置"]').click()
+  await pg.waitForTimeout(300)
+  await check('设置')
+  const sheet = await pg.locator('.sheet').boundingBox()
+  t(`${name}·设置：整张面板在屏幕里`, sheet && sheet.y >= 0 && sheet.y + sheet.height <= vh + 0.5 && sheet.x >= 0, sheet ? `${Math.round(sheet.y)}–${Math.round(sheet.y + sheet.height)}，屏高 ${vh}` : '')
+  await pg.locator('#apikey').fill(TEST_KEY)
+  await pg.locator('.sheet .btn', { hasText: '保存并开启' }).click()
+  await pg.waitForTimeout(700)
+  await check('设置·已开')
+  await pg.locator('.sheet .ghost[aria-label="关闭设置"]').click()
+  await pg.waitForTimeout(200)
+
+  // ---- 截图卡（开着 Claude，读出了字）
   await pg.evaluate(async () => {
     const c = document.createElement('canvas'); c.width = 600; c.height = 1300
     const g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, 600, 1300)

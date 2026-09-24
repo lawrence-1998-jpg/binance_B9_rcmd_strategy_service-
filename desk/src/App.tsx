@@ -4,9 +4,10 @@ import {
   type Item, type Kind,
 } from './lib/card'
 import { askPrompt, pick, pieces, plainAnswer } from './lib/ask'
-import { dataUrlToBlob, isImage, shrink } from './lib/image'
-import { connect, type Runtime } from './lib/store'
-import { copyText } from './lib/copy'
+import { isImage, shrink, toPng } from './lib/image'
+import { fromBackup, merge, openStore, toBackup, type Store } from './lib/store'
+import * as claude from './lib/ai'
+import { copyImage, copyText } from './lib/copy'
 import { applyUpdate, useUpdate } from './lib/update'
 import { EXAMPLES } from './examples'
 
@@ -14,25 +15,30 @@ import { EXAMPLES } from './examples'
  * 随手拾 —— 随手复制的信息，贴进来就被整理成一张卡片，收着、找得到、随时拿出去用。
  *
  * 三件事，按她用的顺序：
- *   收：粘贴即收下。不用点「保存」，不用选类型。
- *   整：Claude 读懂它，拆成标题、要点、字段（时间 / 地点 / 电话 / 金额…）、待办，
- *       再替她想好下一步拿去问 AI 的那一句。Claude 想的那几秒，本地先认出来的东西已经摆上了。
- *   用：一张卡上能复制的东西都是按钮 —— 一个字段、整理版、给 AI 的版本、原文；
+ *   收：粘贴即收下。不用点「保存」，不用选类型。文字、截图都行。
+ *   整：本地先认一遍 —— 时间、地点、电话、金额、链接、待办，按类型配好「拿去问 AI」的那一句。
+ *       在设置里填了自己的 Claude API Key 的话，再交给 Claude 读懂重写（截图也能读）。
+ *   用：一张卡上能复制的东西都是按钮 —— 一个字段、整理版、给 AI 的版本、原文、截图；
  *       多选几张，合成一段再复制。
+ *
+ * 全部存在这台设备上（lib/store.ts）。不填 Key 就一个请求都不往外发。
  */
 
-type Toast = { msg: string; undo?: () => void; id: number }
+type Toast = { msg: string; action?: { label: string; run: () => void }; id: number }
 type Ask = { q: string; text: string; busy: boolean; chosen: Item[]; err?: string }
-/** 这几种错误说明这个视图里用不了 Claude：别再问了，整理降级成本地 */
-const AI_OFF = new Set(['not_granted', 'sampling_disabled', 'not_declared', 'capability_disabled', 'capability_removed'])
+/** 这两种错误说明 Key 本身用不了：别每收一条都再撞一次，等她去设置里换 */
+const KEY_DEAD = new Set(['bad_key', 'no_access'])
+const SHOT_LOCAL = '没开 Claude，读不了图里的字 ——「复制图片」贴给任何一个 AI 都行；或者在「设置」里填上 API Key'
 
 const touch = typeof window !== 'undefined' && !!window.matchMedia?.('(pointer: coarse)').matches
 const MOD = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent) ? '⌘' : 'Ctrl'
 
 export function App() {
-  const [rt, setRt] = useState<Runtime | null>(null)
+  const [store, setStore] = useState<Store | null>(null)
   const [items, setItems] = useState<Item[] | null>(null)
-  const [aiOff, setAiOff] = useState(false)
+  const [key, setKey] = useState(() => claude.loadKey())
+  const [keyBad, setKeyBad] = useState(false)
+  const [settings, setSettings] = useState(false)
   const [open, setOpen] = useState<string | null>(null)
   const [kind, setKind] = useState<Kind | 'all'>('all')
   const [q, setQ] = useState('')
@@ -41,49 +47,50 @@ export function App() {
   const [toast, setToast] = useState<Toast | null>(null)
   const [copied, setCopied] = useState<string | null>(null)
   const [draft, setDraft] = useState('')
-  const [storeErr, setStoreErr] = useState<string | null>(null)
   const [now, setNow] = useState(() => Date.now())
   const [ask, setAsk] = useState<Ask | null>(null)
   const askCtl = useRef<AbortController | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
 
-  const rtRef = useRef<Runtime | null>(null)
-  const readyWaiters = useRef<((r: Runtime) => void)[]>([])
+  const storeRef = useRef<Store | null>(null)
+  const readyWaiters = useRef<((s: Store) => void)[]>([])
   const itemsRef = useRef<Item[]>([])
   itemsRef.current = items ?? []
-  const aiOffRef = useRef(false)
-  aiOffRef.current = aiOff
+  /** 能不能叫 Claude：填了 Key、而且这个 Key 没被判死 */
+  const aiKey = key && !keyBad ? key : ''
+  const keyRef = useRef('')
+  keyRef.current = aiKey
   const capRef = useRef<HTMLTextAreaElement>(null)
 
   // ---------------------------------------------------------------- 连上
 
   useEffect(() => {
     let live = true
-    void connect().then((r) => {
+    void openStore().then((s) => {
       if (!live) return
-      rtRef.current = r
-      setRt(r)
-      readyWaiters.current.splice(0).forEach((f) => f(r))
+      storeRef.current = s
+      setStore(s)
+      readyWaiters.current.splice(0).forEach((f) => f(s))
     })
     return () => { live = false }
   }, [])
   useEffect(() => {
-    if (!rt) return
-    return rt.store.subscribe(setItems, (code) => setStoreErr(code))
-  }, [rt])
+    if (!store) return
+    return store.subscribe(setItems)
+  }, [store])
   useEffect(() => {
     const t = setInterval(() => setNow(Date.now()), 60_000)
     return () => clearInterval(t)
   }, [])
 
-  const whenReady = () => (rtRef.current ? Promise.resolve(rtRef.current) : new Promise<Runtime>((r) => readyWaiters.current.push(r)))
+  const whenReady = () => (storeRef.current ? Promise.resolve(storeRef.current) : new Promise<Store>((r) => readyWaiters.current.push(r)))
 
   // ---------------------------------------------------------------- 提示
 
-  const say = useCallback((msg: string, undo?: () => void) => setToast({ msg, undo, id: Date.now() }), [])
+  const say = useCallback((msg: string, action?: Toast['action']) => setToast({ msg, action, id: Date.now() }), [])
   useEffect(() => {
     if (!toast) return
-    const t = setTimeout(() => setToast(null), toast.undo ? 6000 : 2200)
+    const t = setTimeout(() => setToast(null), toast.action ? 6000 : 2200)
     return () => clearTimeout(t)
   }, [toast])
 
@@ -99,51 +106,49 @@ export function App() {
       say(`已复制${what}`)
     })
   }
+  /** 截图卡：把图本身复制出去，贴进任何一个 AI 的对话框 */
+  const copyShot = (it: Item, key: string) => {
+    if (!it.img) return
+    void copyImage(toPng(it.img)).then((ok) => {
+      if (!ok) { say('这个浏览器不让复制图片 —— 长按图片存下来'); return }
+      setCopied(key)
+      window.clearTimeout(copyTimer.current)
+      copyTimer.current = window.setTimeout(() => setCopied(null), 1600)
+      say('已复制图片 · 去 AI 那儿粘贴')
+    })
+  }
 
   // ---------------------------------------------------------------- 整理
 
   const patch = async (id: string, p: Partial<Item>) => {
-    try { await rtRef.current?.store.patch(id, { ...p, updatedAt: Date.now() }) } catch { /* 已经被删了 */ }
+    try { await storeRef.current?.patch(id, { ...p, updatedAt: Date.now() }) } catch { /* 写不进去：下次刷新按盘上的样子 */ }
   }
 
-  /** file：刚收进来的截图原件（第一次整理用它，清楚）；重新整理时用卡里存的那份 */
-  const organize = async (it: Item, again = false, file?: Blob) => {
-    const r = await whenReady()
-    const shot = !!it.img || !!file
-    if (!r.sample || aiOffRef.current || (shot && !r.images)) {
-      await patch(it.id, shot
-        ? { status: 'failed', note: '这里读不了图 —— 在 claude.ai 里打开，再点「重新整理」' }
-        : { status: 'local', note: '' })
+  /**
+   * 交给 Claude 整理一条。没开（没填 Key / Key 用不了）就停在本地整理 ——
+   * 本地那一遍在收下的时候已经做完了，卡上本来就有东西。
+   * again：她点了「重新整理」，让 Claude 想得仔细一点
+   */
+  const organize = async (it: Item, again = false) => {
+    const k = keyRef.current
+    const shot = !!it.img
+    if (!k) {
+      await patch(it.id, { status: 'local', note: shot && it.raw === IMG_PLACEHOLDER ? SHOT_LOCAL : '' })
       return
     }
     if (again) await patch(it.id, { status: 'pending', note: '' })
     try {
-      const images = shot ? (file ?? dataUrlToBlob(it.img!)) : undefined
-      const j = await r.sample.json(aiPrompt(shot ? '' : it.raw, new Date(), shot), {
-        ...(again ? { modelTier: 'default' as const, cache: false } : { modelTier: 'quick' as const }),
-        ...(images ? { images } : {}),
-      })
+      const j = await claude.organize(k, aiPrompt(shot ? '' : it.raw, new Date(), shot), shot ? it.img : undefined, again ? 'medium' : 'low')
       const card = fromAi(j)
-      if (!card) throw { code: 'invalid_json' }
+      if (!card) throw new claude.AiError('invalid_json')
       // 读文字时不许 Claude 改原文；读截图时，它转写出来的字就是原文
       const { raw, ...rest } = card
       await patch(it.id, { ...rest, ...(shot && raw ? { raw } : {}), status: 'done', note: '' })
     } catch (e) {
-      const code = (e as { code?: string })?.code ?? 'upstream_error'
+      const code = e instanceof claude.AiError ? e.code : 'failed'
       if (code === 'cancelled') return
-      if (AI_OFF.has(code)) {
-        setAiOff(true)
-        await patch(it.id, { status: 'local', note: '' })
-        return
-      }
-      const note =
-        code === 'rate_limited' ? 'Claude 这会儿忙，过一会儿点「重新整理」'
-        : code === 'prompt_too_large' ? '太长了，Claude 一次读不完 —— 可以分几段收'
-        : code === 'refused' ? 'Claude 没接这条，先做了基础整理'
-        : code === 'image_rejected' ? '这张图 Claude 读不了，换一张试试'
-        : code === 'session_expired' ? '登录过期了，重新登录 claude.ai 后点「重新整理」'
-        : '这次没整理成，点「重新整理」再试'
-      await patch(it.id, { status: 'failed', note })
+      if (KEY_DEAD.has(code)) setKeyBad(true)
+      await patch(it.id, { status: 'failed', note: claude.noteFor(code) })
     }
   }
 
@@ -152,7 +157,7 @@ export function App() {
   const add = async (text: string) => {
     const raw = tidy(text)
     if (!raw) { say('剪贴板里没有文字'); return }
-    const r = await whenReady()
+    const st = await whenReady()
     const dup = itemsRef.current.find((x) => x.raw === raw)
     if (dup) {
       setKind('all'); setQ(''); setOpen(dup.id)
@@ -163,16 +168,16 @@ export function App() {
     const t = Date.now()
     const it: Item = {
       id: newId(), raw, createdAt: t, updatedAt: t,
-      status: r.sample && !aiOffRef.current ? 'pending' : 'local',
+      status: keyRef.current ? 'pending' : 'local',
       pinned: false,
       ...quick(raw),
     }
     setKind('all'); setQ(''); setSearching(false); setOpen(it.id)
     try {
-      await r.store.put(it)
+      await st.put(it)
     } catch (e) {
       const code = (e as { code?: string })?.code
-      say(code === 'quota_exceeded' ? '库满了，删掉一些旧的再收' : '没存上，再贴一次试试')
+      say(code === 'quota_exceeded' ? '这台设备的空间满了，删掉一些旧的再收' : '没存上，再贴一次试试')
       return
     }
     if (it.status === 'pending') void organize(it)
@@ -180,31 +185,32 @@ export function App() {
   const addRef = useRef(add)
   addRef.current = add
 
-  /** 收一张截图：先压一份小的存进卡片，原图交给 Claude 去读 */
+  /**
+   * 收一张截图：压一份存进卡片。开了 Claude 就让它读图里的字；
+   * 没开也收 —— 图就在卡上，「复制图片」能贴给任何一个 AI
+   */
   const addImage = async (file: Blob) => {
-    const r = await whenReady()
-    if (!r.sample || aiOffRef.current || !r.images) {
-      say('截图要在 claude.ai 里打开才能收 —— 得让 Claude 读图')
-      return
-    }
+    const st = await whenReady()
     let img: string
     try { img = await shrink(file) } catch { say('这张图读不了，换一张试试'); return }
     const t = Date.now()
+    const d = new Date(t)
+    const ai = !!keyRef.current
     const it: Item = {
-      id: newId(), raw: IMG_PLACEHOLDER, createdAt: t, updatedAt: t, status: 'pending', pinned: false,
-      kind: 'other', title: '一张截图', summary: '', fields: [], todos: [], tags: [], prompt: '', img,
+      id: newId(), raw: IMG_PLACEHOLDER, createdAt: t, updatedAt: t, status: ai ? 'pending' : 'local', pinned: false,
+      kind: 'other', title: ai ? '一张截图' : `截图 · ${d.getMonth() + 1}月${d.getDate()}日 ${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`,
+      summary: '', fields: [], todos: [], tags: [], prompt: '', img,
+      ...(ai ? {} : { note: SHOT_LOCAL }),
     }
     setKind('all'); setQ(''); setSearching(false); setOpen(it.id)
     try {
-      await r.store.put(it)
+      await st.put(it)
     } catch (e) {
       const code = (e as { code?: string })?.code
-      say(code === 'quota_exceeded' ? '库满了，删掉一些旧的再收' : '没存上，再试一次')
+      say(code === 'quota_exceeded' ? '这台设备的空间满了，删掉一些旧的再收' : '没存上，再试一次')
       return
     }
-    // 原图格式 Claude 不收、或者太大，就给它压过的那份
-    const direct = r.images.mediaTypes.includes(file.type) && file.size <= r.images.maxInputBytes
-    void organize(it, false, direct ? file : dataUrlToBlob(img))
+    if (ai) void organize(it)
   }
   const addImageRef = useRef(addImage)
   addImageRef.current = addImage
@@ -260,11 +266,13 @@ export function App() {
   // ---------------------------------------------------------------- 改 / 删
 
   const remove = async (list: Item[]) => {
-    const r = rtRef.current
-    if (!r || !list.length) return
-    await Promise.all(list.map((it) => r.store.remove(it.id).catch(() => {})))
+    const st = storeRef.current
+    if (!st || !list.length) return
+    await Promise.all(list.map((it) => st.remove(it.id).catch(() => {})))
     if (list.some((it) => it.id === open)) setOpen(null)
-    say(list.length > 1 ? `删掉了 ${list.length} 条` : '删掉了', () => { list.forEach((it) => void r.store.put(it).catch(() => {})) })
+    say(list.length > 1 ? `删掉了 ${list.length} 条` : '删掉了', {
+      label: '撤销', run: () => { void st.putMany(list).catch(() => {}) },
+    })
   }
 
   const toggleTodo = (it: Item, i: number) =>
@@ -273,9 +281,9 @@ export function App() {
   // ---------------------------------------------------------------- 问
 
   const doAsk = async () => {
-    const r = rtRef.current
+    const k = keyRef.current
     const question = q.trim()
-    if (!r?.sample || aiOffRef.current || !question) return
+    if (!k || !question) return
     askCtl.current?.abort()
     const ctl = new AbortController()
     askCtl.current = ctl
@@ -283,20 +291,18 @@ export function App() {
     const mine = (a: Ask | null) => !!a && a.q === question && askCtl.current === ctl
     setAsk({ q: question, text: '', busy: true, chosen })
     try {
-      const res = await r.sample(askPrompt(question, chosen), {
-        cache: false,
-        signal: ctl.signal,
-        onText: ({ text }) => setAsk((a) => (mine(a) ? { ...a!, text } : a)),
-      })
-      setAsk((a) => (mine(a) ? { ...a!, text: res.text, busy: false } : a))
+      const text = await claude.ask(k, askPrompt(question, chosen), (t) => setAsk((a) => (mine(a) ? { ...a!, text: t } : a)), ctl.signal)
+      setAsk((a) => (mine(a) ? { ...a!, text, busy: false } : a))
     } catch (e) {
-      const { code, text } = (e ?? {}) as { code?: string; text?: string }
-      if (AI_OFF.has(code ?? '')) setAiOff(true)
+      const { code, text } = (e ?? {}) as { code?: claude.AiErrCode; text?: string }
+      if (code && KEY_DEAD.has(code)) setKeyBad(true)
       const err =
         code === 'cancelled' ? undefined
-        : AI_OFF.has(code ?? '') ? '这里没开 Claude，问不了 —— 上面的搜索结果照样能用'
-        : code === 'rate_limited' ? 'Claude 这会儿忙，过一会儿再问'
-        : code === 'prompt_too_large' ? '收的东西太多了，换个更具体的问法试试'
+        : code === 'bad_key' || code === 'no_access' ? 'API Key 用不了，问不了 —— 去「设置」里看看。上面的搜索照样能用'
+        : code === 'rate_limited' || code === 'overloaded' ? 'Claude 这会儿忙，过一会儿再问'
+        : code === 'offline' ? '没连上网，问不了 —— 上面的搜索照样能用'
+        : code === 'no_credit' ? 'API 账户余额不足，充值后再问'
+        : code === 'too_large' ? '收的东西太多了，换个更具体的问法试试'
         : '没问成，再问一次试试'
       setAsk((a) => (mine(a) ? { ...a!, text: text ?? a!.text, busy: false, err } : a))
     }
@@ -334,6 +340,8 @@ export function App() {
   }, [shown, now])
 
   const empty = items !== null && lib.length === 0
+  // 示例卡照实演示：没开 Claude 时就是本地整理出来的样子，贴进来真的会变成这样
+  const examples = useMemo(() => (aiKey ? EXAMPLES : EXAMPLES.map((e) => ({ ...e, ...quick(e.raw), status: 'local' as const }))), [aiKey])
   const pickedItems = picked ? lib.filter((it) => picked.has(it.id)) : []
 
   // 键盘：/ 搜索，Esc 收起
@@ -355,14 +363,47 @@ export function App() {
     return () => window.removeEventListener('keydown', on)
   }, [picked, open, searching])
 
-  const canAsk = !!rt?.sample && !aiOff && lib.length > 0
-  const canShot = !!rt?.sample && !!rt.images && !aiOff
+  const canAsk = !!aiKey && lib.length > 0
 
   const status =
-    !rt ? '正在打开你的收藏…'
-    : rt.sample && !aiOff ? `粘贴即收下 · ${rt.images ? '文字截图都行 · ' : ''}Claude 帮你整理${rt.store.mode === 'cloud' ? ' · 手机电脑同一份' : ''}`
-    : aiOff ? '粘贴即收下 · 这里没开 Claude，只做基础整理'
-    : '粘贴即收下 · 只存在这台设备 · 在 Claude 里打开能用 AI 整理'
+    !store ? '正在打开你的收藏…'
+    : keyBad ? '粘贴即收下 · API Key 用不了，先做基础整理 —— 去设置里看看'
+    : aiKey ? '粘贴即收下 · 文字截图都行 · Claude 帮你整理'
+    : '粘贴即收下 · 文字截图都行 · 只存在这台设备'
+
+  // ---------------------------------------------------------------- 导出 / 导入
+
+  const doExport = () => {
+    const d = new Date()
+    const p = (n: number) => String(n).padStart(2, '0')
+    const url = URL.createObjectURL(new Blob([toBackup(lib, d)], { type: 'application/json' }))
+    const a = document.createElement('a')
+    a.href = url
+    // 文件名用英文：有的浏览器碰到中文文件名直接存成「download」
+    a.download = `suishou-backup-${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}.json`
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    setTimeout(() => URL.revokeObjectURL(url), 10_000)
+    say(`导出了 ${lib.length} 条`)
+  }
+  const doImport = async (f: File) => {
+    const st = await whenReady()
+    let incoming: Item[]
+    try { incoming = fromBackup(await f.text()) } catch { say('这不是随手拾的备份文件'); return }
+    const { add, skipped } = merge(itemsRef.current, incoming)
+    try { await st.putMany(add) } catch { say('没导进去 —— 这台设备的空间可能满了'); return }
+    say(add.length ? `导入了 ${add.length} 条${skipped ? `，${skipped} 条已经有了` : ''}` : `都已经有了（${skipped} 条）`)
+  }
+
+  // 安卓上装成 App 后，别的 App 里「分享」到这里：带着 ?text= / ?url= 打开，当场收下
+  useEffect(() => {
+    const u = new URLSearchParams(location.search)
+    const parts = uniqParts([u.get('title'), u.get('text'), u.get('url')])
+    if (!parts.length) return
+    history.replaceState(null, '', location.pathname)
+    void addRef.current(parts.join('\n'))
+  }, [])
 
   return (
     <div className={'app' + (picked ? ' picking' : '')}>
@@ -383,6 +424,11 @@ export function App() {
             <button type="button" className="ghost txt" aria-pressed={!!picked}
               onClick={() => setPicked((p) => (p ? null : new Set()))}>
               {picked ? '完成' : '选择'}
+            </button>
+          )}
+          {!picked && (
+            <button type="button" className={'ghost' + (keyBad ? ' warn-dot' : '')} aria-label="设置" onClick={() => setSettings(true)}>
+              <GearIcon />
             </button>
           )}
         </div>
@@ -479,8 +525,8 @@ export function App() {
             aria-label="粘贴或输入要收下的内容"
           />
           <div className="cap-foot">
-            <span className={'cap-hint' + (rt?.sample && !aiOff ? ' ai' : '')}>{status}</span>
-            {canShot && !draft.trim() && (
+            <span className={'cap-hint' + (aiKey ? ' ai' : '')}>{status}</span>
+            {!draft.trim() && (
               <>
                 <input
                   id="shot"
@@ -508,12 +554,6 @@ export function App() {
         </section>
       )}
 
-      {storeErr && (
-        <p className="warn" role="status">
-          {storeErr === 'revoked' ? '这个页面的存储权限被收回了，新收的东西不会保存。' : '存储暂时连不上，刚收的可能没保存 —— 刷新一下再看。'}
-        </p>
-      )}
-
       {lib.length > 0 && (
         <nav className="kinds" aria-label="按类型看">
           <button type="button" className={kind === 'all' ? 'on' : ''} aria-pressed={kind === 'all'} onClick={() => setKind('all')}>
@@ -533,7 +573,7 @@ export function App() {
         {empty && (
           <>
             <p className="ex-h">示例 · 贴进来的东西会变成这样。收下第一条后这些就不见了。</p>
-            {EXAMPLES.map((it) => (
+            {examples.map((it) => (
               <Card key={it.id} it={it} example open={open === it.id} now={now} copied={copied}
                 onToggle={() => setOpen(open === it.id ? null : it.id)} copy={copy} />
             ))}
@@ -571,7 +611,8 @@ export function App() {
                 onRetitle={(title) => void patch(it.id, { title })}
                 onRedo={() => void organize(it, true)}
                 onDelete={() => void remove([it])}
-                aiReady={!!rt?.sample && !aiOff}
+                copyShot={copyShot}
+                aiReady={!!aiKey}
               />
             ))}
           </section>
@@ -596,13 +637,25 @@ export function App() {
         {toast && (
           <div className="toast" key={toast.id}>
             <span>{toast.msg}</span>
-            {toast.undo && <button type="button" onClick={() => { toast.undo?.(); setToast(null) }}>撤销</button>}
+            {toast.action && <button type="button" onClick={() => { toast.action?.run(); setToast(null) }}>{toast.action.label}</button>}
           </div>
         )}
       </div>
 
+      {settings && (
+        <Settings
+          count={lib.length}
+          apiKey={key}
+          keyBad={keyBad}
+          onKey={(k) => { setKey(k); setKeyBad(false) }}
+          onExport={doExport}
+          onImport={(f) => void doImport(f)}
+          onClose={() => setSettings(false)}
+        />
+      )}
+
       <footer className="foot">
-        <span>{rt?.store.mode === 'cloud' ? '存在你的 Claude 账号里，只有你看得到。' : '存在这台设备的浏览器里，不上传。'}</span>
+        <span>{aiKey ? '存在这台设备上。开着 Claude 整理：收下的内容会直接发给 Anthropic。' : '存在这台设备的浏览器里，不上传。'}</span>
         <span className="ver">{__BUILD_SHA__ === 'offline' ? '单文件版' : `v${__BUILD_SHA__}`}</span>
       </footer>
     </div>
@@ -627,6 +680,7 @@ interface CardProps {
   onRetitle?: (t: string) => void
   onRedo?: () => void
   onDelete?: () => void
+  copyShot?: (it: Item, key: string) => void
   aiReady?: boolean
 }
 
@@ -645,6 +699,8 @@ function Card(p: CardProps) {
   const k = (s: string) => `${it.id}:${s}`
   const done = (s: string) => copied === k(s)
   const chips = it.fields.slice(0, 3)
+  /** 截图、图里的字还没读出来 */
+  const textless = !!it.img && it.raw === IMG_PLACEHOLDER
 
   const saveTitle = () => {
     setEditing(false)
@@ -719,13 +775,21 @@ function Card(p: CardProps) {
 
       {open && (
         <div className="detail">
-          {it.note && <p className="note">{it.note}</p>}
+          {/* 「没开 Claude」那句：她已经开了，就别再说了（下面有「让 Claude 读图」） */}
+          {it.note && !(p.aiReady && it.status === 'local') && <p className="note">{it.note}</p>}
 
           {it.img && (
-            <button type="button" className={'shot' + (bigShot ? ' big' : '')} onClick={() => setBigShot((b) => !b)}
-              aria-label={bigShot ? '收起截图' : '看完整截图'}>
-              <img src={it.img} alt="收进来的截图" />
-            </button>
+            <div className="shot-wrap">
+              <button type="button" className={'shot' + (bigShot ? ' big' : '')} onClick={() => setBigShot((b) => !b)}
+                aria-label={bigShot ? '收起截图' : '看完整截图'}>
+                <img src={it.img} alt="收进来的截图" />
+              </button>
+              {!textless && p.copyShot && (
+                <button type="button" className={'shot-copy' + (done('img') ? ' done' : '')} onClick={() => p.copyShot?.(it, k('img'))}>
+                  {done('img') ? '✓ 已复制' : '复制图片'}
+                </button>
+              )}
+            </div>
           )}
 
           {it.fields.length > 0 && (
@@ -758,7 +822,7 @@ function Card(p: CardProps) {
             <p className="tags">{it.tags.map((t) => <span key={t}>#{t}</span>)}</p>
           )}
 
-          {it.prompt && (
+          {it.prompt && !textless && (
             <button type="button" className={'ask' + (done('ai') ? ' done' : '')}
               onClick={() => copy(asAi(it), k('ai'), '给 AI 的版本')}>
               <span className="ask-l">{done('ai') ? '已复制 · 去 AI 那儿粘贴' : '下一步可以这样问 AI'}</span>
@@ -766,30 +830,45 @@ function Card(p: CardProps) {
             </button>
           )}
 
-          <div className="raw">
-            <button type="button" className="raw-t" aria-expanded={showRaw} onClick={() => setShowRaw((s) => !s)}>
-              {showRaw ? '收起原文 ▴' : it.img ? '看图里的字 ▾' : '看原文 ▾'}
-            </button>
-            {showRaw && <pre>{it.raw}</pre>}
-          </div>
+          {!textless && (
+            <div className="raw">
+              <button type="button" className="raw-t" aria-expanded={showRaw} onClick={() => setShowRaw((s) => !s)}>
+                {showRaw ? '收起原文 ▴' : it.img ? '看图里的字 ▾' : '看原文 ▾'}
+              </button>
+              {showRaw && <pre>{it.raw}</pre>}
+            </div>
+          )}
 
-          <div className="copies">
-            <button type="button" className={'btn solid' + (done('text') ? ' done' : '')} onClick={() => copy(asText(it), k('text'), '整理版')}>
-              {done('text') ? '✓ 已复制' : '复制整理版'}
-            </button>
-            <button type="button" className={'btn' + (done('ai') ? ' done' : '')} onClick={() => copy(asAi(it), k('ai'), '给 AI 的版本')}>
-              {done('ai') ? '✓ 已复制' : '复制给 AI'}
-            </button>
-            <button type="button" className={'btn' + (done('raw') ? ' done' : '')} onClick={() => copy(it.raw, k('raw'), '原文')}>
-              {done('raw') ? '✓ 已复制' : '复制原文'}
-            </button>
-          </div>
+          {textless ? (
+            // 图里的字还没读出来：能拿走的就是这张图
+            <div className="copies two">
+              <button type="button" className={'btn solid' + (done('img') ? ' done' : '')} onClick={() => p.copyShot?.(it, k('img'))}>
+                {done('img') ? '✓ 已复制' : '复制图片'}
+              </button>
+              <button type="button" className={'btn' + (done('text') ? ' done' : '')} onClick={() => copy(asText(it), k('text'), '整理版')}>
+                {done('text') ? '✓ 已复制' : '复制整理版'}
+              </button>
+            </div>
+          ) : (
+            <div className="copies">
+              <button type="button" className={'btn solid' + (done('text') ? ' done' : '')} onClick={() => copy(asText(it), k('text'), '整理版')}>
+                {done('text') ? '✓ 已复制' : '复制整理版'}
+              </button>
+              <button type="button" className={'btn' + (done('ai') ? ' done' : '')} onClick={() => copy(asAi(it), k('ai'), '给 AI 的版本')}>
+                {done('ai') ? '✓ 已复制' : '复制给 AI'}
+              </button>
+              <button type="button" className={'btn' + (done('raw') ? ' done' : '')} onClick={() => copy(it.raw, k('raw'), '原文')}>
+                {done('raw') ? '✓ 已复制' : '复制原文'}
+              </button>
+            </div>
+          )}
 
           {!p.example && (
             <div className="acts">
               <button type="button" onClick={() => setEditing(true)}>改标题</button>
-              {p.aiReady && it.status !== 'pending' && <button type="button" onClick={p.onRedo}>重新整理</button>}
-              {stale && p.aiReady && <button type="button" onClick={p.onRedo}>重新整理</button>}
+              {p.aiReady && (it.status !== 'pending' || stale) && (
+                <button type="button" onClick={p.onRedo}>{it.status === 'local' ? (it.img ? '让 Claude 读图' : '让 Claude 整理') : '重新整理'}</button>
+              )}
               <button type="button" onClick={p.onPin}>{it.pinned ? '取消置顶' : '置顶'}</button>
               <button type="button" className="danger" onClick={p.onDelete}>删除</button>
             </div>
@@ -797,6 +876,166 @@ function Card(p: CardProps) {
         </div>
       )}
     </article>
+  )
+}
+
+// ---------------------------------------------------------------- 设置
+
+/** 分享进来的标题 / 正文 / 链接：去掉重复的（很多 App 会把链接同时塞进 text） */
+function uniqParts(xs: (string | null)[]): string[] {
+  const out: string[] = []
+  for (const x of xs) {
+    const t = x?.trim()
+    if (t && !out.some((o) => o.includes(t))) out.push(t)
+  }
+  return out
+}
+
+interface SettingsProps {
+  count: number
+  apiKey: string
+  keyBad: boolean
+  onKey: (k: string) => void
+  onExport: () => void
+  onImport: (f: File) => void
+  onClose: () => void
+}
+
+function Settings(p: SettingsProps) {
+  const [draft, setDraft] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null)
+  const fileRef = useRef<HTMLInputElement>(null)
+  const boxRef = useRef<HTMLElement>(null)
+
+  useEffect(() => {
+    const prev = document.activeElement as HTMLElement | null
+    boxRef.current?.focus()
+    const on = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.stopPropagation(); p.onClose() } }
+    window.addEventListener('keydown', on, true)
+    return () => { window.removeEventListener('keydown', on, true); prev?.focus?.() }
+  }, [])
+
+  const say = (ok: boolean, text: string) => setMsg({ ok, text })
+  const why = (code: string) =>
+    code === 'bad_key' ? '这个 Key 不对 —— 检查一下有没有复制完整'
+    : code === 'no_access' ? '这个 Key 用不了 Claude（没有权限），换一个试试'
+    : code === 'rate_limited' || code === 'overloaded' ? 'Claude 那边这会儿忙，过一会儿再试'
+    : '没测成，再试一次'
+
+  const save = async () => {
+    const k = draft.trim()
+    if (!k) return
+    if (!claude.looksLikeKey(k)) { say(false, '这看起来不像 Claude 的 API Key（应该以 sk-ant- 开头）'); return }
+    setBusy(true); setMsg(null)
+    try {
+      await claude.check(k)
+      claude.saveKey(k)
+      p.onKey(k)
+      setDraft('')
+      say(true, '已开启。之后收下的每一条都会交给 Claude 整理')
+    } catch (e) {
+      const code = e instanceof claude.AiError ? e.code : 'failed'
+      if (code === 'offline') {
+        // 没网测不了：先存上，有网时用得上
+        claude.saveKey(k)
+        p.onKey(k)
+        setDraft('')
+        say(true, '没连上网，测不了 —— 先存上了，有网时就会用')
+      } else say(false, why(code))
+    } finally { setBusy(false) }
+  }
+
+  const test = async () => {
+    setBusy(true); setMsg(null)
+    try { await claude.check(p.apiKey); p.onKey(p.apiKey); say(true, '能用 ✓') }
+    catch (e) { const code = e instanceof claude.AiError ? e.code : 'failed'; say(false, code === 'offline' ? '没连上网' : why(code)) }
+    finally { setBusy(false) }
+  }
+
+  const off = () => {
+    claude.clearKey()
+    p.onKey('')
+    say(true, '已关掉，Key 已从这台设备删除。之后只做本地整理，不再往外发任何东西')
+  }
+
+  return (
+    <div className="sheet-bg" onClick={(e) => { if (e.target === e.currentTarget) p.onClose() }}>
+      <section className="sheet" role="dialog" aria-modal="true" aria-labelledby="set-h" tabIndex={-1} ref={boxRef}>
+        <header className="sheet-h">
+          <h2 id="set-h">设置</h2>
+          <button type="button" className="ghost" aria-label="关闭设置" onClick={p.onClose}>✕</button>
+        </header>
+
+        <div className="set-sec">
+          <h3>你的数据</h3>
+          <p className="set-p">
+            {p.count ? `${p.count} 条，` : ''}只存在这台设备的浏览器里，不上传到任何地方。换手机、换浏览器、清理浏览器数据之前，先导出一份备份。
+          </p>
+          <div className="set-row">
+            <button type="button" className="btn solid" disabled={!p.count} onClick={p.onExport}>导出备份</button>
+            <button type="button" className="btn" onClick={() => fileRef.current?.click()}>导入备份</button>
+            <input
+              id="import"
+              ref={fileRef}
+              type="file"
+              accept="application/json,.json"
+              hidden
+              onChange={(e) => { const f = e.target.files?.[0]; if (f) p.onImport(f); e.target.value = '' }}
+            />
+          </div>
+        </div>
+
+        <div className="set-sec">
+          <h3>
+            Claude 整理
+            <span className={'pill' + (p.apiKey && !p.keyBad ? ' on' : p.keyBad ? ' bad' : '')}>
+              {p.keyBad ? '用不了' : p.apiKey ? '已开' : '可选'}
+            </span>
+          </h3>
+          <p className="set-p">
+            不开也能用：本地会认出时间、地点、电话、金额、链接和待办。开了之后，Claude 会读懂每一条再整理，还能读截图里的字、在搜索框里直接提问。
+          </p>
+          {p.apiKey ? (
+            <>
+              <p className="key-on">你的 API Key：<code>sk-ant-…{p.apiKey.slice(-4)}</code></p>
+              <div className="set-row">
+                <button type="button" className="btn" disabled={busy} onClick={() => void test()}>{busy ? '在测…' : '测一下'}</button>
+                <button type="button" className="btn quiet" onClick={off}>关掉并删除 Key</button>
+              </div>
+            </>
+          ) : (
+            <>
+              <label className="set-l" htmlFor="apikey">你自己的 Claude API Key</label>
+              <input
+                id="apikey"
+                className="set-in"
+                type="password"
+                autoComplete="off"
+                autoCapitalize="off"
+                spellCheck={false}
+                placeholder="sk-ant-…"
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') void save() }}
+              />
+              <div className="set-row">
+                <button type="button" className="btn solid" disabled={busy || !draft.trim()} onClick={() => void save()}>
+                  {busy ? '在测…' : '保存并开启'}
+                </button>
+              </div>
+              <p className="set-fine">在 console.anthropic.com 的 API Keys 页面创建。按用量付费，记在你自己的账户上。</p>
+            </>
+          )}
+          {msg && <p className={'set-msg' + (msg.ok ? ' ok' : ' no')} role="status">{msg.text}</p>}
+          <p className="set-fine">
+            Key 只存在这台设备上。开着的时候，你收下的内容（和截图、提问）会从这台设备直接发给 Anthropic（api.anthropic.com）处理，不经过其他任何服务器。偶尔主力模型不接某条时，Anthropic 会自动换一个模型接着整理。
+          </p>
+        </div>
+
+        <p className="set-fine set-ver">随手拾 · {__BUILD_SHA__ === 'offline' ? '单文件版' : `v${__BUILD_SHA__}`} · 不联网也能用</p>
+      </section>
+    </div>
   )
 }
 
@@ -814,6 +1053,14 @@ function UpdateBanner() {
 
 // ---------------------------------------------------------------- 图标
 
+function GearIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="3" />
+      <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z" />
+    </svg>
+  )
+}
 function CopyIcon() {
   return (
     <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
