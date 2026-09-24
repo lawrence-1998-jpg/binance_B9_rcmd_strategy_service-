@@ -19,14 +19,15 @@ const DIST = resolve(HERE, '..', 'dist')
 const PORT = Number(process.env.DESK_PORT ?? 8765)
 
 // 默认这一批：能在干净机器上跑起来、且真的出断言的。
-//   unit      纯逻辑：本地认字段、给 Claude 的指令、核 Claude 的回复、复制出去的样子
-//   flow      在 claude.ai 里（假运行时 mock-claude.js）：收 → 整理 → 复制 → 待办 → 筛选搜索 → 多选 → 删 → 刷新；Claude 忙 / 不可用
-//   offline   不在 claude.ai 里：没有 AI 也能收、能认、能复制、刷新还在
+//   unit      纯逻辑：本地整理认得准不准、给 Claude 的指令、核 Claude 的回复、复制出去的样子、备份合并
+//   flow      本地版（默认，没填 Key）：收 → 本地整理 → 复制 → 待办 → 筛选搜索 → 多选 → 删 → 刷新 → 截图 → 分享进来 → 导出导入 → 老数据搬家
+//   ai        填了自己的 Key（假的 api.anthropic.com）：Claude 整理、读截图、忙 / 不接 / 断网 / Key 失效时怎么退、问一问、关掉
+//   offline   断网：本地版照样能用；开着 Claude 时断网不卡住，有网了补上
 //   look      手机 / 小屏 / 电脑 × 浅色 / 深色：对比度、点击区域、不出界、不裁字
-//   private   不出网；每一笔都写在她自己那一格
-//   single    仓库里那份离线单文件版能双击打开、能用、不乱码
+//   private   没开 Claude 一个请求都不出网；开了只到 api.anthropic.com，Key 只在请求头里；关掉删干净
+//   single    仓库里那份离线单文件版能双击打开、能用、不乱码，填了 Key 也能叫 Claude
 //   swupdate  GitHub Pages 那一版：新版本打开一次就到手上（会临时换 dist，run-all.sh 会还原）
-const DEFAULT = ['unit', 'flow', 'offline', 'look', 'private', 'single', 'swupdate']
+const DEFAULT = ['unit', 'flow', 'ai', 'offline', 'look', 'private', 'single', 'swupdate']
 
 const suites = process.argv.slice(2).filter((a) => !a.startsWith('-'))
 const list = suites.length ? suites : DEFAULT

@@ -379,7 +379,8 @@ h1, h2, h3, h4, p { margin: 0; }
 .tick.on::before { background: var(--btn); border-color: var(--btn); }
 .tick svg { position: relative; width: 16px; height: 16px; }
 
-.card-main { display: block; width: 100%; padding: 0 10px 2px 0; }
+/* 只有一行标题（本地整理的联系人、链接没有要点）时，整块也要够手指点 */
+.card-main { display: flex; flex-direction: column; justify-content: center; width: 100%; min-height: var(--tap); padding: 0 10px 2px 0; }
 .card-main h3 {
   font-family: var(--f-serif); font-weight: 700;
   font-size: 18.5px; line-height: 1.35; letter-spacing: .01em;
@@ -431,6 +432,15 @@ h1, h2, h3, h4, p { margin: 0; }
   background: linear-gradient(to bottom, transparent, var(--card) 70%);
 }
 .shot.big { max-height: none; }
+.shot-wrap { position: relative; }
+/* 读过字的截图：图的右上角放一个「复制图片」，贴给别的 AI 用 */
+.shot-copy {
+  position: absolute; top: 8px; right: 8px;
+  min-height: var(--tap); padding: 0 14px; border-radius: 12px;
+  background: var(--btn); color: var(--on-btn); font-size: 14px; font-weight: 650;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, .18);
+}
+.shot-copy.done { background: var(--ok); color: var(--on-ok); }
 
 .rows { display: grid; border-top: 1px solid var(--line-2); }
 .row {
@@ -479,6 +489,7 @@ h1, h2, h3, h4, p { margin: 0; }
 
 /* 三个复制按钮：最常用的整理版是实心的 */
 .copies { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.copies.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .btn {
   display: inline-grid; place-items: center;
   min-height: 50px; padding: 0 10px; border-radius: 14px;
@@ -547,6 +558,64 @@ h1, h2, h3, h4, p { margin: 0; }
   display: flex; align-items: center; justify-content: center; gap: 8px;
   width: 100%; min-height: var(--tap); margin: 2px 0 10px; border-radius: 12px;
   background: var(--accent-soft); color: var(--accent); font-size: 15px;
+}
+
+/* ---------------------------------------------------------------- 设置 */
+
+/* Key 用不了：齿轮上点一个小红点，提醒她去看 */
+.ghost.warn-dot { position: relative; }
+.ghost.warn-dot::after {
+  content: ''; position: absolute; top: 10px; right: 10px;
+  width: 8px; height: 8px; border-radius: 50%; background: var(--danger);
+}
+
+.sheet-bg {
+  position: fixed; inset: 0; z-index: 50;
+  display: flex; align-items: flex-end; justify-content: center;
+  background: rgba(8, 12, 16, .42);
+  animation: fade .15s var(--ease);
+}
+.sheet {
+  width: 100%; max-width: 560px; max-height: calc(100% - 24px); overflow: auto;
+  padding: 6px 20px calc(20px + env(safe-area-inset-bottom, 0px));
+  background: var(--card); color: var(--ink);
+  border-radius: 20px 20px 0 0;
+  box-shadow: var(--shadow-l);
+  animation: rise .2s var(--ease);
+  outline: none;
+  overscroll-behavior: contain;
+}
+.sheet-h { display: flex; align-items: center; justify-content: space-between; min-height: 56px; }
+.sheet-h h2 { font-family: var(--f-serif); font-size: 20px; font-weight: 700; letter-spacing: .04em; }
+.set-sec { display: grid; gap: 10px; padding: 16px 0; border-top: 1px solid var(--line-2); }
+.set-sec h3 { display: flex; align-items: center; gap: 10px; font-size: 15.5px; font-weight: 650; }
+.pill {
+  font-size: 12.5px; font-weight: 600; padding: 2px 9px; border-radius: 999px;
+  background: var(--well); color: var(--ink-2);
+}
+.pill.on { background: var(--ok-soft); color: var(--ok-text); }
+.pill.bad { background: var(--well); color: var(--danger); }
+.set-p { font-size: 14.5px; color: var(--ink-2); line-height: 1.6; }
+.set-fine { font-size: 13px; color: var(--ink-3); line-height: 1.6; }
+.set-ver { padding-top: 12px; border-top: 1px solid var(--line-2); font-family: var(--f-mono); font-size: 12.5px; }
+.set-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(128px, 1fr)); gap: 8px; }
+.set-l { font-size: 14px; font-weight: 600; color: var(--ink-2); }
+.set-in {
+  width: 100%; min-height: 50px; padding: 0 14px; border-radius: 12px;
+  border: 1px solid var(--line); background: var(--well); color: var(--ink);
+  font-family: var(--f-mono); letter-spacing: .02em;
+}
+.set-in:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+.key-on { font-size: 14.5px; color: var(--ink-2); }
+.key-on code { font-family: var(--f-mono); color: var(--ink); }
+.set-msg { font-size: 14px; padding: 10px 12px; border-radius: 10px; background: var(--well); color: var(--ink); }
+.set-msg.ok { background: var(--ok-soft); color: var(--ok-text); }
+.set-msg.no { color: var(--danger); }
+@keyframes fade { from { opacity: 0; } }
+
+@media (min-width: 720px) {
+  .sheet-bg { align-items: center; }
+  .sheet { border-radius: 20px; padding-bottom: 20px; }
 }
 
 @media (min-width: 720px) {

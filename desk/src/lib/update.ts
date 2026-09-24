@@ -172,9 +172,8 @@ export function initUpdates(): void {
   if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) return
   // file:// 下没有 SW，单文件版走的就是这条
   if (!location.protocol.startsWith('http')) return
-  // 在 claude.ai 里是被框起来的页面：那里不许注册 Service Worker，
-  // 版本也由平台管（重新发布就自动换），这一整套都不该动
-  if (inFrame() || 'claude' in window) return
+  // 被别的页面框起来预览时（各种网页预览器）：那里注册不了 Service Worker，这一整套都不该动
+  if (inFrame()) return
 
   started = Date.now()
   hadController = !!navigator.serviceWorker.controller

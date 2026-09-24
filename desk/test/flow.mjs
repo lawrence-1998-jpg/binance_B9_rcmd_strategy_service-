@@ -1,25 +1,26 @@
 /**
- * 在「claude.ai 里打开」的情况下把整条路走一遍（用 mock-claude.js 装一个假的运行时）：
- *   收 → Claude 整理 → 各种复制 → 待办 → 筛选 / 搜索 → 多选 → 删除撤销 → 置顶 → 改标题 → 刷新还在
- *   → Claude 忙 / 不可用 时怎么退。
+ * 本地版把整条路走一遍（没填 Claude 的 Key —— 这是默认的样子）：
+ *   收 → 本地整理 → 各种复制 → 待办 → 筛选 / 搜索 → 多选 → 删除撤销 → 置顶 → 改标题 → 刷新还在
+ *   → 清单 → 截图（没有 AI 也收，能复制图片）→ 从别的 App 分享进来 → 导出 / 导入备份 → 老版本的数据搬过来。
  *
  * 复制的每一步都去读真的剪贴板，不看按钮上写了什么。
+ * 存进去的每一步都去读真的 IndexedDB。
  */
 import pkg from 'playwright'
 const { chromium, devices } = pkg
 
 const URL = process.env.DESK_URL ?? 'http://127.0.0.1:8765/index.html'
-const MOCK = new globalThis.URL('./mock-claude.js', import.meta.url).pathname
 let fail = 0
 const t = (n, ok, note = '') => { console.log(`${ok ? '✓' : '✗'} ${n}${note ? ' — ' + note : ''}`); if (!ok) fail++ }
 
 const CONTACT = 'Lily Chen｜增长策略负责人\n手机 138 1234 5678\n邮箱 lily.chen@example.com'
 const MEET = '王总：周四下午的会挪到周五上午 10 点吧，地点还是国贸三期 B 座 1208。记得带上次那版竞品分析，财务的 Linda 也会来。'
-const NOTE = '想法：会员体系的核心问题可能不是权益太少，而是用户根本不知道自己有哪些权益。'
+const LIST = '- [ ] 订周五的会议室\n- [x] 发邮件给 Linda\n- [ ] 准备报价单'
 
 const b = await chromium.launch()
-const ctx = await b.newContext({ ...devices['iPhone 13'], permissions: ['clipboard-read', 'clipboard-write'] })
-await ctx.addInitScript({ path: MOCK })
+const ctx = await b.newContext({ ...devices['iPhone 13'], permissions: ['clipboard-read', 'clipboard-write'], acceptDownloads: true })
+const outside = []
+ctx.on('request', (r) => { if (!r.url().startsWith(new globalThis.URL(URL).origin) && !/^(data|blob):/.test(r.url())) outside.push(r.url()) })
 const pg = await ctx.newPage()
 const errs = []
 pg.on('pageerror', (e) => errs.push(e.message))
@@ -29,10 +30,16 @@ const setClip = (s) => pg.evaluate((x) => navigator.clipboard.writeText(x), s)
 const cards = () => pg.locator('.list article.card')
 const card = (text) => cards().filter({ hasText: text }).first()
 const toast = () => pg.locator('.toast').innerText().catch(() => '')
-const mock = (fn) => pg.evaluate(fn)
-const docs = () => pg.evaluate(() => JSON.parse(sessionStorage.getItem('__mockdb') || '{}'))
 const wait = (ms = 250) => pg.waitForTimeout(ms)
-/** 真按一次 Ctrl+V（焦点在收件框里） */
+/** 真的去 IndexedDB 里读 —— 「存上了」以盘上为准 */
+const disk = () => pg.evaluate(() => new Promise((ok, no) => {
+  const r = indexedDB.open('suishou')
+  r.onerror = () => no(r.error)
+  r.onsuccess = () => {
+    const q = r.result.transaction('items').objectStore('items').getAll()
+    q.onsuccess = () => { ok(q.result); r.result.close() }
+  }
+}))
 const ensureOpen = async (c) => { if (!(await c.locator('.detail').count())) { await c.locator('.card-main').click(); await wait() } }
 const pasteInBox = async (text) => { await setClip(text); await pg.locator('#capture').focus(); await pg.keyboard.press('Control+V') }
 
@@ -42,37 +49,33 @@ try {
 
   // ---------------------------------------------------------------- 一打开
   t('空的时候摆着示例卡，标着「示例」', (await cards().count()) === 3 && (await pg.locator('.badge', { hasText: '示例' }).count()) === 3)
-  t('告诉她：粘贴即收下、Claude 整理、手机电脑同一份', (await pg.locator('.cap-hint').innerText()).includes('Claude'), await pg.locator('.cap-hint').innerText())
+  t('告诉她：粘贴即收下、只存在这台设备', (await pg.locator('.cap-hint').innerText()).includes('只存在这台设备'), await pg.locator('.cap-hint').innerText())
+  t('右上角有「设置」', (await pg.locator('.ghost[aria-label="设置"]').count()) === 1)
 
   // ---------------------------------------------------------------- 收
   await pasteInBox(CONTACT)
-  await wait(120)
+  await wait(200)
   const c1 = card('138 1234 5678')
   t('粘贴即收下：卡片马上出现', (await cards().count()) === 1)
-  t('……先显示「Claude 在整理」', (await c1.locator('.busy-t').count()) === 1)
-  t('……Claude 想的时候，本地认出来的电话已经摆上了', (await c1.locator('.row-v', { hasText: '138 1234 5678' }).count()) === 1)
+  t('……不转圈（本地整理，当场就好）', (await c1.locator('.busy-t').count()) === 0 && (await c1.getAttribute('data-status')) === 'local')
+  t('……认出了电话和邮箱', (await c1.locator('.row-v', { hasText: '138 1234 5678' }).count()) === 1 && (await c1.locator('.row-v', { hasText: 'lily.chen@example.com' }).count()) === 1)
+  t('……类型是联系人', (await c1.locator('.kind').innerText()) === '联系人')
   t('收下之后输入框清空', (await pg.locator('#capture').inputValue()) === '')
-  await wait(700)
-  t('Claude 整理完：标题换成它起的', (await c1.locator('h3').innerText()) === 'Lily Chen', await c1.locator('h3').innerText())
-  t('……不再转圈', (await c1.locator('.busy-t').count()) === 0)
   t('……示例卡消失', (await pg.locator('.badge', { hasText: '示例' }).count()) === 0)
-  const calls = await mock(() => window.__mock.calls.map((c) => c.tier))
-  t('第一次整理用快速档（秒回）', calls.length === 1 && calls[0] === 'quick', JSON.stringify(calls))
-  const saved = Object.entries(await docs())
-  t('存进了她自己那一格（data/users/<id>/…）', saved.length === 1 && saved[0][0].startsWith('data/users/u_test/lib/items/'), saved.map(([p]) => p).join())
-  const order = await mock(() => window.__mock.writes.map((w) => w[0]).join(','))
-  t('先建再改：没有对不存在的文档 update', order === 'set,update', order)
+  const saved = await disk()
+  t('存进了这台设备的 IndexedDB', saved.length === 1 && saved[0].raw === CONTACT, `${saved.length} 条`)
+  t('没有「重新整理」（没开 Claude，本地那遍已经是全部）', (await c1.locator('.acts button', { hasText: /整理|读图/ }).count()) === 0)
 
   // ---------------------------------------------------------------- 复制：一格、整理版、给 AI、原文
-  await c1.locator('.row', { hasText: '手机' }).click(); await wait()
-  t('点「手机」那一行：只复制号码', (await clip()) === '138 1234 5678', await clip())
+  await c1.locator('.row', { hasText: '电话' }).click(); await wait()
+  t('点「电话」那一行：只复制号码', (await clip()) === '138 1234 5678', await clip())
   t('……那一行说「已复制」', (await c1.locator('.row.done').innerText()).includes('已复制'))
   await c1.locator('.copies .btn', { hasText: '复制整理版' }).click(); await wait()
   const txt = await clip()
-  t('复制整理版：标题 + 字段', txt.startsWith('Lily Chen\n') && txt.includes('手机：138 1234 5678'), JSON.stringify(txt.slice(0, 30)))
+  t('复制整理版：标题 + 字段', txt.startsWith('Lily Chen｜增长策略负责人\n') && txt.includes('电话：138 1234 5678'), JSON.stringify(txt.slice(0, 40)))
   await c1.locator('.copies .btn', { hasText: '复制给 AI' }).click(); await wait()
   const ai = await clip()
-  t('复制给 AI：先是那句指令，后面带着整理版和原文', ai.startsWith('帮我给 Lily 写一条初次联系的微信。') && ai.includes('【原文】'), JSON.stringify(ai.slice(0, 24)))
+  t('复制给 AI：按联系人配好的那句开头，后面带着整理版和原文', ai.startsWith('帮我把这个人整理成通讯录格式') && ai.includes('【整理好的信息】') && ai.includes('【原文】'), JSON.stringify(ai.slice(0, 24)))
   await c1.locator('.copies .btn', { hasText: '复制原文' }).click(); await wait()
   t('复制原文：一字不差', (await clip()) === CONTACT)
   await c1.locator('.ask').click(); await wait()
@@ -82,27 +85,30 @@ try {
   await setClip(MEET)
   await pg.locator('.group-h').first().click()
   await pg.keyboard.press('Control+V')
-  await wait(900)
-  const c2 = card('王总的会改到周五')
+  await wait(400)
+  const c2 = card('国贸三期')
   t('在页面空白处 Ctrl+V 也算收下', (await cards().count()) === 2)
   t('新收的那张自动展开，上一张收起', (await c2.locator('.detail').count()) === 1 && (await c1.locator('.detail').count()) === 0)
-  t('Claude 把相对时间换成了具体日期', (await c2.locator('.row-v').first().innerText()).includes('9月26日'))
+  const meetVals = await c2.locator('.row-v').allInnerTexts()
+  t('本地认出了改到的时间和地点（不把「周四」当时间）', meetVals.includes('周五上午 10 点') && meetVals.includes('国贸三期 B 座 1208') && !meetVals.includes('周四'), JSON.stringify(meetVals))
+  t('……类型是日程', (await c2.locator('.kind').innerText()) === '日程')
+  t('……「记得带…」变成了待办', (await c2.locator('.todo').innerText()).includes('带上次那版竞品分析'))
 
   // 收起来的卡上，字段小条点一下就复制
-  await c1.locator('.chip', { hasText: '姓名' }).click(); await wait()
-  t('收起的卡：点字段小条，复制那一格', (await clip()) === 'Lily Chen')
+  await c1.locator('.chip', { hasText: '电话' }).click(); await wait()
+  t('收起的卡：点字段小条，复制那一格', (await clip()) === '138 1234 5678')
   await c1.locator('.copy-ic').click(); await wait()
-  t('收起的卡：右上角复制按钮 = 整理版', (await clip()).startsWith('Lily Chen\n'))
+  t('收起的卡：右上角复制按钮 = 整理版', (await clip()).startsWith('Lily Chen｜'))
 
   // ---------------------------------------------------------------- 待办
   await c2.locator('.todo').first().click(); await wait(300)
-  const meetDoc = Object.values(await docs()).find((d) => d.title === '王总的会改到周五')
+  const meetDoc = (await disk()).find((d) => d.raw === MEET)
   t('勾掉一个待办：存进去了', meetDoc?.todos?.[0]?.done === true, JSON.stringify(meetDoc?.todos))
   await c2.locator('.copies .btn', { hasText: '复制整理版' }).click(); await wait()
-  t('勾掉的待办不再出现在整理版里', !(await clip()).includes('带上竞品分析') && (await clip()).includes('回复王总确认'))
+  t('勾掉的待办不再出现在整理版里', !(await clip()).includes('待办'))
 
   // ---------------------------------------------------------------- 重复的
-  await pasteInBox(MEET); await wait(400)
+  await pasteInBox(MEET); await wait(300)
   t('同一段再贴一次：不重复收，告诉她收过了', (await cards().count()) === 2 && (await toast()).includes('收过'), await toast())
 
   // ---------------------------------------------------------------- 筛选 / 搜索
@@ -112,6 +118,7 @@ try {
   await pg.locator('.ghost[aria-label="搜索"]').click()
   await pg.locator('#search').fill('1208'); await wait()
   t('搜「1208」：找到那场会', (await cards().count()) === 1 && (await cards().first().innerText()).includes('王总'))
+  t('没开 Claude：搜索框里没有「问 Claude」', (await pg.locator('.ask-go').count()) === 0)
   await pg.locator('#search').fill('上海'); await wait()
   t('搜不到时说一声', (await pg.locator('.none').innerText()).includes('上海'))
   await pg.locator('.ghost[aria-label="搜索"]').click(); await wait()
@@ -133,9 +140,9 @@ try {
   // ---------------------------------------------------------------- 删除 + 撤销
   await ensureOpen(card('王总'))
   await card('王总').locator('.acts .danger').click(); await wait(300)
-  t('删除', (await cards().count()) === 1)
+  t('删除', (await cards().count()) === 1 && (await disk()).length === 1)
   await pg.locator('.toast button', { hasText: '撤销' }).click(); await wait(300)
-  t('删了能撤销', (await cards().count()) === 2)
+  t('删了能撤销（盘上也回来了）', (await cards().count()) === 2 && (await disk()).length === 2)
 
   // ---------------------------------------------------------------- 置顶 / 改标题
   await ensureOpen(card('Lily Chen'))
@@ -144,15 +151,20 @@ try {
   await card('Lily Chen').locator('.acts button', { hasText: '改标题' }).click()
   await pg.locator('.title-in').fill('Lily · 增长负责人')
   await pg.locator('.title-in').press('Enter'); await wait(300)
-  t('改标题：存进去了', Object.values(await docs()).some((d) => d.title === 'Lily · 增长负责人'))
+  t('改标题：存进去了', (await disk()).some((d) => d.title === 'Lily · 增长负责人'))
 
   // ---------------------------------------------------------------- 刷新
   await pg.reload({ waitUntil: 'load' }); await wait(700)
-  t('刷新之后都还在（存的是数据库，不是这一页）', (await cards().count()) === 2 && (await cards().first().innerText()).includes('Lily · 增长负责人'))
+  t('刷新之后都还在（存在这台设备上）', (await cards().count()) === 2 && (await cards().first().innerText()).includes('Lily · 增长负责人'))
 
-  // ---------------------------------------------------------------- 截图
+  // ---------------------------------------------------------------- 清单
+  await pasteInBox(LIST); await wait(300)
+  const c3 = pg.locator('.card.open')
+  t('勾框清单：一行一条待办，打了勾的已经勾上', (await c3.locator('.todo').count()) === 3 && (await c3.locator('.todo.did').count()) === 1)
+  t('……标题是「第一件 等 3 件」，类型是待办', (await c3.locator('h3').innerText()) === '订周五的会议室 等 3 件' && (await c3.locator('.kind').innerText()) === '待办')
+
+  // ---------------------------------------------------------------- 截图（没开 Claude 也收）
   const ICON = new globalThis.URL('../public/icons/icon-192.png', import.meta.url).pathname
-  /** 在页面里画一张 PNG，像真的一样从剪贴板粘贴进来 */
   const pasteImage = () => pg.evaluate(async () => {
     const c = document.createElement('canvas'); c.width = 600; c.height = 900
     const g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, 600, 900)
@@ -163,98 +175,79 @@ try {
     document.querySelector('#capture').focus()
     document.querySelector('#capture').dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true }))
   })
-  t('能读图的地方，收件框旁边有「截图」按钮', (await pg.locator('.shot-btn').count()) === 1)
-  t('……提示里也说了截图能收', (await pg.locator('.cap-hint').innerText()).includes('截图'))
+  t('收件框旁边有「截图」按钮（不需要 Claude）', (await pg.locator('.shot-btn').count()) === 1)
   const n0 = await cards().count()
-  await pasteImage(); await wait(150)
+  await pasteImage(); await wait(400)
   const s1 = pg.locator('.card.open')
-  t('粘贴一张截图：马上收下，标着「截图」', (await cards().count()) === n0 + 1 && (await s1.locator('.badge', { hasText: '截图' }).count()) === 1)
-  t('……卡上就看得到这张图', ((await s1.locator('.shot img').getAttribute('src')) ?? '').startsWith('data:image/jpeg'))
-  t('……Claude 在读', (await s1.locator('.busy-t').count()) === 1)
-  await wait(700)
-  t('Claude 读完：按图里的内容起了标题、拆了字段', (await s1.locator('h3').innerText()) === '年费报价截图' && (await s1.locator('.row', { hasText: '年费' }).count()) === 1)
-  await s1.locator('.raw-t').click()
-  t('「看图里的字」：Claude 转写出来的原文', (await s1.locator('.raw pre').innerText()).includes('报价单'))
-  const shotCall = await mock(() => window.__mock.calls.at(-1))
-  t('原图直接交给 Claude（PNG 它收）', shotCall.images === 1 && shotCall.imageTypes[0] === 'image/png', JSON.stringify(shotCall.imageTypes))
-  t('给 Claude 的是读图的指令，不是空原文', shotCall.input.includes('读图') && !shotCall.input.includes('<<<'))
-  const shotDoc = Object.values(await docs()).find((d) => d.title === '年费报价截图')
-  t('卡里存了一份压缩过的图（放得进数据库一条）', typeof shotDoc?.img === 'string' && shotDoc.img.length <= 150_000, `${shotDoc?.img?.length ?? 0} 字符`)
-  await s1.locator('.copies .btn', { hasText: '复制原文' }).click(); await wait()
-  t('截图卡「复制原文」= 图里的字', (await clip()).startsWith('报价单'))
-
-  // 从相册挑
+  t('粘贴一张截图：收下，标着「截图」，图就在卡上', (await cards().count()) === n0 + 1 && (await s1.locator('.badge', { hasText: '截图' }).count()) === 1 && ((await s1.locator('.shot img').getAttribute('src')) ?? '').startsWith('data:image/jpeg'))
+  t('……说清楚：读不了图里的字，但能复制图片', (await s1.locator('.note').innerText()).includes('复制图片'))
+  t('……不转圈', (await s1.locator('.busy-t').count()) === 0)
+  await s1.locator('.copies .btn', { hasText: '复制图片' }).click(); await wait(600)
+  const types = await pg.evaluate(async () => { try { return (await navigator.clipboard.read()).flatMap((i) => i.types) } catch (e) { return ['读不了: ' + e.message] } })
+  t('「复制图片」：剪贴板里是一张 PNG，贴进哪家 AI 都行', types.includes('image/png'), JSON.stringify(types))
+  t('……没有空的「复制原文」「看原文」', (await s1.locator('.copies .btn', { hasText: '复制原文' }).count()) === 0 && (await s1.locator('.raw-t').count()) === 0)
+  const shotDoc = (await disk()).find((d) => d.img)
+  t('卡里存了一份压缩过的图', typeof shotDoc?.img === 'string' && shotDoc.img.length <= 600_000, `${shotDoc?.img?.length ?? 0} 字符`)
   const n1 = await cards().count()
-  await pg.locator('#shot').setInputFiles(ICON); await wait(900)
+  await pg.locator('#shot').setInputFiles(ICON); await wait(500)
   t('点「截图」从相册挑一张：也收下了', (await cards().count()) === n1 + 1)
-
-  // 读图失败，重新整理用卡里存的那份
-  await mock(() => { window.__mock.fail = 'rate_limited' })
-  await pasteImage(); await wait(700)
-  const s3 = pg.locator('.card.open')
-  t('读图时 Claude 忙：卡留着，说清楚', (await s3.locator('.note').innerText()).includes('忙'))
-  await mock(() => { window.__mock.fail = null })
-  await s3.locator('.acts button', { hasText: '重新整理' }).click(); await wait(900)
-  const again = await mock(() => window.__mock.calls.at(-1))
-  t('重新整理截图：用卡里存的那份图再读一次', again.images === 1 && again.imageTypes[0] === 'image/jpeg' && again.tier === 'default', JSON.stringify(again))
-
-  // ---------------------------------------------------------------- 问一问
-  await pg.locator('.ghost[aria-label="搜索"]').click()
-  await pg.locator('#search').fill('Lily 电话'); await wait()
-  t('搜索框里打一句话：出现「问 Claude」', (await pg.locator('.ask-go').innerText()).includes('Lily 电话'))
-  await pg.locator('.ask-go').click(); await wait(150)
-  t('问的时候先说在翻', (await pg.locator('.answer-wait').count()) === 1 || (await pg.locator('.answer-t').count()) === 1)
-  await wait(900)
-  const ans = await pg.locator('.answer-t').innerText()
-  t('回答：直接给出电话', ans.includes('138 1234 5678'), ans)
-  t('回答里标了出处，下面列出那张卡（整行可点）', (await pg.locator('.answer-t .ref').count()) === 1 && (await pg.locator('.src').innerText()).includes('Lily'))
-  t('答完之后「问 Claude」按钮收起（不重复）', (await pg.locator('.ask-go').count()) === 0)
-  t('Claude 回答了，下面就不再说「没找到」', (await pg.locator('.none').count()) === 0)
-  const askCall = await mock(() => window.__mock.asks.at(-1))
-  t('问的时候带上了她收的卡片，并且不拿缓存', askCall.input.includes('我的问题：Lily 电话') && askCall.input.includes('Lily') && askCall.cache === false)
-  await pg.locator('.answer .mini', { hasText: '复制回答' }).click(); await wait()
-  const ansCopied = await clip()
-  t('复制回答：[编号] 换成了卡片名，贴出去看得懂', ansCopied.includes('138 1234 5678') && !/\[\d+\]/.test(ansCopied) && ansCopied.includes('（Lily'), ansCopied)
-  await pg.locator('.src').first().click(); await wait(400)
-  const lily = card('Lily')
-  t('点出处：跳到那张卡并展开', (await lily.locator('.detail').count()) === 1 && (await pg.locator('#search').inputValue()) === '')
-  await pg.locator('#search').fill('上海办公室地址')
-  await pg.locator('#search').press('Enter'); await wait(900)
-  t('回车也能问；收的东西里没有就直说', (await pg.locator('.answer-t').innerText()).includes('没有'))
-  await pg.locator('.ghost[aria-label="搜索"]').click(); await wait()
-  t('关掉搜索：回答也收起', (await pg.locator('.answer').count()) === 0)
-
-  // ---------------------------------------------------------------- Claude 忙
-  await mock(() => { window.__mock.fail = 'rate_limited' })
-  await pasteInBox(NOTE); await wait(700)
-  // 整理完标题会变，按 id 找它，别按字
-  const c3 = pg.locator('#' + await card('会员体系').getAttribute('id'))
-  t('Claude 忙：卡照样收下，说清楚怎么了', (await c3.locator('.note').innerText()).includes('忙'), await c3.locator('.note').innerText().catch(() => ''))
-  await mock(() => { window.__mock.fail = null })
-  await c3.locator('.acts button', { hasText: '重新整理' }).click(); await wait(900)
-  t('点「重新整理」：整理好了', (await c3.locator('.note').count()) === 0 && (await c3.locator('h3').innerText()) === '一条笔记')
-  const last = await mock(() => window.__mock.calls.at(-1))
-  t('重新整理用更仔细的档，而且不拿缓存里的旧答案', last.tier === 'default' && last.cache === false, JSON.stringify({ tier: last.tier, cache: last.cache }))
 
   // ---------------------------------------------------------------- 手打的也能收
   const n2 = await cards().count()
   await pg.locator('#capture').fill('周五前把季度复盘 PPT 发给王总')
-  await pg.locator('.take').click(); await wait(700)
+  await pg.locator('.take').click(); await wait(300)
+  const c4 = pg.locator('.card.open')
   t('手打的：点「收下」', (await cards().count()) === n2 + 1)
+  t('……认出是待办、截止周五前', (await c4.locator('.kind').innerText()) === '待办' && (await c4.locator('.row', { hasText: '截止' }).innerText()).includes('周五前'))
 
-  // ---------------------------------------------------------------- Claude 用不了
-  await mock(() => { window.__mock.fail = 'not_granted' })
-  await pasteInBox('第一条不让用 Claude 的'); await wait(700)
-  const before = await mock(() => window.__mock.calls.length)
-  t('不让用 Claude：卡照样收下，只做本地整理', (await card('第一条不让用').getAttribute('data-status')) === 'local')
-  t('……顶上的提示改口', (await pg.locator('.cap-hint').innerText()).includes('没开 Claude'), await pg.locator('.cap-hint').innerText())
-  await pasteInBox('第二条也不让用'); await wait(700)
-  t('……之后不再去问 Claude（不反复弹同意框）', (await mock(() => window.__mock.calls.length)) === before)
-  t('……「截图」按钮收起来（没有 Claude 读不了图）', (await pg.locator('.shot-btn').count()) === 0)
-  await pg.locator('.ghost[aria-label="搜索"]').click()
-  await pg.locator('#search').fill('Lily'); await wait()
-  t('……搜索照样能用，但不再出现「问 Claude」', (await pg.locator('.ask-go').count()) === 0 && (await cards().count()) >= 1)
+  // ---------------------------------------------------------------- 从别的 App 分享进来（安卓装成 App 后）
+  const shareUrl = URL + '?title=' + encodeURIComponent('一篇文章') + '&text=' + encodeURIComponent('值得一看') + '&url=' + encodeURIComponent('https://example.com/a')
+  await pg.goto(shareUrl, { waitUntil: 'load' }); await wait(700)
+  t('分享进来的：当场收下', (await cards().filter({ hasText: 'example.com/a' }).count()) === 1)
+  t('……地址栏里的参数清掉了（刷新不会再收一次）', !(await pg.evaluate(() => location.search)))
+  const total = await cards().count()
 
+  // ---------------------------------------------------------------- 备份：导出 / 导入
+  await pg.locator('.ghost[aria-label="设置"]').click(); await wait(300)
+  t('设置：说清楚数据只在这台设备上', (await pg.locator('.sheet').innerText()).includes('只存在这台设备'))
+  t('设置：Claude 整理是「可选」的，默认没开', (await pg.locator('.sheet .pill').innerText()) === '可选')
+  const [dl] = await Promise.all([pg.waitForEvent('download'), pg.locator('.sheet .btn', { hasText: '导出备份' }).click()])
+  const file = await dl.path()
+  const { readFileSync } = await import('node:fs')
+  const backup = JSON.parse(readFileSync(file, 'utf8'))
+  t('导出备份：一个 JSON 文件，每一条都在（截图也在）', backup.app === 'suishou' && backup.items.length === total && backup.items.some((x) => x.img), `${backup.items.length} / ${total}`)
+  t('……文件名看得出是什么', /^suishou-backup-\d{8}\.json$/.test(dl.suggestedFilename()), dl.suggestedFilename())
+  await pg.keyboard.press('Escape'); await wait(200)
+  t('Esc 关掉设置', (await pg.locator('.sheet').count()) === 0)
+
+  // 换一台「设备」：新的浏览器上下文，什么都没有
+  const ctx2 = await b.newContext({ ...devices['iPhone 13'] })
+  const pg2 = await ctx2.newPage()
+  pg2.on('pageerror', (e) => errs.push('新设备: ' + e.message))
+  await pg2.goto(URL, { waitUntil: 'load' }); await pg2.waitForTimeout(500)
+  await pg2.locator('.ghost[aria-label="设置"]').click()
+  await pg2.locator('#import').setInputFiles(file); await pg2.waitForTimeout(600)
+  t('换台设备导入备份：全回来了', (await pg2.locator('.list article.card').count()) === total, `${await pg2.locator('.list article.card').count()} / ${total}`)
+  t('……告诉她导入了几条', (await pg2.locator('.toast').innerText()).includes(`导入了 ${total} 条`))
+  await pg2.locator('#import').setInputFiles(file); await pg2.waitForTimeout(500)
+  t('同一份再导一次：不重复', (await pg2.locator('.list article.card').count()) === total && (await pg2.locator('.toast').innerText()).includes('已经有了'))
+  await pg2.locator('#import').setInputFiles({ name: 'x.json', mimeType: 'application/json', buffer: Buffer.from('{"a":1}') }); await pg2.waitForTimeout(300)
+  t('导入别的文件：说清楚不是备份，什么都不动', (await pg2.locator('.toast').innerText()).includes('不是随手拾的备份') && (await pg2.locator('.list article.card').count()) === total)
+  await ctx2.close()
+
+  // ---------------------------------------------------------------- 老版本的数据（存在 localStorage 里的）
+  const ctx3 = await b.newContext()
+  const old = [{ id: 'old1', raw: '老版本收的一条', createdAt: Date.now() - 86400e3, updatedAt: 0, status: 'local', kind: 'note', title: '老版本收的一条', summary: '', fields: [], todos: [], tags: [], prompt: '', pinned: false }]
+  await ctx3.addInitScript((v) => { if (!sessionStorage.getItem('__seeded')) { localStorage.setItem('suishou.items.v2', v); sessionStorage.setItem('__seeded', '1') } }, JSON.stringify(old))
+  const pg3 = await ctx3.newPage()
+  await pg3.goto(URL, { waitUntil: 'load' }); await pg3.waitForTimeout(600)
+  t('老版本存的东西：打开就搬过来了', (await pg3.locator('.list article.card').filter({ hasText: '老版本收的一条' }).count()) === 1)
+  t('……搬完把旧的那份清掉（不会搬两次）', (await pg3.evaluate(() => localStorage.getItem('suishou.items.v2'))) === null)
+  await pg3.reload({ waitUntil: 'load' }); await pg3.waitForTimeout(500)
+  t('……刷新后还在，只有一条', (await pg3.locator('.list article.card').count()) === 1)
+  await ctx3.close()
+
+  t('没开 Claude：全程一个请求都没出过这个网站', outside.length === 0, outside.slice(0, 3).join(' | '))
   t('全程没有页面报错', errs.length === 0, errs.slice(0, 2).join(' | '))
 } finally {
   await b.close()

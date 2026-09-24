@@ -25,3 +25,14 @@ export async function copyText(text: string): Promise<boolean> {
     return false
   }
 }
+
+/** 复制一张图（截图卡）。不支持的浏览器返回 false，调用方提示她长按图片自己存 */
+export async function copyImage(png: Promise<Blob>): Promise<boolean> {
+  try {
+    if (!navigator.clipboard?.write || typeof ClipboardItem === 'undefined') return false
+    await navigator.clipboard.write([new ClipboardItem({ 'image/png': png })])
+    return true
+  } catch {
+    return false
+  }
+}
