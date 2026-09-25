@@ -75,13 +75,13 @@ try {
   await c1.locator('.copies .btn', { hasText: '复制整理版' }).click(); await wait()
   const txt = await clip()
   t('复制整理版：标题 + 字段', txt.startsWith('Lily Chen｜增长策略负责人\n') && txt.includes('电话：138 1234 5678'), JSON.stringify(txt.slice(0, 40)))
-  await c1.locator('.copies .btn', { hasText: '复制给 AI' }).click(); await wait()
+  await c1.locator('.ask').click(); await wait()
   const ai = await clip()
-  t('复制给 AI：按联系人配好的那句开头，后面带着整理版和原文', ai.startsWith('帮我把这个人整理成通讯录格式') && ai.includes('【整理好的信息】') && ai.includes('【原文】'), JSON.stringify(ai.slice(0, 24)))
+  t('「拿去问 AI」那块就是「复制给 AI」：按联系人配好的那句开头，后面带着整理版和原文', ai.startsWith('帮我把这个人整理成通讯录格式') && ai.includes('【整理好的信息】') && ai.includes('【原文】'), JSON.stringify(ai.slice(0, 24)))
+  t('……那块上的按钮说「已复制」', (await c1.locator('.ask-btn').innerText()).includes('已复制'))
   await c1.locator('.copies .btn', { hasText: '复制原文' }).click(); await wait()
   t('复制原文：一字不差', (await clip()) === CONTACT)
-  await c1.locator('.ask').click(); await wait()
-  t('点「下一步可以这样问 AI」那块：也是复制给 AI 的版本', (await clip()) === ai)
+  t('「复制给 AI」只有一处（不在下面那排里重复）', (await c1.locator('.copies .btn', { hasText: '复制给 AI' }).count()) === 0 && (await c1.locator('.ask').count()) === 1)
 
   // ---------------------------------------------------------------- 在页面任何地方粘贴
   await setClip(MEET)
@@ -219,7 +219,7 @@ try {
   t('……那个按钮说「已复制」', (await meetCard.locator('.alt.done').innerText()) === '已复制')
 
   // ---------------------------------------------------------------- 加到日历 / 存到通讯录
-  const [icsDl] = await Promise.all([pg.waitForEvent('download'), meetCard.locator('.sends .btn', { hasText: '加到日历' }).click()])
+  const [icsDl] = await Promise.all([pg.waitForEvent('download'), meetCard.locator('.copies .btn', { hasText: '加到日历' }).click()])
   const ics = readFileSync(await icsDl.path(), 'utf8')
   const d0 = ics.match(/DTSTART:(\d{4})(\d{2})(\d{2})T100000/)
   const fri = d0 && new Date(+d0[1], +d0[2] - 1, +d0[3])
@@ -229,8 +229,8 @@ try {
   t('……地点、提醒都在，告诉她点开就能加', ics.includes('LOCATION:国贸三期 B 座 1208') && ics.includes('BEGIN:VALARM') && (await toast()).includes('日历'))
   const lilyCard = card('Lily · 增长负责人')
   await ensureOpen(lilyCard)
-  t('联系人卡：没有时间，就没有「加到日历」', (await lilyCard.locator('.sends .btn', { hasText: '日历' }).count()) === 0)
-  const [vcfDl] = await Promise.all([pg.waitForEvent('download'), lilyCard.locator('.sends .btn', { hasText: '存到通讯录' }).click()])
+  t('联系人卡：没有时间，就没有「加到日历」', (await lilyCard.locator('.copies .btn', { hasText: '日历' }).count()) === 0)
+  const [vcfDl] = await Promise.all([pg.waitForEvent('download'), lilyCard.locator('.copies .btn', { hasText: '存到通讯录' }).click()])
   const vcf = readFileSync(await vcfDl.path(), 'utf8')
   t('联系人卡「存到通讯录」：一个 .vcf，名字、电话、邮箱都在', vcfDl.suggestedFilename().endsWith('.vcf') && vcf.includes('FN:Lily') && vcf.includes('TEL;TYPE=CELL:13812345678') && vcf.includes('EMAIL;TYPE=INTERNET:lily.chen@example.com'), vcf.split('\r\n').slice(2, 5).join(' / '))
 

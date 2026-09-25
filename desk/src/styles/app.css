@@ -168,27 +168,24 @@ h1, h2, h3, h4, p { margin: 0; }
 /* ---------------------------------------------------------------- 收 */
 
 .capture {
-  margin: 4px 0 14px;
+  display: flex; align-items: flex-end; gap: 6px;
+  margin: 4px 0 6px; padding: 4px 4px 4px 0;
   background: var(--card);
   border: 1.5px solid var(--line);
-  border-radius: 18px;
+  border-radius: 16px;
   box-shadow: var(--shadow);
   transition: border-color .15s;
 }
 .capture:focus-within { border-color: var(--ink-3); }
 .capture textarea {
-  display: block; width: 100%;
-  min-height: 64px; max-height: 40vh;
-  padding: 14px 16px 6px;
+  flex: 1; min-width: 0; display: block;
+  min-height: 44px; max-height: 40vh;
+  padding: 10px 0 10px 14px;
   border: 0; outline: none; resize: none; background: transparent;
-  line-height: 1.55;
+  line-height: 1.5;
 }
 .capture textarea::placeholder { color: var(--ink-3); }
-.cap-foot {
-  display: flex; align-items: center; justify-content: space-between; gap: 10px;
-  min-height: 44px; padding: 0 6px 6px 16px;
-}
-.cap-hint { font-size: 12.5px; color: var(--ink-3); line-height: 1.35; }
+.cap-hint { margin: 0 2px 12px; font-size: 12.5px; color: var(--ink-3); line-height: 1.4; }
 .cap-hint.ai::before {
   content: ''; display: inline-block; width: 7px; height: 7px; border-radius: 50%;
   background: var(--accent); margin-right: 7px; vertical-align: 1px;
@@ -200,15 +197,15 @@ h1, h2, h3, h4, p { margin: 0; }
 }
 .warn { margin: -4px 0 12px; font-size: 14px; color: var(--danger); }
 
-/* 截图按钮：收件框右下角，跟「收下」同一个位置、同一种分量 */
+/* 截图按钮：收件框里、输入框右边；有字了就换成「收下」 */
 .shot-btn {
   flex-shrink: 0;
   display: inline-flex; align-items: center; gap: 6px;
-  min-height: var(--tap); padding: 0 14px; border-radius: 12px;
+  min-height: var(--tap); padding: 0 12px; border-radius: 12px;
   color: var(--ink-2); font-size: 14.5px; font-weight: 550;
-  border: 1px solid var(--line);
+  background: var(--well);
 }
-.shot-btn:hover { background: var(--well); color: var(--ink); }
+.shot-btn:hover { color: var(--ink); background: color-mix(in srgb, var(--well) 70%, var(--line)); }
 
 /* ---------------------------------------------------------------- 问 */
 
@@ -281,25 +278,28 @@ h1, h2, h3, h4, p { margin: 0; }
 
 .kinds {
   display: flex; gap: 6px;
-  margin: 0 -16px 6px; padding: 2px 16px 6px;
+  margin: -4px -16px 2px; padding: 0 16px;
   overflow-x: auto; scrollbar-width: none;
 }
 .kinds::-webkit-scrollbar { display: none; }
-.kinds button {
-  flex-shrink: 0;
+.kinds button { flex-shrink: 0; display: inline-flex; align-items: center; min-height: var(--tap); padding: 0; }
+.k-in {
   display: inline-flex; align-items: center; gap: 6px;
-  min-height: var(--tap); padding: 0 14px; border-radius: 999px;
+  padding: 6px 13px; border-radius: 999px;
   font-size: 14.5px; color: var(--ink-2);
   border: 1px solid var(--line);
+  transition: background .15s, color .15s;
 }
-.kinds button span { font-family: var(--f-mono); font-size: 12px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
-.kinds button.on { background: var(--btn); color: var(--on-btn); border-color: var(--btn); }
-.kinds button.on span { color: inherit; opacity: .75; }
+.k-in i { font-style: normal; font-family: var(--f-mono); font-size: 12px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+.kinds button:hover .k-in { background: var(--card); }
+.kinds button.on .k-in { background: var(--btn); color: var(--on-btn); border-color: var(--btn); }
+.kinds button.on .k-in i { color: inherit; opacity: .75; }
 
 /* ---------------------------------------------------------------- 列表 */
 
-.list { display: grid; gap: 10px; }
-.group { display: grid; gap: 10px; }
+/* minmax(0, 1fr)：卡片里有横着滑的一排（字段条、换个问法），不许它把整列撑得比屏幕还宽 */
+.list { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; }
+.group { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; }
 .group-h, .ex-h {
   margin-top: 10px;
   font-size: 12.5px; font-weight: 600; letter-spacing: .08em;
@@ -321,9 +321,10 @@ h1, h2, h3, h4, p { margin: 0; }
   background: var(--card);
   border: 1px solid var(--line-2);
   border-radius: var(--r);
-  padding: 4px 6px 12px 16px;
+  padding: 6px 8px 12px 16px;
   box-shadow: var(--shadow);
   scroll-margin: 80px;
+  transition: box-shadow .2s var(--ease), border-color .2s;
 }
 .card[data-k="event"] { --kc: var(--k-event); --kb: var(--k-event-bg); }
 .card[data-k="todo"] { --kc: var(--k-todo); --kb: var(--k-todo-bg); }
@@ -335,10 +336,11 @@ h1, h2, h3, h4, p { margin: 0; }
 .card[data-k="quote"] { --kc: var(--k-quote); --kb: var(--k-quote-bg); }
 .card[data-k="question"] { --kc: var(--k-question); --kb: var(--k-question-bg); }
 .card[data-k="code"] { --kc: var(--k-code); --kb: var(--k-code-bg); }
-.card.open { border-color: var(--line); }
+.card.open { border-color: var(--line); box-shadow: var(--shadow), 0 16px 40px -24px rgba(18, 26, 35, .28); }
 .card.picked { outline: 2px solid var(--ink); outline-offset: -1px; }
 
-.card-head { display: flex; align-items: center; gap: 8px; min-height: var(--tap); }
+.card-head { display: flex; align-items: center; gap: 8px; min-height: 36px; }
+.card-head .copy-ic, .card-head .tick { margin-block: -4px; }
 .kind {
   font-size: 12.5px; font-weight: 650; letter-spacing: .04em;
   color: var(--kc); background: var(--kb);
@@ -379,14 +381,17 @@ h1, h2, h3, h4, p { margin: 0; }
 .tick.on::before { background: var(--btn); border-color: var(--btn); }
 .tick svg { position: relative; width: 16px; height: 16px; }
 
-/* 只有一行标题（本地整理的联系人、链接没有要点）时，整块也要够手指点 */
-.card-main { display: flex; flex-direction: column; justify-content: center; width: 100%; min-height: var(--tap); padding: 0 10px 2px 0; }
+/* 标题这一块整块可点。只有一行标题时（本地整理的联系人、链接没有要点），
+   它还是 44 高够手指点，只是多出来的那点高度跟下面的字段条叠着，看起来不空 */
+.card-main { display: flex; flex-direction: column; justify-content: flex-start; width: 100%; min-height: var(--tap); padding: 2px 10px 2px 0; }
+.card-main.solo { margin-bottom: -12px; }
 .card-main h3 {
   font-family: var(--f-serif); font-weight: 700;
-  font-size: 18.5px; line-height: 1.35; letter-spacing: .01em;
+  font-size: 18px; line-height: 1.38; letter-spacing: .01em;
   text-wrap: balance;
 }
-.card-main p { margin-top: 3px; font-size: 15px; color: var(--ink-2); line-height: 1.5; }
+.card-main p { margin-top: 3px; font-size: 14.5px; color: var(--ink-2); line-height: 1.55; text-wrap: pretty; }
+.card:not(.open) .card-main p { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
 .card-main p.dim { color: var(--ink-3); }
 .card.busy .card-main p.dim { animation: breathe 1.4s ease-in-out infinite; }
 .title-in {
@@ -395,25 +400,32 @@ h1, h2, h3, h4, p { margin: 0; }
   border: 1.5px solid var(--ink-3); border-radius: 10px; background: var(--card); outline: none;
 }
 
-/* 字段小条：一张卡最多露三条，点一下就复制那一格 */
-.chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; padding-right: 10px; }
-.chip {
-  display: inline-flex; align-items: center; gap: 7px; max-width: 100%;
-  min-height: var(--tap); padding: 0 12px; border-radius: 12px;
+/* 字段小条：一张卡最多露三条，一行排开（放不下就横着滑），点一下就复制那一格 */
+.chips {
+  display: flex; gap: 6px; margin: 6px -8px 0 0; padding-right: 8px;
+  overflow-x: auto; scrollbar-width: none;
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 20px), transparent);
+  mask-image: linear-gradient(to right, #000 calc(100% - 20px), transparent);
+}
+.chips::-webkit-scrollbar { display: none; }
+.chip { flex-shrink: 0; display: inline-flex; align-items: center; min-height: var(--tap); padding: 0; max-width: 78%; }
+.chip-in {
+  display: inline-flex; align-items: baseline; gap: 6px; min-width: 0; max-width: 100%;
+  padding: 6px 11px; border-radius: 10px;
   background: var(--well); color: var(--ink);
-  font-size: 14px; line-height: 1.3;
+  font-size: 14px; line-height: 1.35;
   transition: background .15s, color .15s;
 }
-.chip:hover { background: color-mix(in srgb, var(--well) 70%, var(--line)); }
+.chip:hover .chip-in { background: color-mix(in srgb, var(--well) 70%, var(--line)); }
 .chip-l { color: var(--ink-3); white-space: nowrap; font-size: 12.5px; }
 .chip-v { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
-.chip.done { background: var(--ok-soft); }
+.chip.done .chip-in { background: var(--ok-soft); }
 .chip.done .chip-v, .chip.done .chip-l { color: var(--ok-text); }
-.chip.more { color: var(--ink-2); background: transparent; border: 1px dashed var(--line); }
+.chip.more .chip-in { color: var(--ink-2); background: transparent; border: 1px dashed var(--line); padding-block: 5px; }
 
 /* ---------------------------------------------------------------- 展开 */
 
-.detail { display: grid; gap: 14px; margin-top: 12px; padding-right: 10px; }
+.detail { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; margin-top: 12px; padding-right: 10px; }
 .note { font-size: 14px; color: var(--ink-2); background: var(--well); padding: 10px 12px; border-radius: 10px; }
 
 /* 截图：先露一截，点开看全图 */
@@ -452,11 +464,13 @@ h1, h2, h3, h4, p { margin: 0; }
 .row:hover { background: color-mix(in srgb, var(--well) 55%, transparent); }
 .row-l { font-size: 13.5px; color: var(--ink-3); }
 .row-v { font-size: 15.5px; color: var(--ink); overflow-wrap: anywhere; user-select: text; -webkit-user-select: text; }
-.row-c { font-size: 12.5px; color: var(--ink-3); }
+.row-c { display: inline-flex; align-self: center; font-size: 12.5px; color: var(--ink-3); opacity: .8; }
+.row-c svg { width: 17px; height: 17px; }
+.row:hover .row-c { opacity: 1; }
 .row.done .row-c { color: var(--ok-text); font-weight: 650; }
 .row.done { background: var(--ok-soft); }
 
-.todos h4, .raw-t { font-size: 13px; font-weight: 600; color: var(--ink-3); letter-spacing: .04em; }
+.todos h4 { font-size: 13px; font-weight: 600; color: var(--ink-3); letter-spacing: .04em; }
 .todos { display: grid; gap: 2px; }
 .todos h4 { margin-bottom: 4px; }
 .todo { display: flex; align-items: flex-start; gap: 10px; min-height: var(--tap); padding: 10px 0; cursor: pointer; font-size: 15.5px; }
@@ -465,37 +479,54 @@ h1, h2, h3, h4, p { margin: 0; }
 
 .tags { display: flex; flex-wrap: wrap; gap: 10px; font-size: 13.5px; color: var(--ink-3); }
 
-.ask {
-  display: grid; gap: 4px; width: 100%;
-  padding: 12px 14px; border-radius: 12px;
+/* 拿去问 AI：一块浅紫，上面是配好的那一句（主按钮），下面一排横着滑的「换个问法」 */
+.ai-box {
+  display: grid; gap: 2px;
+  margin-right: 0; padding: 4px; border-radius: 14px;
   background: var(--accent-soft);
+}
+.ask {
+  display: grid; gap: 6px; width: 100%;
+  padding: 10px 10px 12px 12px; border-radius: 11px;
   transition: background .15s;
 }
-.ask-l { font-size: 12.5px; font-weight: 650; color: var(--accent); letter-spacing: .04em; }
-.ask-t { font-size: 15px; color: var(--ink); line-height: 1.5; }
-.ask.done { background: var(--ok-soft); }
+.ask:hover { background: color-mix(in srgb, var(--accent-soft) 60%, var(--card)); }
+.ask-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.ask-l { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 650; color: var(--accent); letter-spacing: .04em; }
+.ask-l svg { width: 15px; height: 15px; }
+.ask-btn {
+  flex-shrink: 0; padding: 5px 11px; border-radius: 999px;
+  background: var(--accent); color: var(--card);
+  font-size: 13px; font-weight: 650;
+}
+.ask-t { font-size: 15px; color: var(--ink); line-height: 1.55; }
 .ask.done .ask-l { color: var(--ok-text); }
+.ask.done .ask-btn { background: var(--ok); color: var(--on-ok); }
 
-/* 换个问法：一排小按钮，点一下连同这条信息一起复制 */
-.alts { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-.alts-h { width: 100%; font-size: 13px; font-weight: 600; color: var(--ink-3); letter-spacing: .04em; }
+/* 换个问法：一行，放不下就横着滑；点一下连同这条信息一起复制 */
+.alts {
+  display: flex; align-items: center; gap: 6px;
+  padding: 0 4px 4px 8px;
+  overflow-x: auto; scrollbar-width: none;
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 24px), transparent);
+  mask-image: linear-gradient(to right, #000 calc(100% - 24px), transparent);
+}
+.alts::-webkit-scrollbar { display: none; }
+.alts-h { flex-shrink: 0; margin-right: 2px; font-size: 12.5px; font-weight: 600; color: var(--ink-3); white-space: nowrap; }
 .alt {
-  min-height: var(--tap); padding: 0 14px; border-radius: 12px;
-  background: var(--card); color: var(--accent); border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
-  font-size: 14.5px; font-weight: 600;
+  flex-shrink: 0; white-space: nowrap;
+  min-height: var(--tap); padding: 0 13px; border-radius: 11px;
+  background: var(--card); color: var(--accent);
+  font-size: 14px; font-weight: 600;
   transition: background .15s, color .15s;
 }
-.alt:hover { background: var(--accent-soft); }
-.alt.done { background: var(--ok); color: var(--on-ok); border-color: var(--ok); }
+.alt:last-child { margin-right: 20px; }
+.alt:hover { color: var(--ink); }
+.alt.done { background: var(--ok); color: var(--on-ok); }
 
-/* 放到别处：加到日历 / 存到通讯录 */
-.sends { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; }
-.sends .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: var(--tap); font-weight: 600; color: var(--ink-2); }
-
-.raw-t { min-height: var(--tap); padding: 0 12px; margin-left: -12px; border-radius: 10px; color: var(--ink-2); font-weight: 500; letter-spacing: 0; }
-.raw-t:hover { background: var(--well); }
+/* 看原文（点「看原文」才出来） */
 .raw pre {
-  margin: 4px 0 0; padding: 12px 14px; border-radius: 10px;
+  margin: 0; padding: 12px 14px; border-radius: 10px;
   background: var(--well); color: var(--ink-2);
   font-family: var(--f); font-size: 14px; line-height: 1.6;
   white-space: pre-wrap; overflow-wrap: anywhere;
@@ -503,14 +534,17 @@ h1, h2, h3, h4, p { margin: 0; }
   user-select: text; -webkit-user-select: text;
 }
 
-/* 三个复制按钮：最常用的整理版是实心的 */
-.copies { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
-.copies.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+/* 一排拿走：整理版（实心）/ 原文 / 日历 / 通讯录。四个时排成两行 */
+.copies { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.copies.n3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .copies .btn { white-space: nowrap; }
-/* 320 宽的小屏：三个按钮挤一排时字别断成两行（「复制整 / 理版」） */
+.btn.send { display: inline-flex; align-items: center; justify-content: center; gap: 6px; color: var(--ink-2); }
+.btn.send svg { flex-shrink: 0; }
+/* 320 宽的小屏：三个按钮挤一排时字别断成两行（「复制整 / 理版」），图标也先收起来 */
 @media (max-width: 359px) {
   .copies { gap: 6px; }
   .copies .btn { padding: 0 2px; font-size: 13.5px; letter-spacing: -.02em; }
+  .btn.send svg { display: none; }
   .detail { padding-right: 0; }
 }
 .btn {
@@ -526,7 +560,7 @@ h1, h2, h3, h4, p { margin: 0; }
 .btn.done { background: var(--ok); color: var(--on-ok); border-color: var(--ok); }
 .btn.quiet { color: var(--danger); }
 
-.acts { display: flex; flex-wrap: wrap; gap: 2px; margin: -4px -8px 0; }
+.acts { display: flex; flex-wrap: wrap; gap: 2px; margin: -6px -8px -4px; }
 .acts button {
   min-height: var(--tap); padding: 0 10px; border-radius: 10px;
   font-size: 14px; color: var(--ink-2);
