@@ -1,12 +1,14 @@
 /**
  * 本地版把整条路走一遍（没填 Claude 的 Key —— 这是默认的样子）：
  *   收 → 本地整理 → 各种复制 → 待办 → 筛选 / 搜索 → 多选 → 删除撤销 → 置顶 → 改标题 → 刷新还在
- *   → 清单 → 截图（没有 AI 也收，能复制图片）→ 从别的 App 分享进来 → 导出 / 导入备份 → 老版本的数据搬过来。
+ *   → 清单 → 截图（没有 AI 也收，能复制图片）→ 从别的 App 分享进来 → 换个问法 / 我的问法
+ *   → 加到日历 / 存到通讯录 → 导出 / 导入备份 → 老版本的数据搬过来。
  *
  * 复制的每一步都去读真的剪贴板，不看按钮上写了什么。
  * 存进去的每一步都去读真的 IndexedDB。
  */
 import pkg from 'playwright'
+import { readFileSync } from 'node:fs'
 const { chromium, devices } = pkg
 
 const URL = process.env.DESK_URL ?? 'http://127.0.0.1:8765/index.html'
@@ -207,13 +209,51 @@ try {
   t('……地址栏里的参数清掉了（刷新不会再收一次）', !(await pg.evaluate(() => location.search)))
   const total = await cards().count()
 
+  // ---------------------------------------------------------------- 换个问法
+  const meetCard = card('国贸三期')
+  await ensureOpen(meetCard)
+  t('聊天里的「王总：」拎成了「来自」', (await meetCard.locator('.row', { hasText: '来自' }).innerText()).includes('王总'))
+  await meetCard.locator('.alt', { hasText: '起草确认回复' }).click(); await wait()
+  const alt = await clip()
+  t('换个问法：点「起草确认回复」，复制的是这句 + 整理版 + 原文', alt.startsWith('帮我起草一条回复，确认时间和地点') && alt.includes('【原文】') && alt.includes('国贸三期'), JSON.stringify(alt.slice(0, 30)))
+  t('……那个按钮说「已复制」', (await meetCard.locator('.alt.done').innerText()) === '已复制')
+
+  // ---------------------------------------------------------------- 加到日历 / 存到通讯录
+  const [icsDl] = await Promise.all([pg.waitForEvent('download'), meetCard.locator('.sends .btn', { hasText: '加到日历' }).click()])
+  const ics = readFileSync(await icsDl.path(), 'utf8')
+  const d0 = ics.match(/DTSTART:(\d{4})(\d{2})(\d{2})T100000/)
+  const fri = d0 && new Date(+d0[1], +d0[2] - 1, +d0[3])
+  const today = new Date(); today.setHours(0, 0, 0, 0)
+  const ahead = fri ? Math.round((fri - today) / 86_400_000) : -1
+  t('日程卡「加到日历」：一个 .ics，就是接下来这个周五的上午 10 点', icsDl.suggestedFilename().endsWith('.ics') && !!fri && fri.getDay() === 5 && ahead >= 0 && ahead < 7, `${ics.split('\r\n').find((l) => l.startsWith('DTSTART'))}，离今天 ${ahead} 天`)
+  t('……地点、提醒都在，告诉她点开就能加', ics.includes('LOCATION:国贸三期 B 座 1208') && ics.includes('BEGIN:VALARM') && (await toast()).includes('日历'))
+  const lilyCard = card('Lily · 增长负责人')
+  await ensureOpen(lilyCard)
+  t('联系人卡：没有时间，就没有「加到日历」', (await lilyCard.locator('.sends .btn', { hasText: '日历' }).count()) === 0)
+  const [vcfDl] = await Promise.all([pg.waitForEvent('download'), lilyCard.locator('.sends .btn', { hasText: '存到通讯录' }).click()])
+  const vcf = readFileSync(await vcfDl.path(), 'utf8')
+  t('联系人卡「存到通讯录」：一个 .vcf，名字、电话、邮箱都在', vcfDl.suggestedFilename().endsWith('.vcf') && vcf.includes('FN:Lily') && vcf.includes('TEL;TYPE=CELL:13812345678') && vcf.includes('EMAIL;TYPE=INTERNET:lily.chen@example.com'), vcf.split('\r\n').slice(2, 5).join(' / '))
+
+  // ---------------------------------------------------------------- 我的问法
+  await pg.locator('.ghost[aria-label="设置"]').click(); await wait(200)
+  await pg.locator('#newask').fill('帮我改写成一条朋友圈')
+  await pg.locator('.sheet .btn', { hasText: '存下' }).click(); await wait(150)
+  t('设置里存一句自己的问法', (await pg.locator('.my-asks li').count()) === 1 && (await pg.locator('.my-asks').innerText()).includes('改写成一条朋友圈'))
+  await pg.keyboard.press('Escape'); await wait(150)
+  await pg.reload({ waitUntil: 'load' }); await wait(600)
+  const lily2 = card('Lily · 增长负责人')
+  await ensureOpen(lily2)
+  const mine = lily2.locator('.alt', { hasText: '改写成一条朋友圈' })
+  t('每张卡的「换个问法」里都有它（刷新后还在）', (await mine.count()) === 1)
+  await mine.click(); await wait()
+  t('……点一下：这句 + 这条信息一起复制', (await clip()).startsWith('帮我改写成一条朋友圈\n\n【整理好的信息】\nLily'))
+
   // ---------------------------------------------------------------- 备份：导出 / 导入
   await pg.locator('.ghost[aria-label="设置"]').click(); await wait(300)
   t('设置：说清楚数据只在这台设备上', (await pg.locator('.sheet').innerText()).includes('只存在这台设备'))
   t('设置：Claude 整理是「可选」的，默认没开', (await pg.locator('.sheet .pill').innerText()) === '可选')
   const [dl] = await Promise.all([pg.waitForEvent('download'), pg.locator('.sheet .btn', { hasText: '导出备份' }).click()])
   const file = await dl.path()
-  const { readFileSync } = await import('node:fs')
   const backup = JSON.parse(readFileSync(file, 'utf8'))
   t('导出备份：一个 JSON 文件，每一条都在（截图也在）', backup.app === 'suishou' && backup.items.length === total && backup.items.some((x) => x.img), `${backup.items.length} / ${total}`)
   t('……文件名看得出是什么', /^suishou-backup-\d{8}\.json$/.test(dl.suggestedFilename()), dl.suggestedFilename())
@@ -229,11 +269,18 @@ try {
   await pg2.locator('#import').setInputFiles(file); await pg2.waitForTimeout(600)
   t('换台设备导入备份：全回来了', (await pg2.locator('.list article.card').count()) === total, `${await pg2.locator('.list article.card').count()} / ${total}`)
   t('……告诉她导入了几条', (await pg2.locator('.toast').innerText()).includes(`导入了 ${total} 条`))
+  t('……她存的问法也跟着过来了', (await pg2.locator('.my-asks').innerText().catch(() => '')).includes('改写成一条朋友圈'))
   await pg2.locator('#import').setInputFiles(file); await pg2.waitForTimeout(500)
   t('同一份再导一次：不重复', (await pg2.locator('.list article.card').count()) === total && (await pg2.locator('.toast').innerText()).includes('已经有了'))
   await pg2.locator('#import').setInputFiles({ name: 'x.json', mimeType: 'application/json', buffer: Buffer.from('{"a":1}') }); await pg2.waitForTimeout(300)
   t('导入别的文件：说清楚不是备份，什么都不动', (await pg2.locator('.toast').innerText()).includes('不是随手拾的备份') && (await pg2.locator('.list article.card').count()) === total)
   await ctx2.close()
+
+  // 删掉自己的问法
+  await pg.locator('.ghost[aria-label="设置"]').click(); await wait(200)
+  await pg.locator('.my-ask-x').first().click(); await wait(150)
+  t('问法可以删掉', (await pg.locator('.my-asks li').count()) === 0)
+  await pg.keyboard.press('Escape'); await wait(150)
 
   // ---------------------------------------------------------------- 老版本的数据（存在 localStorage 里的）
   const ctx3 = await b.newContext()

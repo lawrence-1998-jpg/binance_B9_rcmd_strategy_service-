@@ -12,7 +12,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 const dir = mkdtempSync(join(tmpdir(), 'card-'))
 const out = join(dir, 'm.mjs')
 await esbuild({
-  stdin: { contents: "export * from './card'; export { normalize, toBackup, fromBackup, merge } from './store'; export * as A from './ask'", resolveDir: fileURLToPath(new URL('../src/lib/', import.meta.url)), loader: 'ts' },
+  stdin: { contents: "export * from './card'; export { normalize, toBackup, fromBackup, readBackup, merge, mergeAsks } from './store'; export * as A from './ask'; export * as S from './send'", resolveDir: fileURLToPath(new URL('../src/lib/', import.meta.url)), loader: 'ts' },
   outfile: out, format: 'esm', bundle: true, logLevel: 'warning',
 })
 const C = await import(pathToFileURL(out).href)
@@ -38,6 +38,12 @@ t('会议：「记得带…」变成一条待办', meet.todos.length === 1 && me
 t('会议：要点接着标题往下露，不从半个词开始', meet.summary.startsWith('记得带上次那版竞品分析'), meet.summary)
 t('会议：标题不把「10」劈成两半', !/1…$/.test(meet.title) && [...meet.title].length <= 19, meet.title)
 t('会议：配好一句按日程问 AI 的话', meet.prompt.startsWith('帮我把这件事整理成日程'), meet.prompt)
+t('聊天里的「王总：」拎成「来自」，标题从他说的话开始', val(meet, '来自')[0] === '王总' && meet.title === '周四下午的会挪到周五上午 10 点吧', `${JSON.stringify(val(meet, '来自'))} / ${meet.title}`)
+const zhang = C.quick('张经理：合同我明天上午发你邮箱，你周五前签好寄回来就行')
+t('「你周五前签好寄回来」：待办只取有期限的那一小句', zhang.todos[0]?.text === '周五前签好寄回来就行' && val(zhang, '来自')[0] === '张经理', JSON.stringify(zhang.todos))
+t('「报价：」「Note:」不当成说话的人', val(C.quick('报价：年费版 ¥36,000/年'), '来自').length === 0 && val(C.quick('Note: 这个很重要'), '来自').length === 0)
+t('英文名「Lily:」认得出', val(C.quick('Lily: can we move the call to Friday 3pm?'), '来自')[0] === 'Lily')
+t('报错「TypeError:」不当成说话的人', val(C.quick('TypeError: x is undefined'), '来自').length === 0)
 
 const price = C.quick('报价：年费版 ¥36,000/年（含 20 个席位），超出部分每席 ¥1,500/年；首年 8 折。')
 t('报价：认出两个金额', val(price, '金额').length === 2 && val(price, '金额')[0].startsWith('¥36,000'), JSON.stringify(val(price, '金额')))
@@ -131,6 +137,55 @@ const n = C.normalize('x1', { raw: 'r', kind: 'weird', fields: [{ label: 'a', va
 t('读回来的脏数据补齐', n && n.kind === 'other' && n.fields.length === 1 && n.todos.length === 1 && n.todos[0].done === false && n.tags.length === 1)
 t('没有原文的记录不认', C.normalize('x2', { title: 'x' }) === null)
 
+// ---------------------------------------------------------------- 换个问法
+
+const ev0 = { id: 'e', raw: '原文', createdAt: 0, updatedAt: 0, status: 'local', pinned: false, ...C.quick('王总：周五上午 10 点国贸见') }
+const alts = C.asksFor(ev0, [{ label: '写朋友圈', text: '帮我改写成一条朋友圈' }])
+t('换个问法：日程有「起草确认回复」，还有通用的和她自己存的', alts.some((a) => a.label === '起草确认回复') && alts.some((a) => a.label === '翻译成英文') && alts.at(-1).label === '写朋友圈', alts.map((a) => a.label).join(','))
+t('换个问法：跟卡上那句一样的不重复出现', !C.asksFor({ ...ev0, prompt: '用一句话告诉我这条信息最重要的是什么。' }).some((a) => a.label === '一句话总结'))
+t('换个问法复制出去：开头换成那一句，后面照样带整理版和原文', C.asAiWith(ev0, '帮我改写成一条朋友圈').startsWith('帮我改写成一条朋友圈\n\n【整理好的信息】') && C.asAiWith(ev0, 'x').includes('【原文】'))
+t('她存的问法：按钮名从那句话里取（去掉「帮我」「请」）', C.askLabel('帮我改写成一条朋友圈') === '改写成一条朋友圈' && C.askLabel('请把这条翻成日文') === '翻成日文', C.askLabel('请把这条翻成日文'))
+t('问法合并：同一句不重复', C.mergeAsks([{ label: 'a', text: 'x' }], [{ label: 'b', text: 'x' }, { label: 'c', text: 'y' }]).length === 2)
+
+// ---------------------------------------------------------------- 放到别处：日历 / 通讯录
+
+const N0 = new Date(2026, 8, 23, 10, 0) // 周三
+const at = (s) => { const w = C.S.when(s, N0); if (!w) return 'null'; const d = w.start; return `${d.getMonth() + 1}/${d.getDate()}${w.allDay ? ' 全天' : ` ${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`}` }
+const table = [
+  ['周五上午 10 点', '9/25 10:00'], ['9月26日（周五）10:00', '9/26 10:00'], ['明天下午 3 点', '9/24 15:00'], ['下周一', '9/28 全天'],
+  ['今晚八点', '9/23 20:00'], ['10 月 15 日', '10/15 全天'], ['周三', '9/23 全天'], ['周二', '9/29 全天'], ['下午三点半', '9/23 15:30'],
+  ['2026-10-08 14:30', '10/8 14:30'], ['Friday 3pm', '9/25 15:00'], ['周日晚上 7:30', '9/27 19:30'], ['后天中午12点', '9/25 12:00'],
+  ['明天早一点到', '9/24 全天'], ['hello', 'null'], ['App.tsx:42:13', 'null'],
+]
+const wrong = table.filter(([s, want]) => at(s) !== want).map(([s, want]) => `${s}→${at(s)}（该是 ${want}）`)
+t(`读时间：${table.length} 种说法都读对（「快一点」不当成 1 点，行号不当钟点）`, wrong.length === 0, wrong.join(' | '))
+t('读时间：1 月 5 日（已经过去好几个月）算明年', C.S.when('1月5日', N0).start.getFullYear() === 2027)
+
+const meetIt = { id: 'm1', raw: '王总：周五上午 10 点国贸见，地点：国贸三期 B 座 1208', createdAt: 0, updatedAt: 0, status: 'local', pinned: false,
+  ...C.quick('王总：周五上午 10 点国贸见，地点：国贸三期 B 座 1208') }
+const evm = C.S.eventOf(meetIt, N0)
+t('日程卡：读出时间和地点', evm && !evm.when.allDay && evm.when.start.getDate() === 25 && evm.place === '国贸三期 B 座 1208', JSON.stringify(evm))
+const ics = C.S.toIcs(meetIt, evm, N0)
+t('日历文件：本地时间周五 10 点，一小时，标题、地点、提醒都在', ics.includes('DTSTART:20260925T100000\r\n') && ics.includes('DTEND:20260925T110000') && ics.includes('SUMMARY:周五上午 10 点国贸见') && ics.includes('LOCATION:国贸三期 B 座 1208') && ics.includes('TRIGGER:-PT15M'), ics.split('\r\n').slice(6, 10).join(' / '))
+t('日历文件：CRLF 换行，每行不超过 75 字节（长原文按规范折行、不劈汉字）', (() => {
+  const long = C.S.toIcs({ ...meetIt, raw: '很长的原文，'.repeat(60) }, evm, N0)
+  const lines = long.split('\r\n')
+  return !/[^\r]\n/.test(long) && lines.every((l) => new TextEncoder().encode(l).length <= 75) && !long.includes('\uFFFD') && lines.some((l) => l.startsWith(' '))
+})())
+t('日历文件：逗号分号换行都转义', C.S.toIcs({ ...meetIt, title: 'a,b;c' }, evm, N0).includes('SUMMARY:a\\,b\\;c'))
+const dueIt = { ...meetIt, kind: 'todo', fields: [{ label: '截止', value: '10 月 15 日' }] }
+const evd = C.S.eventOf(dueIt, N0)
+const icsd = C.S.toIcs(dueIt, evd, N0)
+t('只有截止日：全天，标题前加「截止：」', evd.due && icsd.includes('DTSTART;VALUE=DATE:20261015') && icsd.includes('DTEND;VALUE=DATE:20261016') && icsd.includes('SUMMARY:截止：'))
+t('验证码、没时间的笔记：没有「加到日历」', C.S.eventOf({ ...otp, id: 'o', raw: 'x', createdAt: 0, updatedAt: 0, status: 'local', pinned: false }, N0) === null && C.S.eventOf({ ...meetIt, kind: 'note', fields: [] }, N0) === null)
+
+const lily = { id: 'l1', raw: 'Lily Chen｜增长策略负责人\n手机 138 1234 5678\n邮箱 lily.chen@example.com', createdAt: 0, updatedAt: 0, status: 'local', pinned: false, ...contact }
+const pl = C.S.personOf(lily)
+t('名片：姓名、职位、电话、邮箱', pl.name === 'Lily Chen' && pl.title === '增长策略负责人' && pl.phones[0] === '138 1234 5678' && pl.emails[0] === 'lily.chen@example.com', JSON.stringify(pl))
+const vcf = C.S.toVcf(pl, lily)
+t('联系人文件：vCard 3.0，号码去掉空格', vcf.startsWith('BEGIN:VCARD\r\nVERSION:3.0\r\nFN:Lily Chen\r\n') && vcf.includes('TITLE:增长策略负责人') && vcf.includes('TEL;TYPE=CELL:13812345678') && vcf.includes('EMAIL;TYPE=INTERNET:lily.chen@example.com'))
+t('没电话没邮箱的：没有「存到通讯录」', C.S.personOf({ ...meetIt, fields: [] }) === null)
+
 // ---------------------------------------------------------------- 备份：导出 / 导入
 
 const mine = [
@@ -140,6 +195,8 @@ const mine = [
 ]
 const file = C.toBackup(mine, new Date(2026, 8, 23))
 const back = C.fromBackup(file)
+const withAsks = C.readBackup(C.toBackup(mine, new Date(2026, 8, 23), [{ label: '朋友圈', text: '帮我改写成一条朋友圈' }]))
+t('备份里带着她存的问法', withAsks.asks.length === 1 && withAsks.asks[0].text === '帮我改写成一条朋友圈' && withAsks.items.length === 3)
 t('导出再导入：一条不少，截图也在', back.length === 3 && back[2].img === 'data:image/jpeg;base64,AAAA')
 t('导出时整理到一半的不带「在整理」（换台设备不会一直转圈）', back.find((x) => x.id === 'a2').status === 'failed')
 t('导出的文件认得出是随手拾的', JSON.parse(file).app === 'suishou' && JSON.parse(file).version === 1)

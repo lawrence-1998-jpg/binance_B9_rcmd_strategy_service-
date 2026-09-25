@@ -80,7 +80,7 @@ const MONEY_RE = /(?:[¥￥$€£]\s?\d[\d,]*(?:\.\d+)?\s?(?:万|亿|千|k|K|w|W
 const DATE_RE = /(?:\d{4}\s?[-/.年]\s?\d{1,2}\s?[-/.月]\s?\d{1,2}\s?日?|\d{1,2}\s?月\s?\d{1,2}\s?[日号]|(?:今天|明天|后天|今晚|明早|明晚|下周[一二三四五六日天]|本周[一二三四五六日天]|周[一二三四五六日天]|星期[一二三四五六日天]))(?:\s*(?:上午|下午|晚上|中午|早上)?\s*\d{1,2}\s*(?:[:：]\s*\d{2}|点半?|点\s*\d{1,2}\s*分?))?|(?:上午|下午|晚上|中午|早上)\s*\d{1,2}\s*(?:[:：]\s*\d{2}|点半?)|\b\d{1,2}:\d{2}\b/g
 /** 光一个「今天」「周五」、后面没跟钟点：只有在像是约时间、定期限的话里才算数 */
 const BARE_DAY = /^(?:今天|明天|后天|今晚|明早|明晚|(?:下|本)?周.|星期.)$/
-const SCHEDULING = /开会|会议|[的个场]会|约了?[时见吃聊]|见面|面试|截止|之前|前完成|到期|提交|交付|碰一下|聊一下|通电话|打电话|电话会|视频会|面谈|拜访|航班|高铁|接机|饭局|聚餐|deadline|due|call|meeting/i
+const SCHEDULING = /开会|会议|[的个场]会|约了?[时见吃聊]|见面|面试|截止|之前|前完成|到期|提交|交付|碰一下|聊一下|通电话|打电话|电话会|视频会|面谈|拜访|航班|高铁|接机|饭局|聚餐|见(?:[，。！!,.\s]|$)|deadline|due|call|meeting/i
 const CODE_RE = /(?:验证码|校验码|动态码|code)[^\d]{0,6}(\d{4,8})/i
 /** 「周五前」「月底之前」：截止时间 */
 const DUE_RE = /(?:今天|明天|后天|今晚|(?:下|本)?周[一二三四五六日天]|星期[一二三四五六日天]|\d{1,2}月\d{1,2}[日号]|\d{1,2}[日号]|月底|月初|年底|下班)(?:之|以)?前/g
@@ -89,11 +89,17 @@ const PLACE_RE = /(?:地点|地址|位置)(?:还是|改为|改在|改到|定在|
 /** 让「我」去做的事：「记得带上…」「别忘了…」「麻烦…」 */
 const TODO_CUE = /(?:记得|别忘了?|不要忘了?|务必|麻烦(?:你)?|请(?:你)?|帮我|需要|要去|得去|待办|TODO|to-?do)\s*[:：]?\s*/i
 /** 「周五前把 PPT 发给王总」这种：有期限、有动作 */
-const DUE_TASK = /(?:之|以)?前(?:要|得|需要)?(?:把|将)?.{0,24}?(?:发|交|提交|完成|给|做|准备|回复|确认|整理|写|改|订|约|联系|打电话|付|报)/
+const DUE_TASK = /(?:之|以)?前(?:要|得|需要)?(?:把|将)?.{0,24}?(?:发|交|提交|完成|给|做|准备|回复|确认|整理|写|改|订|约|联系|打电话|付|报|签|寄|填|传|预约)/
 /** 清单的一行：「- [ ] 买牛奶」「1. xxx」「• xxx」 */
 const LIST_LINE = /^\s*(?:[-*•·]\s*)?(?:\[( |x|X)\]|[-*•·]|\d{1,2}[.、)）])\s*(\S.*)$/
 const IDEA_RE = /^(?:(?:今天|刚才|突然)?想到|想法|灵感|脑洞|idea)\s*[:：]\s*/i
 const NOTE_HEAD = /纪要|笔记|总结|复盘|记录|要点|摘要/
+/**
+ * 聊天里复制出来的一句：「王总：…」「张经理：…」「Lily: …」。
+ * 只认像人的：中文带称呼（总、经理、老师…），或者英文名。「报价：」「地点：」这种不算
+ */
+const SPEAKER = /^((?:[\u4e00-\u9fa5]{1,3}(?:总|哥|姐|老师|经理|总监|老板|同学|主任|医生|律师|师傅|组长|主管|助理))|(?:[A-Z][a-z]+(?: [A-Z][a-z]+)?))\s*[:：]\s*(?=\S)/
+const NOT_NAME = /^(?:Note|Notes|Todo|Re|Fwd|Subject|From|To|Date|Link|Links|Tip|Tips|Update|Summary|Step|Http|Https|Warning|Error|Info|Debug|Question|Answer|Price|Total)$/
 /** 「改到周五」：改之前的那个时间不算 */
 const MOVED = /(?:挪|改|推|延|换|提前)到/
 
@@ -110,6 +116,70 @@ export const LOCAL_ASK: Record<Kind, string> = {
   idea: '帮我把这个想法展开：成立的前提是什么、有哪些风险、下一步怎么最快验证。',
   note: '帮我提炼这段内容的要点（不超过 5 条），并列出需要我跟进的事。',
   other: '请帮我理解这条信息，提炼要点，并告诉我接下来该做什么。',
+}
+
+export interface Ask { label: string; text: string }
+
+/** 卡片上「换个问法」：按类型多给几种，点一下连同这条信息一起复制 */
+export const MORE_ASKS: Record<Kind, Ask[]> = {
+  event: [
+    { label: '起草确认回复', text: '帮我起草一条回复，确认时间和地点，语气简洁客气。' },
+    { label: '要准备什么', text: '这件事我需要提前准备什么？列一个清单，按先后排好。' },
+  ],
+  todo: [
+    { label: '拆成小步骤', text: '把这些事拆成马上就能开始做的小步骤。' },
+    { label: '写进度同步', text: '帮我写一段简短的进度同步，说明这些事的安排和时间点。' },
+  ],
+  contact: [
+    { label: '写初次联系', text: '帮我给这个人写一条初次联系的消息：礼貌、简短，说明来意。' },
+    { label: '沟通前了解', text: '和这个人沟通前，我应该先了解哪些背景？列出要点和可以聊的话题。' },
+  ],
+  link: [
+    { label: '讲了什么', text: '帮我读这个链接，用三句话告诉我讲了什么。' },
+    { label: '提炼行动点', text: '帮我读这个链接，提炼出对我有用、可以马上照做的几点。' },
+  ],
+  data: [
+    { label: '做成表格', text: '把这些数字整理成一张 Markdown 表格，算出合计。' },
+    { label: '谈价话术', text: '帮我想三种谈价 / 谈条件的说法，理由要站得住。' },
+  ],
+  code: [
+    { label: '说人话', text: '用大白话解释这段代码 / 报错在说什么。' },
+    { label: '直接给修复', text: '直接给出修好的代码，并说明改了哪里、为什么。' },
+  ],
+  question: [
+    { label: '列出正反', text: '把这个问题的几种答案和各自的理由列出来，最后给我建议。' },
+  ],
+  quote: [
+    { label: '改写成我的话', text: '把这段话改写成我自己的说法，意思不变，更口语一点。' },
+  ],
+  idea: [
+    { label: '挑毛病', text: '挑挑这个想法的毛病：最可能失败的三个原因，以及怎么避开。' },
+  ],
+  note: [
+    { label: '改写得更清楚', text: '把这段内容改写得更清楚、更有条理，意思不变。' },
+    { label: '列出待办', text: '从这段内容里列出需要我跟进的事，带上时间。' },
+  ],
+  other: [],
+}
+const COMMON_ASKS: Ask[] = [
+  { label: '一句话总结', text: '用一句话告诉我这条信息最重要的是什么。' },
+  { label: '翻译成英文', text: '把这条信息翻译成自然、得体的英文，保留所有数字、人名和链接。' },
+]
+
+/** 一张卡能换的问法：按类型的 + 通用的 + 她自己存的；跟卡上那句一样的不重复 */
+export function asksFor(it: Item, mine: Ask[] = []): Ask[] {
+  const seen = new Set([it.prompt])
+  return [...MORE_ASKS[it.kind], ...COMMON_ASKS, ...mine].filter((a) => a.text && !seen.has(a.text) && seen.add(a.text))
+}
+
+/** 她自己存的问法：按钮上显示的名字从那句话里取 */
+export function askLabel(text: string): string {
+  return clip(text.trim().replace(/^(?:请你?|麻烦你?|帮我|帮忙)\s*/, '').replace(/^把(?:这条|它|这段)\s*/, ''), 8) || '我的问法'
+}
+
+/** 换个问法复制出去：跟「复制给 AI」一样的格式，只是开头那句换掉 */
+export function asAiWith(it: Item, ask: string): string {
+  return asAi({ ...it, prompt: ask })
 }
 
 function uniq(xs: string[]): string[] {
@@ -134,7 +204,12 @@ function findTodos(raw: string): { todos: Todo[]; list: boolean } {
       const what = sent.slice(cue.index + cue[0].length).split(/[，,]/)[0].trim()
       if ([...what].length >= 2) out.push(clip(what, 40))
     } else if (DUE_TASK.test(sent) && [...sent.trim()].length <= 60) {
-      out.push(clip(sent.trim(), 40))
+      // 「合同我明天发你，你周五前签好寄回来」：要做的是有期限的那一小句，不是整句
+      // 那一小句太短（「月底前给初版」）就带上前一句（「Linda 负责数据看板」），不然看不出是什么事
+      const parts = sent.replace(SPEAKER, '').split(/[，,]/)
+      const i = Math.max(0, parts.findIndex((c) => DUE_TASK.test(c)))
+      const part = [...parts[i].trim()].length < 8 && i > 0 ? `${parts[i - 1].trim()}，${parts[i].trim()}` : parts[i]
+      out.push(clip(part.trim().replace(/^(?:你|您|我|咱们|我们)(?=\S)/, ''), 40))
     }
   }
   return { todos: uniq(out).slice(0, 5).map((text) => ({ text, done: false })), list: false }
@@ -157,9 +232,12 @@ export function quick(input: string): Pick<Item, 'kind' | 'title' | 'summary' | 
   const place = raw.match(PLACE_RE)?.[1]?.trim()
   const code = raw.match(CODE_RE)?.[1]
   const { todos, list } = code ? { todos: [], list: false } : findTodos(raw)
+  const who = isCode ? undefined : raw.match(SPEAKER)?.[1]
+  const speaker = who && !NOT_NAME.test(who) ? who : undefined
 
   const fields: Field[] = []
   if (code) fields.push({ label: '验证码', value: code })
+  if (speaker) fields.push({ label: '来自', value: speaker })
   // 「有效期至 10 月 15 日」「截止 3 月 1 日」：是期限，不是约的时间
   const dueish = (d: string) => /(?:截止|有效期|到期|deadline|due)[^，。；\n]{0,4}$/i.test(raw.slice(0, raw.indexOf(d)))
   dates.slice(0, 2).forEach((d) => fields.push({ label: dueish(d) ? '截止' : '时间', value: d }))
@@ -170,7 +248,8 @@ export function quick(input: string): Pick<Item, 'kind' | 'title' | 'summary' | 
   money.slice(0, 2).forEach((m) => fields.push({ label: '金额', value: m }))
   urls.slice(0, 3).forEach((u) => fields.push({ label: '链接', value: u }))
 
-  const bare = raw.replace(URL_RE, '').trim()
+  // 说话的人已经拎成「来自」了，标题和要点从他说的话开始
+  const bare = raw.replace(URL_RE, '').replace(speaker ? SPEAKER : /$^/, '').trim()
   const kind: Kind =
     code ? 'data'
     : urls.length && bare.length < 30 ? 'link'

@@ -1,4 +1,4 @@
-import { KINDS, type Item, type Kind } from './card'
+import { KINDS, askLabel, type Ask, type Item, type Kind } from './card'
 
 /**
  * 东西存在哪：只在这台设备上，不上传。
@@ -59,25 +59,49 @@ const clean = (it: Item): Item => {
 
 // ---------------------------------------------------------------- 备份
 
-export interface Backup { app: 'suishou'; version: 1; exportedAt: string; items: Item[] }
+export interface Backup { app: 'suishou'; version: 1; exportedAt: string; items: Item[]; asks?: Ask[] }
 
-export function toBackup(items: Item[], now = new Date()): string {
+export function toBackup(items: Item[], now = new Date(), asks: Ask[] = []): string {
   // 整理到一半的，导出时当作没整理完：换台设备打开不会一直转圈
   const out = items.map((it) => clean(it.status === 'pending' ? { ...it, status: 'failed', note: '' } : it))
-  const b: Backup = { app: 'suishou', version: 1, exportedAt: now.toISOString(), items: out }
+  const b: Backup = { app: 'suishou', version: 1, exportedAt: now.toISOString(), items: out, ...(asks.length ? { asks } : {}) }
   return JSON.stringify(b, null, 1)
 }
 
 /** 认得自己导出的文件，也认一个光秃秃的数组；认不出来就抛错，不猜 */
-export function fromBackup(text: string): Item[] {
+export function readBackup(text: string): { items: Item[]; asks: Ask[] } {
   let j: unknown
   try { j = JSON.parse(text) } catch { throw new Error('not_json') }
   const list = Array.isArray(j) ? j : (j as Partial<Backup>)?.app === 'suishou' && Array.isArray((j as Backup).items) ? (j as Backup).items : null
   if (!list) throw new Error('not_backup')
-  return list
+  const items = list
     .map((d) => (d && typeof d === 'object' ? normalize(String((d as Record<string, unknown>).id ?? ''), d as Record<string, unknown>) : null))
     .filter((x): x is Item => !!x && !!x.id)
     .map((it) => (it.status === 'pending' ? { ...it, status: 'failed' as const } : it))
+  return { items, asks: cleanAsks(Array.isArray(j) ? [] : (j as Backup).asks) }
+}
+export const fromBackup = (text: string): Item[] => readBackup(text).items
+
+// ---------------------------------------------------------------- 她自己存的问法
+
+const ASKS = 'suishou.asks'
+function cleanAsks(x: unknown): Ask[] {
+  if (!Array.isArray(x)) return []
+  return x
+    .filter((a): a is Ask => !!a && typeof (a as Ask).text === 'string' && !!(a as Ask).text.trim())
+    .map((a) => ({ text: a.text.trim().slice(0, 300), label: typeof a.label === 'string' && a.label.trim() ? a.label.trim().slice(0, 12) : askLabel(a.text) }))
+    .slice(0, 30)
+}
+export function loadAsks(): Ask[] {
+  try { return cleanAsks(JSON.parse(localStorage.getItem(ASKS) || '[]')) } catch { return [] }
+}
+export function saveAsks(asks: Ask[]): void {
+  try { localStorage.setItem(ASKS, JSON.stringify(asks)) } catch { /* 无痕模式：这次会话里还在 */ }
+}
+/** 合在一起，同一句不重复 */
+export function mergeAsks(have: Ask[], more: Ask[]): Ask[] {
+  const seen = new Set(have.map((a) => a.text))
+  return [...have, ...more.filter((a) => !seen.has(a.text) && seen.add(a.text))].slice(0, 30)
 }
 
 /** 导入时怎么合：同一条（同 id）留改得更晚的；内容一模一样的不重复收（截图按图比，不按「［截图］」那几个字） */
