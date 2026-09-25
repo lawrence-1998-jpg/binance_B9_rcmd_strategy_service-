@@ -71,7 +71,7 @@ try {
   t('请求：结构化输出（json_schema，kind 只能是那 11 种）', m1.body.output_config?.format?.type === 'json_schema' && m1.body.output_config.format.schema.properties.kind.enum.length === 11)
   t('请求：开着服务端 fallback（主力模型不接时自动换一个接着做）', m1.body.fallbacks === 'default' && m1.beta.includes('server-side-fallback-2026-07-01'), m1.beta)
   t('请求：原文原样放在指令里', m1.prompt.includes('<<<\n' + CONTACT + '\n>>>'))
-  await c1.locator('.copies .btn', { hasText: '复制给 AI' }).click(); await wait()
+  await c1.locator('.ask').click(); await wait()
   t('复制给 AI：换成 Claude 想好的那句', (await clip()).startsWith('帮我给 Lily 写一条初次联系的微信。'))
 
   await pasteInBox(MEET); await wait(900)

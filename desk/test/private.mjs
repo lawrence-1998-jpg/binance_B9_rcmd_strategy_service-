@@ -40,7 +40,7 @@ await paste('王总：周五上午 10 点国贸见，记得带合同。' + SECRE
 const c = pg.locator('.card.open')
 await c.locator('.todo').first().click()
 await c.locator('.acts button', { hasText: '置顶' }).click()
-await c.locator('.copies .btn', { hasText: '复制给 AI' }).click()
+await c.locator('.ask').click()
 await wait()
 await c.locator('.acts .danger').click(); await wait(200)
 await pg.locator('.toast button', { hasText: '撤销' }).click(); await wait(300)

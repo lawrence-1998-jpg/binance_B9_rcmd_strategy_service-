@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
-  IMG_PLACEHOLDER, KINDS, aiPrompt, asAi, asAiWith, askLabel, asksFor, asText, dayGroup, fromAi, manyAi, manyText, matches, newId, quick, stamp, tidy,
+  FALLBACK_ASK, IMG_PLACEHOLDER, KINDS, aiPrompt, asAi, asAiWith, askLabel, asksFor, asText, dayGroup, fromAi, manyAi, manyText, matches, newId, quick, stamp, tidy,
   type Ask, type Item, type Kind,
 } from './lib/card'
 import { askPrompt, pick, pieces, plainAnswer } from './lib/ask'
@@ -371,9 +371,9 @@ export function App() {
 
   const status =
     !store ? '正在打开你的收藏…'
-    : keyBad ? '粘贴即收下 · API Key 用不了，先做基础整理 —— 去设置里看看'
-    : aiKey ? '粘贴即收下 · 文字截图都行 · Claude 帮你整理'
-    : '粘贴即收下 · 文字截图都行 · 只存在这台设备'
+    : keyBad ? 'API Key 用不了，先做基础整理 —— 去设置里看看'
+    : aiKey ? '粘贴即收下 · Claude 帮你整理'
+    : '粘贴即收下 · 只存在这台设备'
 
   // ---------------------------------------------------------------- 导出 / 导入
 
@@ -526,20 +526,21 @@ export function App() {
       )}
 
       {!picked && !searching && (
-        <section className="capture" aria-label="收下一条">
-          <textarea
-            id="capture"
-            ref={capRef}
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); takeDraft() } }}
-            placeholder={touch ? '长按这里，粘贴 —— 聊天、地址、报价、链接、名片都行' : `粘贴到这里，或者在页面任何地方按 ${MOD}+V`}
-            rows={draft ? Math.min(8, draft.split('\n').length + 1) : 2}
-            aria-label="粘贴或输入要收下的内容"
-          />
-          <div className="cap-foot">
-            <span className={'cap-hint' + (aiKey ? ' ai' : '')}>{status}</span>
-            {!draft.trim() && (
+        <>
+          <section className="capture" aria-label="收下一条">
+            <textarea
+              id="capture"
+              ref={capRef}
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); takeDraft() } }}
+              placeholder={touch ? '长按这里，粘贴进来' : `粘贴到这里，或在页面任何地方按 ${MOD}+V`}
+              rows={draft ? Math.min(8, draft.split('\n').length + 1) : 1}
+              aria-label="粘贴或输入要收下的内容"
+            />
+            {draft.trim() ? (
+              <button type="button" className="take" onClick={takeDraft}>收下</button>
+            ) : (
               <>
                 <input
                   id="shot"
@@ -554,27 +555,25 @@ export function App() {
                     e.target.value = ''
                   }}
                 />
-                <button type="button" className="shot-btn" onClick={() => fileRef.current?.click()}>
+                <button type="button" className="shot-btn" aria-label="收一张截图" onClick={() => fileRef.current?.click()}>
                   <ImageIcon />
                   <span>截图</span>
                 </button>
               </>
             )}
-            {draft.trim() && (
-              <button type="button" className="take" onClick={takeDraft}>收下</button>
-            )}
-          </div>
-        </section>
+          </section>
+          <p className={'cap-hint' + (aiKey ? ' ai' : '')}>{status}</p>
+        </>
       )}
 
       {lib.length > 0 && (
         <nav className="kinds" aria-label="按类型看">
           <button type="button" className={kind === 'all' ? 'on' : ''} aria-pressed={kind === 'all'} onClick={() => setKind('all')}>
-            全部 <span>{lib.length}</span>
+            <span className="k-in">全部 <i>{lib.length}</i></span>
           </button>
           {(Object.keys(KINDS) as Kind[]).filter((k) => counts.get(k)).map((k) => (
             <button key={k} type="button" className={kind === k ? 'on' : ''} aria-pressed={kind === k} data-k={k} onClick={() => setKind(kind === k ? 'all' : k)}>
-              {KINDS[k]} <span>{counts.get(k)}</span>
+              <span className="k-in">{KINDS[k]} <i>{counts.get(k)}</i></span>
             </button>
           ))}
         </nav>
@@ -773,7 +772,7 @@ function Card(p: CardProps) {
           aria-label="标题"
         />
       ) : (
-        <button type="button" className="card-main" aria-expanded={open} onClick={p.picking ? p.onPick : p.onToggle}>
+        <button type="button" className={'card-main' + (it.summary || busy ? '' : ' solo')} aria-expanded={open} onClick={p.picking ? p.onPick : p.onToggle}>
           <h3>{it.title}</h3>
           {it.summary ? <p>{it.summary}</p> : busy ? <p className="dim">{it.raw.replace(/\s+/g, ' ').slice(0, 60)}</p> : null}
         </button>
@@ -785,12 +784,14 @@ function Card(p: CardProps) {
             <button key={i} type="button" className={'chip' + (done('f' + i) ? ' done' : '')}
               onClick={() => (p.picking ? p.onPick?.() : copy(f.value, k('f' + i), `「${f.label}」`))}
               aria-label={`复制${f.label}：${f.value}`}>
-              <span className="chip-l">{f.label}</span>
-              <span className="chip-v">{done('f' + i) ? '已复制' : f.value}</span>
+              <span className="chip-in">
+                <span className="chip-l">{f.label}</span>
+                <span className="chip-v">{done('f' + i) ? '已复制' : f.value}</span>
+              </span>
             </button>
           ))}
           {it.fields.length > 3 && !p.picking && (
-            <button type="button" className="chip more" onClick={p.onToggle}>还有 {it.fields.length - 3} 项</button>
+            <button type="button" className="chip more" onClick={p.onToggle}><span className="chip-in">还有 {it.fields.length - 3} 项</span></button>
           )}
         </div>
       )}
@@ -821,7 +822,7 @@ function Card(p: CardProps) {
                   onClick={() => copy(f.value, k('f' + i), `「${f.label}」`)}>
                   <span className="row-l">{f.label}</span>
                   <span className="row-v">{f.value}</span>
-                  <span className="row-c" aria-hidden="true">{done('f' + i) ? '已复制' : '复制'}</span>
+                  <span className="row-c" aria-hidden="true">{done('f' + i) ? '已复制' : <CopyIcon />}</span>
                 </button>
               ))}
             </div>
@@ -844,84 +845,82 @@ function Card(p: CardProps) {
             <p className="tags">{it.tags.map((t) => <span key={t}>#{t}</span>)}</p>
           )}
 
-          {it.prompt && !textless && (
-            <button type="button" className={'ask' + (done('ai') ? ' done' : '')}
-              onClick={() => copy(asAi(it), k('ai'), '给 AI 的版本')}>
-              <span className="ask-l">{done('ai') ? '已复制 · 去 AI 那儿粘贴' : '下一步可以这样问 AI'}</span>
-              <span className="ask-t">{it.prompt}</span>
-            </button>
-          )}
-
-          {alts.length > 0 && (
-            <div className="alts" aria-label="换个问法">
-              <span className="alts-h">换个问法</span>
-              {alts.map((a, i) => (
-                <button key={a.text} type="button" className={'alt' + (done('alt' + i) ? ' done' : '')} title={a.text}
-                  onClick={() => copy(asAiWith(it, a.text), k('alt' + i), `「${a.label}」`)}>
-                  {done('alt' + i) ? '已复制' : a.label}
-                </button>
-              ))}
-            </div>
-          )}
-
+          {/* 拿去问 AI：卡上配好的那一句是主按钮，下面一排是换个问法 —— 所有「给 AI」的都在这一块 */}
           {!textless && (
-            <div className="raw">
-              <button type="button" className="raw-t" aria-expanded={showRaw} onClick={() => setShowRaw((s) => !s)}>
-                {showRaw ? '收起原文 ▴' : it.img ? '看图里的字 ▾' : '看原文 ▾'}
+            <div className="ai-box">
+              <button type="button" className={'ask' + (done('ai') ? ' done' : '')}
+                onClick={() => copy(asAi(it), k('ai'), '给 AI 的版本')}>
+                <span className="ask-top">
+                  <span className="ask-l"><SparkIcon />拿去问 AI</span>
+                  <span className="ask-btn">{done('ai') ? '✓ 已复制' : '复制给 AI'}</span>
+                </span>
+                <span className="ask-t">{it.prompt || FALLBACK_ASK}</span>
               </button>
-              {showRaw && <pre>{it.raw}</pre>}
+              {alts.length > 0 && (
+                <div className="alts" aria-label="换个问法">
+                  <span className="alts-h">换个问法</span>
+                  {alts.map((a, i) => (
+                    <button key={a.text} type="button" className={'alt' + (done('alt' + i) ? ' done' : '')} title={a.text}
+                      onClick={() => copy(asAiWith(it, a.text), k('alt' + i), `「${a.label}」`)}>
+                      {done('alt' + i) ? '已复制' : a.label}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
-          {textless ? (
-            // 图里的字还没读出来：能拿走的就是这张图
-            <div className="copies two">
+          {/* 一排拿走：整理版 / 原文（截图卡是图）/ 日历 / 通讯录 */}
+          <div className={'copies n' + (2 + (ev ? 1 : 0) + (person ? 1 : 0))}>
+            {textless ? (
               <button type="button" className={'btn solid' + (done('img') ? ' done' : '')} onClick={() => p.copyShot?.(it, k('img'))}>
                 {done('img') ? '✓ 已复制' : '复制图片'}
               </button>
-              <button type="button" className={'btn' + (done('text') ? ' done' : '')} onClick={() => copy(asText(it), k('text'), '整理版')}>
-                {done('text') ? '✓ 已复制' : '复制整理版'}
-              </button>
-            </div>
-          ) : (
-            <div className="copies">
+            ) : (
               <button type="button" className={'btn solid' + (done('text') ? ' done' : '')} onClick={() => copy(asText(it), k('text'), '整理版')}>
                 {done('text') ? '✓ 已复制' : '复制整理版'}
               </button>
-              <button type="button" className={'btn' + (done('ai') ? ' done' : '')} onClick={() => copy(asAi(it), k('ai'), '给 AI 的版本')}>
-                {done('ai') ? '✓ 已复制' : '复制给 AI'}
+            )}
+            {textless ? (
+              <button type="button" className={'btn' + (done('text') ? ' done' : '')} onClick={() => copy(asText(it), k('text'), '整理版')}>
+                {done('text') ? '✓ 已复制' : '复制整理版'}
               </button>
+            ) : (
               <button type="button" className={'btn' + (done('raw') ? ' done' : '')} onClick={() => copy(it.raw, k('raw'), '原文')}>
                 {done('raw') ? '✓ 已复制' : '复制原文'}
               </button>
-            </div>
-          )}
+            )}
+            {ev && (
+              <button type="button" className="btn send" title={ev.due ? '把截止日加到日历' : undefined} onClick={() => p.onSend?.(it, 'ics')}>
+                <CalIcon /><span>加到日历</span>
+              </button>
+            )}
+            {person && (
+              <button type="button" className="btn send" onClick={() => p.onSend?.(it, 'vcf')}>
+                <PersonIcon /><span>存到通讯录</span>
+              </button>
+            )}
+          </div>
 
-          {(ev || person) && (
-            <div className="sends" aria-label="放到别处">
-              {ev && (
-                <button type="button" className="btn" onClick={() => p.onSend?.(it, 'ics')}>
-                  <CalIcon /><span>{ev.due ? '截止日加到日历' : '加到日历'}</span>
-                </button>
-              )}
-              {person && (
-                <button type="button" className="btn" onClick={() => p.onSend?.(it, 'vcf')}>
-                  <PersonIcon /><span>存到通讯录</span>
-                </button>
-              )}
-            </div>
-          )}
-
-          {!p.example && (
-            <div className="acts">
-              <button type="button" onClick={() => setEditing(true)}>改标题</button>
-              {p.aiReady && (it.status !== 'pending' || stale) && (
-                <button type="button" onClick={p.onRedo}>{it.status === 'local' ? (it.img ? '让 Claude 读图' : '让 Claude 整理') : '重新整理'}</button>
-              )}
-              <button type="button" onClick={p.onPin}>{it.pinned ? '取消置顶' : '置顶'}</button>
-              <button type="button" className="danger" onClick={p.onDelete}>删除</button>
-            </div>
-          )}
+          {/* 不常用的：一排安静的字 */}
+          <div className="acts">
+            {!textless && (
+              <button type="button" className="raw-t" aria-expanded={showRaw} onClick={() => setShowRaw((s) => !s)}>
+                {showRaw ? '收起原文' : it.img ? '图里的字' : '看原文'}
+              </button>
+            )}
+            {!p.example && (
+              <>
+                <button type="button" onClick={() => setEditing(true)}>改标题</button>
+                {p.aiReady && (it.status !== 'pending' || stale) && (
+                  <button type="button" onClick={p.onRedo}>{it.status === 'local' ? (it.img ? '让 Claude 读图' : '让 Claude 整理') : '重新整理'}</button>
+                )}
+                <button type="button" onClick={p.onPin}>{it.pinned ? '取消置顶' : '置顶'}</button>
+                <button type="button" className="danger" onClick={p.onDelete}>删除</button>
+              </>
+            )}
+          </div>
+          {showRaw && !textless && <div className="raw"><pre>{it.raw}</pre></div>}
         </div>
       )}
     </article>

@@ -34,6 +34,7 @@ const PAIRS = [
   ['--ink', '--well'], ['--ink-2', '--well'], ['--ink-3', '--well'],
   ['--on-btn', '--btn'], ['--on-ok', '--ok'], ['--ok-text', '--ok-soft'],
   ['--accent', '--accent-soft'], ['--accent', '--card'], ['--ink', '--accent-soft'],
+  ['--card', '--accent'], ['--ink-3', '--accent-soft'],
   ['--danger', '--card'],
   ...KINDS.map((k) => [`--k-${k}`, `--k-${k}-bg`]),
 ]
@@ -71,7 +72,10 @@ for (const [name, opts] of CONFIGS) {
     t(`${name}：${PAIRS.length} 组字/底的对比度都 ≥ 4.5`, low.length === 0, low.map(([f, g, r]) => `${f} on ${g} ${r.toFixed(2)}`).join(' | '))
   }
 
-  const measure = () => pg.evaluate(() => {
+  // 屏幕本来多宽。不能拿 innerWidth 比：手机模式下内容一撑宽，浏览器会把布局视口跟着放宽
+  // （390 的屏幕 innerWidth 变成 469），拿它比永远是「没有横向滚动」—— 这条检查以前在手机上就是瞎的
+  const W = pg.viewportSize().width
+  const measure = () => pg.evaluate((W) => {
     const vis = (el) => { const r = el.getBoundingClientRect(); const s = getComputedStyle(el); return r.width > 0 && r.height > 0 && s.visibility !== 'hidden' && s.display !== 'none' }
     const small = [...document.querySelectorAll('button, a, input, textarea, [role="button"], label.todo')]
       .filter(vis)
@@ -83,15 +87,15 @@ for (const [name, opts] of CONFIGS) {
     const tiny = [...document.querySelectorAll('input:not([type=checkbox]), textarea')].filter(vis)
       .filter((el) => parseFloat(getComputedStyle(el).fontSize) < 16).length
     // 按钮上的字（复制、换个问法、加到日历）也不许被挤出去 / 断成两行
-    const clipped = [...document.querySelectorAll('.card h3, .row-v, .card-main p, .copies .btn, .alt, .sends .btn')].filter(vis)
+    const clipped = [...document.querySelectorAll('.card h3, .row-v, .card-main p, .copies .btn, .alt, .ask-btn, .k-in')].filter(vis)
       .filter((el) => el.scrollWidth > el.clientWidth + 1).length
     return {
-      overflow: document.documentElement.scrollWidth - innerWidth,
+      overflow: Math.max(document.documentElement.scrollWidth, innerWidth) - W,
       small, tiny, clipped,
       h1: document.querySelector('.brand h1')?.getBoundingClientRect().height ?? 0,
       vh: innerHeight,
     }
-  })
+  }, W)
   const check = async (state) => {
     const m = await measure()
     await pg.screenshot({ path: `${SHOTS}look-${tag}-${state}.png` })
@@ -109,6 +113,11 @@ for (const [name, opts] of CONFIGS) {
   const ex = await pg.locator('.list .card').first().boundingBox()
   const vh = await pg.evaluate(() => innerHeight)
   t(`${name}·空：收件框和第一张示例卡都在第一屏`, cap && ex && cap.y + cap.height < vh && ex.y < vh - 60, ex ? `示例卡顶 ${Math.round(ex.y)}，屏高 ${vh}` : '')
+  if (vh >= 600) {
+    // 列表要一眼扫得完：正常高度的屏幕上，第一屏至少完整放下两张卡（改版前手机上只放得下一张多一点）
+    const seen = await pg.evaluate((h) => [...document.querySelectorAll('.list .card')].filter((e) => e.getBoundingClientRect().bottom <= h).length, vh)
+    t(`${name}·空：第一屏至少完整放下两张卡`, seen >= 2, `${seen} 张`)
+  }
 
   // ---- 收了两条，一张展开
   for (const text of [CONTACT, MEET]) {
@@ -121,7 +130,7 @@ for (const [name, opts] of CONFIGS) {
   const open = pg.locator('.card.open')
   const copies = await open.locator('.copies').boundingBox()
   const cardBox = await open.boundingBox()
-  t(`${name}·收了两条：三个复制按钮在卡片里排成一行`, copies && copies.height < 60 && copies.x >= cardBox.x && copies.x + copies.width <= cardBox.x + cardBox.width,
+  t(`${name}·收了两条：拿走的那一排按钮在卡片里排成一行`, copies && copies.height < 60 && copies.x >= cardBox.x && copies.x + copies.width <= cardBox.x + cardBox.width,
     copies ? `${Math.round(copies.width)}×${Math.round(copies.height)}` : '')
 
   // ---- 设置（没开 Claude 时的样子），在这里填上 Key 开启

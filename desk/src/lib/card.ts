@@ -419,8 +419,10 @@ export function asText(it: Item): string {
 }
 
 /** 给 AI：一句指令 + 整理好的背景 + 原文。贴进任何一家 AI 都能直接用 */
+export const FALLBACK_ASK = '请帮我理解这条信息，提炼要点，并告诉我接下来该做什么。'
+
 export function asAi(it: Item): string {
-  const ask = it.prompt || '请帮我理解这条信息，提炼要点，并告诉我接下来该做什么。'
+  const ask = it.prompt || FALLBACK_ASK
   return `${ask}\n\n【整理好的信息】\n${asText(it)}\n\n【原文】\n"""\n${it.raw}\n"""`
 }
 
