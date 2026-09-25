@@ -82,7 +82,8 @@ for (const [name, opts] of CONFIGS) {
       .map(({ el, r }) => `${el.className || el.tagName}「${(el.textContent || el.getAttribute('aria-label') || '').trim().slice(0, 8)}」${Math.round(r.width)}×${Math.round(r.height)}`)
     const tiny = [...document.querySelectorAll('input:not([type=checkbox]), textarea')].filter(vis)
       .filter((el) => parseFloat(getComputedStyle(el).fontSize) < 16).length
-    const clipped = [...document.querySelectorAll('.card h3, .row-v, .card-main p')].filter(vis)
+    // 按钮上的字（复制、换个问法、加到日历）也不许被挤出去 / 断成两行
+    const clipped = [...document.querySelectorAll('.card h3, .row-v, .card-main p, .copies .btn, .alt, .sends .btn')].filter(vis)
       .filter((el) => el.scrollWidth > el.clientWidth + 1).length
     return {
       overflow: document.documentElement.scrollWidth - innerWidth,
@@ -97,7 +98,7 @@ for (const [name, opts] of CONFIGS) {
     t(`${name}·${state}：没有横向滚动`, m.overflow <= 0, `多出 ${m.overflow}px`)
     t(`${name}·${state}：能点的都 ≥ 44×44`, m.small.length === 0, m.small.slice(0, 4).join(' | '))
     t(`${name}·${state}：输入框字号 ≥ 16px（iOS 不会放大页面）`, m.tiny === 0, `${m.tiny} 个`)
-    t(`${name}·${state}：标题、字段值没有被横着裁掉`, m.clipped === 0, `${m.clipped} 处`)
+    t(`${name}·${state}：标题、字段值、按钮上的字没有被横着裁掉`, m.clipped === 0, `${m.clipped} 处`)
     t(`${name}·${state}：「随手拾」没被挤成两行`, m.h1 > 0 && m.h1 < 34, `${Math.round(m.h1)}px`)
     return m
   }

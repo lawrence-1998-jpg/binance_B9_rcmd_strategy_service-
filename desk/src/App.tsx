@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
-  IMG_PLACEHOLDER, KINDS, aiPrompt, asAi, asText, dayGroup, fromAi, manyAi, manyText, matches, newId, quick, stamp, tidy,
-  type Item, type Kind,
+  IMG_PLACEHOLDER, KINDS, aiPrompt, asAi, asAiWith, askLabel, asksFor, asText, dayGroup, fromAi, manyAi, manyText, matches, newId, quick, stamp, tidy,
+  type Ask, type Item, type Kind,
 } from './lib/card'
 import { askPrompt, pick, pieces, plainAnswer } from './lib/ask'
 import { isImage, shrink, toPng } from './lib/image'
-import { fromBackup, merge, openStore, toBackup, type Store } from './lib/store'
+import { loadAsks, merge, mergeAsks, openStore, readBackup, saveAsks, toBackup, type Store } from './lib/store'
+import { eventOf, personOf, toIcs, toVcf } from './lib/send'
 import * as claude from './lib/ai'
 import { copyImage, copyText } from './lib/copy'
 import { applyUpdate, useUpdate } from './lib/update'
@@ -25,7 +26,7 @@ import { EXAMPLES } from './examples'
  */
 
 type Toast = { msg: string; action?: { label: string; run: () => void }; id: number }
-type Ask = { q: string; text: string; busy: boolean; chosen: Item[]; err?: string }
+type Answer = { q: string; text: string; busy: boolean; chosen: Item[]; err?: string }
 /** 这两种错误说明 Key 本身用不了：别每收一条都再撞一次，等她去设置里换 */
 const KEY_DEAD = new Set(['bad_key', 'no_access'])
 const SHOT_LOCAL = '没开 Claude，读不了图里的字 ——「复制图片」贴给任何一个 AI 都行；或者在「设置」里填上 API Key'
@@ -39,6 +40,9 @@ export function App() {
   const [key, setKey] = useState(() => claude.loadKey())
   const [keyBad, setKeyBad] = useState(false)
   const [settings, setSettings] = useState(false)
+  /** 她自己存的问法：每张卡的「换个问法」里都有 */
+  const [myAsks, setMyAsks] = useState<Ask[]>(() => loadAsks())
+  const updateAsks = (a: Ask[]) => { setMyAsks(a); saveAsks(a) }
   const [open, setOpen] = useState<string | null>(null)
   const [kind, setKind] = useState<Kind | 'all'>('all')
   const [q, setQ] = useState('')
@@ -48,7 +52,7 @@ export function App() {
   const [copied, setCopied] = useState<string | null>(null)
   const [draft, setDraft] = useState('')
   const [now, setNow] = useState(() => Date.now())
-  const [ask, setAsk] = useState<Ask | null>(null)
+  const [ask, setAsk] = useState<Answer | null>(null)
   const askCtl = useRef<AbortController | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
 
@@ -288,7 +292,7 @@ export function App() {
     const ctl = new AbortController()
     askCtl.current = ctl
     const chosen = pick(question, itemsRef.current)
-    const mine = (a: Ask | null) => !!a && a.q === question && askCtl.current === ctl
+    const mine = (a: Answer | null) => !!a && a.q === question && askCtl.current === ctl
     setAsk({ q: question, text: '', busy: true, chosen })
     try {
       const text = await claude.ask(k, askPrompt(question, chosen), (t) => setAsk((a) => (mine(a) ? { ...a!, text: t } : a)), ctl.signal)
@@ -376,24 +380,33 @@ export function App() {
   const doExport = () => {
     const d = new Date()
     const p = (n: number) => String(n).padStart(2, '0')
-    const url = URL.createObjectURL(new Blob([toBackup(lib, d)], { type: 'application/json' }))
-    const a = document.createElement('a')
-    a.href = url
-    // 文件名用英文：有的浏览器碰到中文文件名直接存成「download」
-    a.download = `suishou-backup-${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}.json`
-    document.body.appendChild(a)
-    a.click()
-    a.remove()
-    setTimeout(() => URL.revokeObjectURL(url), 10_000)
+    saveFile(`suishou-backup-${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}.json`, 'application/json', toBackup(lib, d, myAsks))
     say(`导出了 ${lib.length} 条`)
   }
   const doImport = async (f: File) => {
     const st = await whenReady()
-    let incoming: Item[]
-    try { incoming = fromBackup(await f.text()) } catch { say('这不是随手拾的备份文件'); return }
-    const { add, skipped } = merge(itemsRef.current, incoming)
+    let incoming: { items: Item[]; asks: Ask[] }
+    try { incoming = readBackup(await f.text()) } catch { say('这不是随手拾的备份文件'); return }
+    const { add, skipped } = merge(itemsRef.current, incoming.items)
     try { await st.putMany(add) } catch { say('没导进去 —— 这台设备的空间可能满了'); return }
-    say(add.length ? `导入了 ${add.length} 条${skipped ? `，${skipped} 条已经有了` : ''}` : `都已经有了（${skipped} 条）`)
+    const asks = mergeAsks(myAsks, incoming.asks)
+    const newAsks = asks.length - myAsks.length
+    if (newAsks) updateAsks(asks)
+    say((add.length ? `导入了 ${add.length} 条${skipped ? `，${skipped} 条已经有了` : ''}` : `都已经有了（${skipped} 条）`) + (newAsks ? `，问法 ${newAsks} 个` : ''))
+  }
+  /** 放到别处：日程 → 日历文件，名片 → 联系人文件。手机上点开就弹「添加」 */
+  const send = (it: Item, what: 'ics' | 'vcf') => {
+    if (what === 'ics') {
+      const ev = eventOf(it)
+      if (!ev) return
+      saveFile(`suishou-${it.id}.ics`, 'text/calendar;charset=utf-8', toIcs(it, ev))
+      say('日历文件好了 —— 点开它就加进日历')
+    } else {
+      const person = personOf(it)
+      if (!person) return
+      saveFile(`suishou-${it.id}.vcf`, 'text/vcard;charset=utf-8', toVcf(person, it))
+      say('联系人文件好了 —— 点开它就存进通讯录')
+    }
   }
 
   // 安卓上装成 App 后，别的 App 里「分享」到这里：带着 ?text= / ?url= 打开，当场收下
@@ -574,8 +587,8 @@ export function App() {
           <>
             <p className="ex-h">示例 · 贴进来的东西会变成这样。收下第一条后这些就不见了。</p>
             {examples.map((it) => (
-              <Card key={it.id} it={it} example open={open === it.id} now={now} copied={copied}
-                onToggle={() => setOpen(open === it.id ? null : it.id)} copy={copy} />
+              <Card key={it.id} it={it} example open={open === it.id} now={now} copied={copied} myAsks={myAsks}
+                onToggle={() => setOpen(open === it.id ? null : it.id)} copy={copy} onSend={send} />
             ))}
           </>
         )}
@@ -612,6 +625,8 @@ export function App() {
                 onRedo={() => void organize(it, true)}
                 onDelete={() => void remove([it])}
                 copyShot={copyShot}
+                myAsks={myAsks}
+                onSend={send}
                 aiReady={!!aiKey}
               />
             ))}
@@ -645,6 +660,8 @@ export function App() {
       {settings && (
         <Settings
           count={lib.length}
+          asks={myAsks}
+          onAsks={updateAsks}
           apiKey={key}
           keyBad={keyBad}
           onKey={(k) => { setKey(k); setKeyBad(false) }}
@@ -681,6 +698,8 @@ interface CardProps {
   onRedo?: () => void
   onDelete?: () => void
   copyShot?: (it: Item, key: string) => void
+  myAsks?: Ask[]
+  onSend?: (it: Item, what: 'ics' | 'vcf') => void
   aiReady?: boolean
 }
 
@@ -701,6 +720,9 @@ function Card(p: CardProps) {
   const chips = it.fields.slice(0, 3)
   /** 截图、图里的字还没读出来 */
   const textless = !!it.img && it.raw === IMG_PLACEHOLDER
+  const alts = useMemo(() => (open && !textless ? asksFor(it, p.myAsks) : []), [open, textless, it, p.myAsks])
+  const ev = useMemo(() => (open && p.onSend ? eventOf(it) : null), [open, it, p.onSend])
+  const person = useMemo(() => (open && p.onSend ? personOf(it) : null), [open, it, p.onSend])
 
   const saveTitle = () => {
     setEditing(false)
@@ -830,6 +852,18 @@ function Card(p: CardProps) {
             </button>
           )}
 
+          {alts.length > 0 && (
+            <div className="alts" aria-label="换个问法">
+              <span className="alts-h">换个问法</span>
+              {alts.map((a, i) => (
+                <button key={a.text} type="button" className={'alt' + (done('alt' + i) ? ' done' : '')} title={a.text}
+                  onClick={() => copy(asAiWith(it, a.text), k('alt' + i), `「${a.label}」`)}>
+                  {done('alt' + i) ? '已复制' : a.label}
+                </button>
+              ))}
+            </div>
+          )}
+
           {!textless && (
             <div className="raw">
               <button type="button" className="raw-t" aria-expanded={showRaw} onClick={() => setShowRaw((s) => !s)}>
@@ -863,6 +897,21 @@ function Card(p: CardProps) {
             </div>
           )}
 
+          {(ev || person) && (
+            <div className="sends" aria-label="放到别处">
+              {ev && (
+                <button type="button" className="btn" onClick={() => p.onSend?.(it, 'ics')}>
+                  <CalIcon /><span>{ev.due ? '截止日加到日历' : '加到日历'}</span>
+                </button>
+              )}
+              {person && (
+                <button type="button" className="btn" onClick={() => p.onSend?.(it, 'vcf')}>
+                  <PersonIcon /><span>存到通讯录</span>
+                </button>
+              )}
+            </div>
+          )}
+
           {!p.example && (
             <div className="acts">
               <button type="button" onClick={() => setEditing(true)}>改标题</button>
@@ -879,6 +928,20 @@ function Card(p: CardProps) {
   )
 }
 
+// ---------------------------------------------------------------- 存成文件
+
+/** 让浏览器存一个文件。文件名用英文：有的浏览器碰到中文文件名直接存成「download」 */
+function saveFile(name: string, type: string, text: string) {
+  const url = URL.createObjectURL(new Blob([text], { type }))
+  const a = document.createElement('a')
+  a.href = url
+  a.download = name
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  setTimeout(() => URL.revokeObjectURL(url), 10_000)
+}
+
 // ---------------------------------------------------------------- 设置
 
 /** 分享进来的标题 / 正文 / 链接：去掉重复的（很多 App 会把链接同时塞进 text） */
@@ -893,6 +956,8 @@ function uniqParts(xs: (string | null)[]): string[] {
 
 interface SettingsProps {
   count: number
+  asks: Ask[]
+  onAsks: (a: Ask[]) => void
   apiKey: string
   keyBad: boolean
   onKey: (k: string) => void
@@ -905,6 +970,7 @@ function Settings(p: SettingsProps) {
   const [draft, setDraft] = useState('')
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null)
+  const [newAsk, setNewAsk] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
   const boxRef = useRef<HTMLElement>(null)
 
@@ -917,6 +983,12 @@ function Settings(p: SettingsProps) {
   }, [])
 
   const say = (ok: boolean, text: string) => setMsg({ ok, text })
+  const addAsk = () => {
+    const text = newAsk.trim()
+    if (!text) return
+    p.onAsks(mergeAsks(p.asks, [{ text, label: askLabel(text) }]))
+    setNewAsk('')
+  }
   const why = (code: string) =>
     code === 'bad_key' ? '这个 Key 不对 —— 检查一下有没有复制完整'
     : code === 'no_access' ? '这个 Key 用不了 Claude（没有权限），换一个试试'
@@ -983,6 +1055,34 @@ function Settings(p: SettingsProps) {
               hidden
               onChange={(e) => { const f = e.target.files?.[0]; if (f) p.onImport(f); e.target.value = '' }}
             />
+          </div>
+        </div>
+
+        <div className="set-sec">
+          <h3>我的问法</h3>
+          <p className="set-p">常用的那句存在这里。每张卡展开后的「换个问法」里都会有它，点一下就连同这条信息一起复制，贴进哪家 AI 都行。</p>
+          {p.asks.length > 0 && (
+            <ul className="my-asks">
+              {p.asks.map((a) => (
+                <li key={a.text}>
+                  <span className="my-ask-t"><b>{a.label}</b>{a.text}</span>
+                  <button type="button" className="my-ask-x" aria-label={`删掉问法：${a.label}`}
+                    onClick={() => p.onAsks(p.asks.filter((x) => x.text !== a.text))}>删掉</button>
+                </li>
+              ))}
+            </ul>
+          )}
+          <div className="set-add">
+            <input
+              id="newask"
+              className="set-in plain"
+              value={newAsk}
+              placeholder="比如：帮我改写成一条朋友圈"
+              onChange={(e) => setNewAsk(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') addAsk() }}
+              aria-label="新的问法"
+            />
+            <button type="button" className="btn" disabled={!newAsk.trim()} onClick={addAsk}>存下</button>
           </div>
         </div>
 
@@ -1058,6 +1158,22 @@ function GearIcon() {
     <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
       <circle cx="12" cy="12" r="3" />
       <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z" />
+    </svg>
+  )
+}
+function CalIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3.5" y="5" width="17" height="15.5" rx="3" />
+      <path d="M3.5 10h17M8 3v4M16 3v4" />
+    </svg>
+  )
+}
+function PersonIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="8.5" r="3.8" />
+      <path d="M4.5 20c1.2-3.6 4.1-5.5 7.5-5.5s6.3 1.9 7.5 5.5" />
     </svg>
   )
 }

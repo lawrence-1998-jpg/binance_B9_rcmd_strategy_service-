@@ -476,6 +476,22 @@ h1, h2, h3, h4, p { margin: 0; }
 .ask.done { background: var(--ok-soft); }
 .ask.done .ask-l { color: var(--ok-text); }
 
+/* 换个问法：一排小按钮，点一下连同这条信息一起复制 */
+.alts { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.alts-h { width: 100%; font-size: 13px; font-weight: 600; color: var(--ink-3); letter-spacing: .04em; }
+.alt {
+  min-height: var(--tap); padding: 0 14px; border-radius: 12px;
+  background: var(--card); color: var(--accent); border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
+  font-size: 14.5px; font-weight: 600;
+  transition: background .15s, color .15s;
+}
+.alt:hover { background: var(--accent-soft); }
+.alt.done { background: var(--ok); color: var(--on-ok); border-color: var(--ok); }
+
+/* 放到别处：加到日历 / 存到通讯录 */
+.sends { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; }
+.sends .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: var(--tap); font-weight: 600; color: var(--ink-2); }
+
 .raw-t { min-height: var(--tap); padding: 0 12px; margin-left: -12px; border-radius: 10px; color: var(--ink-2); font-weight: 500; letter-spacing: 0; }
 .raw-t:hover { background: var(--well); }
 .raw pre {
@@ -490,6 +506,13 @@ h1, h2, h3, h4, p { margin: 0; }
 /* 三个复制按钮：最常用的整理版是实心的 */
 .copies { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
 .copies.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.copies .btn { white-space: nowrap; }
+/* 320 宽的小屏：三个按钮挤一排时字别断成两行（「复制整 / 理版」） */
+@media (max-width: 359px) {
+  .copies { gap: 6px; }
+  .copies .btn { padding: 0 2px; font-size: 13.5px; letter-spacing: -.02em; }
+  .detail { padding-right: 0; }
+}
 .btn {
   display: inline-grid; place-items: center;
   min-height: 50px; padding: 0 10px; border-radius: 14px;
@@ -607,6 +630,18 @@ h1, h2, h3, h4, p { margin: 0; }
 }
 .set-in:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
 .key-on { font-size: 14.5px; color: var(--ink-2); }
+.set-in.plain { font-family: var(--f); letter-spacing: 0; }
+.my-asks { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.my-asks li {
+  display: flex; align-items: center; gap: 8px;
+  padding: 4px 4px 4px 12px; border-radius: 12px; background: var(--well);
+}
+.my-ask-t { flex: 1; min-width: 0; font-size: 14px; color: var(--ink-2); line-height: 1.45; overflow-wrap: anywhere; }
+.my-ask-t b { display: block; font-size: 14.5px; color: var(--ink); font-weight: 650; }
+.my-ask-x { flex-shrink: 0; min-height: var(--tap); min-width: var(--tap); padding: 0 12px; border-radius: 10px; color: var(--danger); font-size: 14px; }
+.my-ask-x:hover { background: var(--card); }
+.set-add { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
+.set-add .btn { min-height: 50px; padding: 0 18px; }
 .key-on code { font-family: var(--f-mono); color: var(--ink); }
 .set-msg { font-size: 14px; padding: 10px 12px; border-radius: 10px; background: var(--well); color: var(--ink); }
 .set-msg.ok { background: var(--ok-soft); color: var(--ok-text); }
